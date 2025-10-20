@@ -1,29 +1,102 @@
+# ========== Android Studio ==========
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+*.ipr
+*.iws
+.gradle/
+build/
+captures/
 local.properties
 
-# Firebase 或 API 金鑰設定檔
-google-services.json
-serviceAccountKey.json
-.env
+# ========== Gradle ==========
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+gradle-app.setting
+gradlew.bat
+gradlew
+gradle.properties
 
-# APK / AAB 打包檔
-*.apk
-*.aab
+# ========== JetBrains cache ==========
+out/
+cmake-build-debug/
+cmake-build-release/
 
-# 日誌與快取
+# ========== Keystore / Signing ==========
+*.jks
+*.keystore
+*.pem
+*.p12
+*.key
+*.crt
+
+# ========== Log / Temp ==========
 *.log
-.idea/**/workspace.xml
-.idea/**/tasks.xml
+*.tmp
+*.temp
+*.orig
+*.bak
+
+# ========== OS files ==========
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.swp
+
+# ========== Firebase / Google ==========
+# Firebase service account keys
+serviceAccountKey.json
+*.secret.json
+
+# Google Services configuration (位於 app 資料夾)
+app/google-services.json
+
+# Firebase Emulator / CLI cache
+.firebase/
+.firebaserc
+.emulator-data/
+.storage/
+.firestore/
+database-debug.log
+
+# ========== Android App Data ==========
+app/build/
+*/build/
+bin/
+gen/
+obj/
+
+# ========== NDK / CMake ==========
+.externalNativeBuild/
+.cxx/
+
+# ========== IntelliJ / VSCode ==========
+.idea/
+.vscode/
+*.code-workspace
+
+# ========== Environment / Secrets ==========
+.env
+.env.local
+.env.*.local
+
+# ========== Optional: 本機測試資料 ==========
+/app/debug/
+/app/release/
+/app/profile/
+
+# ========== Node / Web Admin (若有 Next.js 或 Functions 子專案) ==========
+functions/node_modules/
+functions/lib/
+functions/.env
+functions/.firebase/
+functions/.runtimeconfig.json
+functions/serviceAccountKey.json
+
+sca_web/.next/
+sca_web/node_modules/
+sca_web/.env
+sca_web/.vercel/
+sca_web/.vscode/
