@@ -13,3 +13,17 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase 或 API 金鑰設定檔
+google-services.json
+serviceAccountKey.json
+.env
+
+# APK / AAB 打包檔
+*.apk
+*.aab
+
+# 日誌與快取
+*.log
+.idea/**/workspace.xml
+.idea/**/tasks.xml
