@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"> <!-- 背景改為白色 -->
+
+    <!-- 主要刮刮卡內容容器，當有卡片時會載入到這裡 -->
+    <FrameLayout
+        android:id="@+id/scratch_card_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center" />
+
+    <!-- 顯示「(準備中...)」或其他提示訊息的 TextView -->
+    <TextView
+        android:id="@+id/no_scratch_card_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="(準備中...)"
+        android:textSize="24sp"
+        android:textColor="#333333"
+        android:textStyle="bold"
+        android:visibility="gone" /> <!-- 預設隱藏，由程式碼控制顯示 -->
+
+</FrameLayout>

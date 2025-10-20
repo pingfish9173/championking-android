@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+
+    <!-- 填充顏色 -->
+    <solid android:color="#E0E0E0" />
+
+    <!-- 邊框 -->
+    <stroke
+        android:width="2dp"
+        android:color="#BDBDBD" />
+
+    <!-- 確保是正圓形的關鍵：讓背景自動適應容器的最小尺寸 -->
+
+</shape>

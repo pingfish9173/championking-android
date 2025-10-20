@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 設置介面的佈局檔案，將作為 Fragment 載入到主內容區塊 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F0F0F0"
+    android:orientation="vertical"
+    android:weightSum="10">
+
+    <!-- 上方區域單位2：「架上列表」 -->
+    <LinearLayout
+        android:id="@+id/on_shelf_list_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2"
+        android:background="#E0E0E0"
+        android:orientation="horizontal"
+        android:padding="4dp"
+        android:weightSum="6">
+
+        <include
+            android:id="@+id/shelf_item_1"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/shelf_item_2"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/shelf_item_3"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/shelf_item_4"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/shelf_item_5"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/shelf_item_6"
+            layout="@layout/shelf_item_template"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- 下方區域單位8：「刮板區」和「參數設定區」 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="8"
+        android:orientation="horizontal"
+        android:weightSum="10">
+
+        <!-- 左側 7 單位：「刮板區」 -->
+        <FrameLayout
+            android:id="@+id/scratch_board_area"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="7"
+            android:background="#E3F2FD"
+            android:padding="0dp" />
+
+        <!-- 右側 3 單位：「參數設定區」 -->
+        <LinearLayout
+            android:id="@+id/setting_parameters_container"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="3"
+            android:background="#FFFFFF"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="刮刮卡參數設定"
+                android:textColor="#333333"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <!-- 刮數設定 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:text="刮數："
+                    android:textColor="#333333"
+                    android:textSize="14sp" />
+
+                <Spinner
+                    android:id="@+id/spinner_scratches_count"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:entries="@array/scratches_count_options" />
+            </LinearLayout>
+
+            <!-- 特獎設定：左側按鈕；右側唯讀顯示 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/button_pick_special_prize"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:backgroundTint="#FF9800"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:text="特獎"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/edit_text_special_prize"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:clickable="false"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:hint="請在左側按鈕後，於預覽區點選單一數字"
+                    android:inputType="none"
+                    android:padding="6dp"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 大獎設定：左側按鈕（多選）；右側唯讀顯示（逗號分隔） -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/button_pick_grand_prize"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:backgroundTint="#4CAF50"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:text="大獎"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/edit_text_grand_prize"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:clickable="false"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:hint="請在左側按鈕後，於預覽區多選（再點可取消）"
+                    android:inputType="none"
+                    android:padding="6dp"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 夾出X樣，贈送Y刮 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="2dp"
+                        android:text="夾出"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+
+                    <Spinner
+                        android:id="@+id/spinner_claws_count"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:entries="@array/number_options" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="2dp"
+                        android:text="樣"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="2dp"
+                        android:text="贈送"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+
+                    <Spinner
+                        android:id="@+id/spinner_giveaway_count"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:entries="@array/number_options" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="2dp"
+                        android:text="刮"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 儲存按鈕 -->
+            <Button
+                android:id="@+id/button_save_settings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#2196F3"
+                android:paddingVertical="6dp"
+                android:text="儲存"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+
+            <!-- 設為使用中 -->
+            <Button
+                android:id="@+id/button_toggle_inuse"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:paddingVertical="6dp"
+                android:text="設為使用中（★）"
+                android:textSize="14sp" />
+
+            <!-- 返回／刪除 -->
+            <LinearLayout
+                android:id="@+id/row_actions_return_delete"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <Button
+                    android:id="@+id/button_return_selected"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:paddingVertical="6dp"
+                    android:text="↻ 返回"
+                    android:textSize="14sp" />
+
+                <Space
+                    android:layout_width="6dp"
+                    android:layout_height="wrap_content" />
+
+                <Button
+                    android:id="@+id/button_delete_selected"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:paddingVertical="6dp"
+                    android:text="🗑️ 刪除"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- 推到下方的空白填充，讓提醒固定在最底 -->
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- 右下角溫馨提醒（小字、淺灰、靠右） -->
+            <TextView
+                android:id="@+id/text_tip_watch_out"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginEnd="4dp"
+                android:gravity="end"
+                android:text="溫馨提醒：在設定特獎及大獎時，請注意後面有眼👀"
+                android:textColor="#9E9E9E"
+                android:textSize="8sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

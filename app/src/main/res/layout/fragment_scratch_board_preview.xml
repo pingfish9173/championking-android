@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 用於刮板預覽的 Fragment 佈局 -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="0dp">
+
+    <!-- GridLayout 將在這裡動態填充刮板單元格 -->
+    <GridLayout
+        android:id="@+id/scratch_board_grid_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:columnCount="1"
+        android:rowCount="1"
+        android:alignmentMode="alignBounds"
+        android:useDefaultMargins="false"/>
+
+    <!-- 挑選模式導引提示（僅在單選模式顯示） -->
+    <TextView
+        android:id="@+id/single_pick_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:padding="10dp"
+        android:text="請點選一個數字作為「特獎」"
+        android:textSize="14sp"
+        android:textColor="#ffffff"
+        android:background="#99000000"
+        android:visibility="gone"/>
+
+</FrameLayout>

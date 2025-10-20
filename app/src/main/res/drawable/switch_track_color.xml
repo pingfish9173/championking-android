@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 開啟狀態 (Checked) -->
+    <item android:state_checked="true" android:color="#8BC34A"/> <!-- 淺綠色 -->
+    <!-- 關閉狀態 (Unchecked) -->
+    <item android:color="#BDBDBD"/> <!-- 灰色 -->
+</selector>

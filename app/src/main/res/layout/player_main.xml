@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?><!-- 玩家頁面的主佈局文件，負責定義應用程式的玩家畫面。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:baselineAligned="false"
+    android:orientation="horizontal"
+    android:weightSum="10"
+    tools:context=".MainActivity">
+
+    <!-- 左側導覽區域或固定功能區塊 (佔 2 單位) - 玩家頁面 -->
+    <LinearLayout
+        android:id="@+id/left_panel_container_player"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="2"
+        android:background="#FFFFFF"
+        android:orientation="vertical"
+        android:weightSum="10"
+        tools:ignore="RtlHardcoded">
+
+        <!-- Logo (佔 3 單位) -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="3"
+            android:background="#FFFFFF"
+            android:padding="0dp"
+            android:layout_margin="0dp">
+
+            <ImageView
+                android:id="@+id/home_button_player"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:clickable="true"
+                android:contentDescription="LOGO"
+                android:focusable="true"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_home"
+                tools:srcCompat="@tools:sample/avatars" />
+        </FrameLayout>
+
+        <!-- 夾X送X區塊 -->
+        <FrameLayout
+            android:id="@+id/giveaway_count_container_player"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="2"
+            android:background="#FFFFFF"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/giveaway_count_text_view_player"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="夾出X樣，贈送X刮"
+                android:textColor="#00008B"
+                android:textSize="34sp" />
+        </FrameLayout>
+
+        <!-- 特獎和大獎資訊區塊 -->
+        <LinearLayout
+            android:id="@+id/prize_info_container_player"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="3"
+            android:background="#FFFFFF"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <!-- 特獎 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="特獎："
+                    android:textColor="@android:color/black"
+                    android:textSize="26sp" />
+
+                <TextView
+                    android:id="@+id/special_prize_text_view_player"
+                    android:layout_width="50dp"
+                    android:layout_height="50dp"
+                    android:background="@drawable/special_prize_gold_circle"
+                    android:ellipsize="none"
+                    android:gravity="center"
+                    android:textColor="@color/scratch_card_light_gray"
+                    android:textSize="20sp"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+
+            <!-- 大獎 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="大獎："
+                    android:textColor="@android:color/black"
+                    android:textSize="20sp" />
+
+                <LinearLayout
+                    android:id="@+id/grand_prize_text_view_player"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_vertical"
+                    android:paddingTop="4dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+
+        <!-- 「下一版」按鈕區塊 (佔 1 單位) -->
+        <FrameLayout
+            android:id="@+id/player_mode_next_version_button_container_player"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#FFFFFF">
+
+            <Button
+                android:id="@+id/button_next_version_player"
+                android:layout_width="160dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:backgroundTint="#2196F3"
+                android:paddingVertical="8dp"
+                android:text="下一版"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </FrameLayout>
+
+        <!-- 時間區塊 (佔 1 單位) -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.5"
+            android:background="#FFFFFF">
+
+            <TextView
+                android:id="@+id/current_time_text_view_player"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="載入時間..."
+                android:textAlignment="center"
+                android:textColor="@android:color/black"
+                android:textSize="22sp" />
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- 中央主要內容顯示區域 (佔 8 單位) - 玩家頁面 -->
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="8">
+
+        <!-- 這個 FrameLayout 是未來用來載入不同介面 (登入、刮板、設置、商城) 的 Fragment 的容器 -->
+        <FrameLayout
+            android:id="@+id/main_content_container_player"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#2196F3">
+            <!-- 這個 TextView 只是佔位符，將被 Fragment 替換 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="主要內容區塊 (8)"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:visibility="gone" /> <!-- 隱藏這個佔位符 -->
+        </FrameLayout>
+
+        <!-- 浮水印容器 - 玩家頁面不顯示浮水印 -->
+        <FrameLayout
+            android:id="@+id/watermark_overlay_container_player"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone">
+            <!-- 浮水印 TextViews 將透過程式碼動態添加 -->
+        </FrameLayout>
+
+    </FrameLayout>
+
+</LinearLayout>

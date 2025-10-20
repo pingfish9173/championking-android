@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?><!-- res/layout/shelf_item_template.xml -->
+<!-- 這是一個可重用的架位模板，用於 SettingsFragment 中的架上列表 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_margin="4dp"
+    android:layout_weight="1"
+    android:background="@drawable/blue_bordered_box"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- 架位主要文字，其 ID 將在 include 時被覆蓋 -->
+    <TextView
+        android:id="@+id/shelf_item_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:paddingStart="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:text="(載入中...)"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp" />
+
+    <!-- 架位狀態文字，其 ID 將在 include 時被覆蓋 -->
+    <TextView
+        android:id="@+id/shelf_item_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="4dp"
+        android:layout_marginBottom="4dp"
+        android:text="架上使用中"
+        android:textColor="#FF0000"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- 右上角：使用中指示星星（僅顯示★，預設隱藏） -->
+    <TextView
+        android:id="@+id/shelf_item_star"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="4dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:text="★"
+        android:textColor="#FFD700"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+</FrameLayout>

@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:weightSum="10"
+    tools:context=".MainActivity">
+
+    <RelativeLayout
+        android:id="@+id/left_panel_container_master"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="2"
+        android:background="#FFFFFF"
+        tools:ignore="RtlHardcoded">
+
+        <!-- 主要內容區域，使用LinearLayout來組織 -->
+        <LinearLayout
+            android:id="@+id/main_content_area"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_above="@+id/version_info_text_view_master"
+            android:orientation="vertical"
+            android:weightSum="10">
+
+            <!-- 首頁LOGO -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="3"
+                android:background="#FFFFFF"
+                android:padding="0dp"
+                android:layout_margin="0dp">
+
+                <ImageView
+                    android:id="@+id/home_button_master"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:clickable="true"
+                    android:contentDescription="回首頁"
+                    android:focusable="true"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_home"
+                    tools:srcCompat="@tools:sample/avatars" />
+            </FrameLayout>
+
+            <!-- 用戶帳號 -->
+            <FrameLayout
+                android:id="@+id/user_info_container_master"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="0.6"
+                android:background="#FFFFFF"
+                android:padding="2dp"
+                android:layout_marginStart="6dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/user_name_points_text_view_master"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="載入中..."
+                        android:textAlignment="viewStart"
+                        android:textColor="@android:color/black"
+                        android:textSize="14sp"
+                        android:ellipsize="end"
+                        android:maxLines="1" />
+
+                    <Button
+                        android:id="@+id/logout_button_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:backgroundTint="#FF5722"
+                        android:text="登出"
+                        android:textColor="#FFFFFF"
+                        android:textSize="8sp"
+                        android:textStyle="bold"
+                        android:visibility="gone"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="4dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="16dp"  />
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- 特獎及大獎 -->
+            <LinearLayout
+                android:id="@+id/prize_info_container_master"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="3"
+                android:background="#FFFFFF"
+                android:orientation="vertical"
+                android:padding="2dp"
+                android:layout_marginStart="6dp">
+
+                <!-- 特獎 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="特獎："
+                        android:textColor="@android:color/black"
+                        android:textSize="26sp" />
+                    <TextView
+                        android:id="@+id/special_prize_text_view_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:background="@drawable/special_prize_gold_circle"
+                        android:ellipsize="none"
+                        android:gravity="center"
+                        android:textColor="@color/scratch_card_light_gray"
+                        android:textSize="20sp"
+                        android:textStyle="bold"/>
+                </LinearLayout>
+
+                <!-- 大獎 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="大獎："
+                        android:textColor="@android:color/black"
+                        android:textSize="20sp" />
+
+                    <LinearLayout
+                        android:id="@+id/grand_prize_text_view_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:paddingTop="4dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+
+            <!-- 按鈕 -->
+            <LinearLayout
+                android:id="@+id/master_mode_buttons_container_master"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#FFFFFF"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp"
+                android:visibility="visible"
+                android:weightSum="4">
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/shop_button_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:clickable="true"
+                        android:contentDescription="商城"
+                        android:focusable="true"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_shop" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/bag_button_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:clickable="true"
+                        android:contentDescription="背包"
+                        android:focusable="true"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_bag" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/config_button_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:clickable="true"
+                        android:contentDescription="設定"
+                        android:focusable="true"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_config" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/user_button_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:clickable="true"
+                        android:contentDescription="用戶"
+                        android:focusable="true"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_user" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/master_mode_buttons_container_master2"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#FFFFFF"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp"
+                android:visibility="visible"
+                android:weightSum="4">
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="2dp"
+                    android:layout_weight="1"
+                    android:gravity="center">
+
+                    <ImageView
+                        android:id="@+id/pad_button_master"
+                        android:layout_width="50dp"
+                        android:layout_height="50dp"
+                        android:layout_gravity="center"
+                        android:clickable="true"
+                        android:contentDescription="關於平板"
+                        android:focusable="true"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_pad" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="3"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/button_scratch_card_password_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginHorizontal="4dp"
+                        android:backgroundTint="#FF9800"
+                        android:text="換版密碼"
+                        android:textColor="#FFFFFF"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp" />
+
+                    <Button
+                        android:id="@+id/button_master_player_switch_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginHorizontal="4dp"
+                        android:backgroundTint="#FF9800"
+                        android:text="玩家頁面"
+                        android:textColor="#FFFFFF"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="10dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 時間 -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#FFFFFF">
+
+                <FrameLayout
+                    android:id="@+id/time_container_master"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:background="#FFFFFF">
+
+                    <TextView
+                        android:id="@+id/current_time_text_view_master"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="載入時間..."
+                        android:textAlignment="center"
+                        android:textColor="@android:color/black"
+                        android:textSize="22sp" />
+                </FrameLayout>
+            </FrameLayout>
+
+        </LinearLayout>
+
+        <!-- 版本號固定在整個左側面板的絕對底部 -->
+        <TextView
+            android:id="@+id/version_info_text_view_master"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginLeft="4dp"
+            android:layout_marginBottom="4dp"
+            android:alpha="0.7"
+            android:text="V1.0.1"
+            android:textAlignment="textStart"
+            android:textColor="@android:color/black"
+            android:textSize="10sp" />
+
+        <!-- 隱藏的版本號容器，保持原有的ID以免程式碼出錯 -->
+        <FrameLayout
+            android:id="@+id/version_container_master"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+    </RelativeLayout>
+
+    <FrameLayout
+        android:id="@+id/main_content_container_master"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="8">
+
+        <FrameLayout
+            android:id="@+id/fragment_container_master"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#2196F3">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="主要內容區塊 (8)"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/watermark_overlay_container_master"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone"></FrameLayout>
+
+    </FrameLayout>
+
+</LinearLayout>

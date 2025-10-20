@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="blue_500">#2196F3</color>
+    <color name="light_grey_watermark">#B0B0B0</color>
+    <color name="special_prize_gold">#FF8F00</color>
+    <color name="grand_prize_green">#2E7D32</color>
+    <color name="readonly_background">#F5F5F5</color>
+    <color name="readonly_border">#DDDDDD</color>
+    <color name="primary_color">#2196F3</color>
+    <color name="scratch_card_white">#FFFFFF</color>
+    <color name="scratch_card_dark_gray">#424242</color>
+    <color name="scratch_card_medium_gray">#757575</color>
+    <color name="scratch_card_light_gray">#BDBDBD</color>
+    <color name="scratch_card_gold">#FFC107</color>
+    <color name="scratch_card_green">#43A047</color>
+    <color name="scratch_card_light_red">#F6C4D5</color>
+    <!-- 動態效果用的顏色 -->
+    <color name="scratch_card_glow_start">#FFB74D</color>  <!-- 較淺的橙色 -->
+    <color name="scratch_card_glow_end">#FF9800</color>    <!-- 較深的橙色 -->
+</resources>
