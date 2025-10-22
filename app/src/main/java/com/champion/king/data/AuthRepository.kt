@@ -5,9 +5,21 @@ import com.champion.king.model.User
 import com.champion.king.security.PasswordUtils
 import com.champion.king.util.TimeUtils
 import com.google.firebase.database.*
+import com.champion.king.data.api.ApiService
+import com.champion.king.data.api.RetrofitClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.google.gson.Gson
 
-class AuthRepository(private val root: DatabaseReference) {
+class AuthRepository(
+    private val root: DatabaseReference,
+    private val apiService: ApiService = RetrofitClient.apiService
+) {
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private fun users() = root.child("users")
     private fun devicePasswords() = root.child("devicePasswords")
 
@@ -69,10 +81,6 @@ class AuthRepository(private val root: DatabaseReference) {
         })
     }
 
-    /**
-     * 註冊新用戶
-     * 🔹 已更新：加入 accountStatus、lineId、remark 欄位
-     */
     fun registerUser(
         account: String,
         password: String,
@@ -81,78 +89,67 @@ class AuthRepository(private val root: DatabaseReference) {
         city: String,
         district: String,
         deviceNum: String,
+        referralCode: String? = null,  // 🔹 新增：推薦碼參數（選填）
         onResult: (success: Boolean, message: String?) -> Unit
     ) {
-        devicePasswords().orderByChild("number").equalTo(deviceNum)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snap: DataSnapshot) {
-                    if (!snap.exists()) {
-                        onResult(false, AppConfig.Msg.DEVICE_NOT_FOUND); return
+        scope.launch {
+            try {
+                // 1. 建立 API 請求
+                val request = com.champion.king.data.api.dto.RegisterRequest(
+                    account = account,
+                    password = password,
+                    city = city,
+                    district = district,
+                    phone = phone,
+                    email = email,
+                    devicePasswords = deviceNum,
+                    referralCode = referralCode
+                )
+
+                // 2. 呼叫註冊 API
+                val response = apiService.register(request)
+
+                // 3. 處理回應
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful && response.body() != null) {
+                        // API 成功
+                        val body = response.body()!!
+                        onResult(true, body.message)
+                    } else {
+                        // API 失敗，解析錯誤訊息
+                        val errorMsg = parseErrorMessage(response)
+                        onResult(false, errorMsg)
                     }
-
-                    var matchedKey: String? = null
-                    for (child in snap.children) {
-                        val st = child.child("status").getValue(Int::class.java) ?: -1
-                        if (st == 0) {
-                            matchedKey = child.key
-                            break
-                        }
-                    }
-                    if (matchedKey == null) {
-                        onResult(false, AppConfig.Msg.DEVICE_NOT_AVAILABLE); return
-                    }
-
-                    val salt = PasswordUtils.generateSaltBase64(16)
-                    val hash = PasswordUtils.sha256Hex(salt, password)
-
-                    val userData = hashMapOf<String, Any?>(
-                        "account" to account,
-                        "email" to email,
-                        "phone" to phone,
-                        "city" to city,
-                        "district" to district,
-                        "salt" to salt,
-                        "passwordHash" to hash,
-                        "devicePasswords" to deviceNum,
-
-                        // 🔹 新增：帳號狀態、LineID、備註欄位（使用預設值）
-                        "accountStatus" to "ACTIVE",  // 預設為開通
-                        "lineId" to "",               // 預設為空字串
-                        "remark" to "",               // 預設為空字串
-
-                        // 初始化積分與刮刮卡數量
-                        "point" to 0,
-                        "scratchType_10" to 0,
-                        "scratchType_20" to 0,
-                        "scratchType_25" to 0,
-                        "scratchType_30" to 0,
-                        "scratchType_40" to 0,
-                        "scratchType_50" to 0,
-                        "scratchType_60" to 0,
-                        "scratchType_80" to 0,
-                        "scratchType_100" to 0,
-                        "scratchType_120" to 0,
-                        "scratchType_160" to 0,
-                        "scratchType_200" to 0,
-                        "scratchType_240" to 0
-                    )
-
-                    val updates = hashMapOf<String, Any?>(
-                        "/users/$account" to userData,
-                        "/devicePasswords/$matchedKey/status" to 1,
-                        "/devicePasswords/$matchedKey/updatedAt" to ServerValue.TIMESTAMP,
-                        "/devicePasswords/$matchedKey/updateTime" to TimeUtils.taipeiNowString()
-                    )
-
-                    root.updateChildren(updates)
-                        .addOnSuccessListener { onResult(true, null) }
-                        .addOnFailureListener { e -> onResult(false, e.message) }
                 }
 
-                override fun onCancelled(error: DatabaseError) {
-                    onResult(false, dbErrorToHumanMessage(error))
+            } catch (e: Exception) {
+                // 網路或其他異常
+                withContext(Dispatchers.Main) {
+                    onResult(false, "網路錯誤：${e.message ?: "未知錯誤"}")
                 }
-            })
+            }
+        }
+    }
+
+    /**
+     * 解析 API 錯誤訊息
+     */
+    private fun parseErrorMessage(response: retrofit2.Response<*>): String {
+        return try {
+            val errorBody = response.errorBody()?.string()
+            if (errorBody != null) {
+                // 嘗試解析 JSON 錯誤訊息 {"error": "..."}
+                val errorResponse = Gson().fromJson(
+                    errorBody,
+                    com.champion.king.data.api.dto.ErrorResponse::class.java
+                )
+                errorResponse.error
+            } else {
+                "註冊失敗，請稍後再試"
+            }
+        } catch (e: Exception) {
+            "註冊失敗：${response.message()}"
+        }
     }
 
     private fun dbErrorToHumanMessage(error: com.google.firebase.database.DatabaseError): String {
