@@ -81,7 +81,7 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
      * 設定即時驗證 - 使用右側圖標提示
      */
     private fun setupValidation() {
-        // 帳號即時驗證
+        // 帳號格式驗證（移除即時重複檢查）
         binding.editTextAccount.doOnTextChanged { text, _, _, _ ->
             val account = text?.toString()?.trim().orEmpty()
 
@@ -95,8 +95,10 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
                     binding.editTextAccount.error = AppConfig.Msg.ERR_ACCOUNT_RULE
                 }
                 else -> {
-                    // 檢查帳號是否已存在
-                    checkAccountAvailability(account)
+                    // 格式正確，顯示綠色勾勾
+                    binding.iconAccountStatus.setImageResource(R.drawable.ic_check_green)
+                    binding.iconAccountStatus.visibility = View.VISIBLE
+                    binding.editTextAccount.error = null
                 }
             }
         }
@@ -165,32 +167,6 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
         }
     }
 
-    /**
-     * 檢查帳號是否已存在
-     */
-    private fun checkAccountAvailability(account: String) {
-        FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
-            .child("users")
-            .child(account)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.exists()) {
-                    // 帳號已存在
-                    binding.iconAccountStatus.setImageResource(android.R.drawable.ic_delete)
-                    binding.iconAccountStatus.visibility = View.VISIBLE
-                    binding.editTextAccount.error = "此帳號已被使用"
-                } else {
-                    // 帳號可用
-                    binding.iconAccountStatus.setImageResource(R.drawable.ic_check_green)
-                    binding.iconAccountStatus.visibility = View.VISIBLE
-                    binding.editTextAccount.error = null
-                }
-            }
-            .addOnFailureListener {
-                binding.iconAccountStatus.visibility = View.GONE
-            }
-    }
-
     private fun tryRegister() = requireContext().guardOnline {
         val city = binding.spinnerCity.selectedItem?.toString()?.trim().orEmpty()
         val district = binding.spinnerDistrict.selectedItem?.toString()?.trim().orEmpty()
@@ -203,6 +179,8 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
         val email = binding.editTextEmail.text.toString().trim()
         val phone = binding.editTextPhone.text.toString().trim()
         val deviceNum = binding.editTextDevicePassword.text.toString().trim()
+        val referralCode = binding.editTextReferralCode.text.toString().trim()
+            .ifEmpty { null }  // 空字串轉為 null（選填欄位）
 
         // 最終驗證
         if (account.isEmpty()) {
@@ -248,7 +226,7 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
         // remark = ""
         // 這些欄位會在 AuthRepository.registerUser 中自動設定預設值
 
-        repo.registerUser(account, password, email, phone, city, district, deviceNum) { ok, msg ->
+        repo.registerUser(account, password, email, phone, city, district, deviceNum, referralCode) { ok, msg ->
             if (ok) {
                 toast("註冊成功！")
                 parentFragmentManager.popBackStack()

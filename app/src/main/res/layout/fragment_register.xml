@@ -289,6 +289,23 @@
         </FrameLayout>
     </LinearLayout>
 
+    <!-- 推薦碼（選填） -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="推薦碼（選填）"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp" />
+
+    <EditText
+        android:id="@+id/editTextReferralCode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="請輸入推薦碼（例如：TIMMY888）"
+        android:inputType="textCapCharacters"
+        android:maxLength="20"
+        android:padding="12dp" />
+
     <!-- 註冊按鈕 -->
     <Button
         android:id="@+id/button_register"
