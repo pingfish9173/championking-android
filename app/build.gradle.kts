@@ -1,3 +1,13 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+// 讀取 local.properties
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +15,7 @@ plugins {
 }
 
 android {
+
     namespace = "com.champion.king"          // ← 改成你原本的 namespace
     compileSdk = 34                           // ← 依你原本設定（34/35 皆可，建議與專案一致）
 
@@ -16,6 +27,12 @@ android {
         versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "APP_SECRET",
+            "\"${localProperties.getProperty("app.secret", "")}\""
+        )
     }
 
     buildTypes {
@@ -33,6 +50,7 @@ android {
 
     buildFeatures {
         viewBinding = true   // 你專案有用 viewBinding，建議開啟
+        buildConfig = true
     }
 
     compileOptions {
