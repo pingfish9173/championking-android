@@ -76,4 +76,16 @@ dependencies {
 
     // App Check：Debug Provider（僅 debug 版用；用於模擬器/開發機）
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
+
+    // ========== 新增：網路相關套件 ==========
+    // Retrofit - HTTP Client
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // OkHttp - 底層網路庫 + 日誌攔截器（方便除錯）
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Gson - JSON 解析（Retrofit 需要）
+    implementation("com.google.code.gson:gson:2.10.1")
 }
