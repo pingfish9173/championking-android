@@ -5,15 +5,14 @@ import com.champion.king.data.api.dto.RegisterResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
+import com.champion.king.data.api.dto.LoginRequest
+import com.champion.king.data.api.dto.LoginResponse
 
 interface ApiService {
-    
-    /**
-     * 註冊 API
-     * 端點：https://register-qmvrvane7q-uc.a.run.app
-     */
-    @POST("/")  // 因為完整 URL 已經包含路徑，所以這裡用 "/"
+
+    @POST("/")
     suspend fun register(@Body request: RegisterRequest): Response<RegisterResponse>
-    
-    // 未來可以在這裡加入登入 API 等其他端點
+
+    @POST("https://login-qmvrvane7q-uc.a.run.app/")
+    suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 }
