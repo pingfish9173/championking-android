@@ -55,7 +55,8 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                executeLoginFlow(account, password)
+                val user = performActualLogin(account, password)  // ← 接收回傳的 User
+                _loginResult.value = LoginResult.Success(user)    // ← 設定登入成功結果
             } catch (ce: CancellationException) {
                 Log.d("LoginViewModel", "Login cancelled")
             } catch (e: Exception) {
@@ -130,55 +131,6 @@ class LoginViewModel : ViewModel() {
             !ValidationRules.isValidEmail(email) -> InputValidationError.EMAIL
             !ValidationRules.isValidPhone(phone) -> InputValidationError.PHONE
             else -> null
-        }
-    }
-
-    /**
-     * 執行完整的登入流程
-     */
-    private suspend fun executeLoginFlow(account: String, password: String) {
-        // 步驟 1: App Check 預檢（非強制）
-        performAppCheckPreflight()
-
-        // 步驟 2: 確保 Firebase 認證
-        ensureFirebaseAuth()
-
-        // 步驟 3: 執行實際登入
-        val user = performActualLogin(account, password)
-        _loginResult.value = LoginResult.Success(user)
-    }
-
-    /**
-     * App Check 預檢 - 失敗只記錄，不阻擋
-     */
-    private suspend fun performAppCheckPreflight() {
-        try {
-            Firebase.appCheck.getAppCheckToken(/* forceRefresh = */ true).await()
-            Log.d("LoginViewModel", "App Check preflight successful")
-        } catch (e: Exception) {
-            Log.d("LoginViewModel", "App Check preflight ignored: ${e.message}")
-            // 不拋出異常，讓流程繼續
-        }
-    }
-
-    /**
-     * 確保 Firebase 認證狀態
-     */
-    private suspend fun ensureFirebaseAuth() {
-        // 刷新 Auth token（強制）
-        Firebase.auth.currentUser?.getIdToken(true)?.await()
-
-        // 確保匿名認證
-        return suspendCoroutine { continuation ->
-            FirebaseAuthHelper.ensureAnonymous { success, error ->
-                if (success) {
-                    continuation.resume(Unit)
-                } else {
-                    continuation.resumeWithException(
-                        Exception("Firebase 認證失敗：${error?.message ?: "未知錯誤"}")
-                    )
-                }
-            }
         }
     }
 
