@@ -13,6 +13,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.gson.Gson
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 
 class AuthRepository(
     private val root: DatabaseReference,
@@ -23,35 +25,83 @@ class AuthRepository(
     private fun users() = root.child("users")
     private fun devicePasswords() = root.child("devicePasswords")
 
+//    fun login(
+//        account: String,
+//        password: String,
+//        onResult: (success: Boolean, user: User?, message: String?) -> Unit
+//    ) {
+//        users().child(account).addListenerForSingleValueEvent(object : ValueEventListener {
+//            override fun onDataChange(snap: DataSnapshot) {
+//                if (!snap.exists()) {
+//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
+//                }
+//                val salt = snap.child("salt").getValue(String::class.java)
+//                val stored = snap.child("passwordHash").getValue(String::class.java)
+//                if (salt.isNullOrEmpty() || stored.isNullOrEmpty()) {
+//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
+//                }
+//                val inputHash = PasswordUtils.sha256Hex(salt, password)
+//                if (!inputHash.equals(stored, ignoreCase = true)) {
+//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
+//                }
+//                val user = snap.getValue(User::class.java) ?: User()
+//                user.account = account
+//                user.firebaseKey = snap.key
+//                onResult(true, user, null)
+//            }
+//
+//            override fun onCancelled(error: DatabaseError) {
+//                onResult(false, null, dbErrorToHumanMessage(error))
+//            }
+//        })
+//    }
+
     fun login(
         account: String,
         password: String,
         onResult: (success: Boolean, user: User?, message: String?) -> Unit
     ) {
-        users().child(account).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snap: DataSnapshot) {
-                if (!snap.exists()) {
-                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-                }
-                val salt = snap.child("salt").getValue(String::class.java)
-                val stored = snap.child("passwordHash").getValue(String::class.java)
-                if (salt.isNullOrEmpty() || stored.isNullOrEmpty()) {
-                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-                }
-                val inputHash = PasswordUtils.sha256Hex(salt, password)
-                if (!inputHash.equals(stored, ignoreCase = true)) {
-                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-                }
-                val user = snap.getValue(User::class.java) ?: User()
-                user.account = account
-                user.firebaseKey = snap.key
-                onResult(true, user, null)
-            }
+        scope.launch {
+            try {
+                // 1. 建立 API 請求
+                val request = com.champion.king.data.api.dto.LoginRequest(
+                    account = account,
+                    password = password
+                )
 
-            override fun onCancelled(error: DatabaseError) {
-                onResult(false, null, dbErrorToHumanMessage(error))
+                // 2. 呼叫登入 API
+                val response = apiService.login(request)
+
+                // 3. 處理回應
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val body = response.body()!!
+
+                        // 🔹 使用 Custom Token 登入 Firebase Auth
+                        try {
+                            FirebaseAuth.getInstance()
+                                .signInWithCustomToken(body.token)
+                                .await()
+
+                            // Firebase Auth 登入成功，回傳使用者資料
+                            onResult(true, body.user, body.message)
+
+                        } catch (authError: Exception) {
+                            // Custom Token 登入失敗
+                            onResult(false, null, "Firebase 認證失敗：${authError.message}")
+                        }
+                    } else {
+                        val errorMsg = parseErrorMessage(response)
+                        onResult(false, null, errorMsg)
+                    }
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult(false, null, "網路錯誤：${e.message ?: "未知錯誤"}")
+                }
             }
-        })
+        }
     }
 
     fun resetPasswordToPhone(
