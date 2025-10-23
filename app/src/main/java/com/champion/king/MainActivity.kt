@@ -81,15 +81,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     // ====== Lifecycle ======
     override fun onCreate(savedInstanceState: Bundle?) {
-        FirebaseAuthHelper.ensureAnonymous { ok, err ->
-            if (!ok) {
-                Log.e("MainActivity", "Anonymous auth failed", err)
-                Toast.makeText(this, "初始化登入失敗，請檢查網路/服務狀態", Toast.LENGTH_SHORT)
-                    .show()
-                // 視情況：可在此 disable 某些需要 DB 的按鈕
-            }
-        }
-
         super.onCreate(savedInstanceState)
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE

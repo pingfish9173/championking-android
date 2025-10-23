@@ -1,5 +1,7 @@
 package com.champion.king.model
 
+import com.google.gson.annotations.SerializedName
+
 // 用戶資料模型
 data class User(
     var account: String? = null,
@@ -25,6 +27,7 @@ data class User(
     var scratchType_160: Int = 0,
     var scratchType_200: Int = 0,
     var scratchType_240: Int = 0,
+    @SerializedName("uid")
     var firebaseKey: String? = null,
     var switchScratchCardPassword: String? = null,
     var salt: String? = null,
