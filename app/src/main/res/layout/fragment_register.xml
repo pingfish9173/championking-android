@@ -249,7 +249,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
+        android:layout_marginBottom="12dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -290,21 +290,40 @@
     </LinearLayout>
 
     <!-- 推薦碼（選填） -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="推薦碼（選填）"
-        android:textSize="16sp"
-        android:layout_marginTop="16dp" />
-
-    <EditText
-        android:id="@+id/editTextReferralCode"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="請輸入推薦碼（例如：TIMMY888）"
-        android:inputType="textCapCharacters"
-        android:maxLength="20"
-        android:padding="12dp" />
+        android:layout_marginBottom="24dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/label_referral_code"
+            android:layout_width="96dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:gravity="end"
+            android:text="推薦碼："
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <EditText
+                android:id="@+id/editTextReferralCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/edit_text_border"
+                android:hint="推薦碼（選填）"
+                android:inputType="textCapCharacters"
+                android:maxLength="20"
+                android:padding="12dp"
+                android:paddingEnd="40dp" />
+        </FrameLayout>
+    </LinearLayout>
 
     <!-- 註冊按鈕 -->
     <Button
