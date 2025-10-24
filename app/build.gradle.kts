@@ -19,6 +19,15 @@ android {
     namespace = "com.champion.king"          // ← 改成你原本的 namespace
     compileSdk = 34                           // ← 依你原本設定（34/35 皆可，建議與專案一致）
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(localProperties.getProperty("KEYSTORE_FILE") ?: "")
+            storePassword = localProperties.getProperty("KEYSTORE_PASSWORD") ?: ""
+            keyAlias = localProperties.getProperty("KEY_ALIAS") ?: ""
+            keyPassword = localProperties.getProperty("KEY_PASSWORD") ?: ""
+        }
+    }
+
     defaultConfig {
         applicationId = "com.champion.king"  // ← 改成你原本的 applicationId
         minSdk = 24                          // ← 依你原本設定
@@ -37,6 +46,7 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
