@@ -180,5 +180,99 @@
             android:paddingVertical="12dp"
             android:layout_gravity="start" />
 
+        <!-- 分隔線 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="16dp"
+            android:background="#E0E0E0" />
+
+        <!-- 應用程式版本區塊 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="應用程式版本"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 當前版本 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="96dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="當前版本："
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/text_current_version"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#111111"
+                android:textSize="16sp"
+                android:text="1.0.1" />
+        </LinearLayout>
+
+        <!-- 上次檢查時間 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="96dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="上次檢查："
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/text_last_check_time"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#999999"
+                android:textSize="14sp"
+                android:text="尚未檢查" />
+        </LinearLayout>
+
+        <!-- 檢查更新按鈕 -->
+        <Button
+            android:id="@+id/button_check_update"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="檢查更新"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#4CAF50"
+            android:paddingHorizontal="32dp"
+            android:paddingVertical="12dp"
+            android:layout_gravity="start"
+            android:layout_marginBottom="12dp" />
+
+        <!-- 自動檢查更新 -->
+        <CheckBox
+            android:id="@+id/checkbox_auto_check"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="自動檢查更新"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:checked="true" />
+
     </LinearLayout>
 </ScrollView>

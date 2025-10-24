@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 內部快取 -->
+    <cache-path name="apk_cache" path="apk/" />
+
+    <!-- 外部快取 -->
+    <external-cache-path name="external_apk_cache" path="apk/" />
+
+    <!-- 外部檔案目錄（重要！APK 下載到這裡）-->
+    <external-files-path name="external_files" path="Download/" />
+
+    <!-- 外部儲存根目錄（備用）-->
+    <external-path name="external_storage" path="." />
+</paths>

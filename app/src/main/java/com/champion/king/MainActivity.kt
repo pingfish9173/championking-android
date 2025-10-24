@@ -22,6 +22,12 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 import com.champion.king.auth.FirebaseAuthHelper
+import androidx.lifecycle.lifecycleScope
+import com.champion.king.util.ApkDownloader
+import kotlinx.coroutines.launch
+import com.champion.king.util.UpdateManager
+import com.champion.king.util.UpdateResult
+import com.champion.king.util.toast
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -74,6 +80,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var currentUser: User? = null
     private var currentlyDisplayedScratchCardOrder: Int? = null
     private lateinit var versionInfoTextViewMaster: TextView
+    // 更新管理器
+    private val updateManager by lazy { UpdateManager(this) }
 
     // 如果你已有 AppConfig 可置換此常數，避免重複字串
     private val DB_URL =
@@ -108,6 +116,17 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun onResume() {
         super.onResume()
         handler.post(updateTimeRunnable)
+
+        // 回到主頁時檢查更新（需已登入且開啟自動檢查）
+        if (isUserLoggedIn() && updateManager.isAutoCheckEnabled()) {
+            val lastCheckTime = updateManager.getLastCheckTime()
+            val timeDiff = System.currentTimeMillis() - lastCheckTime
+
+            // 距離上次檢查超過 5 分鐘才檢查
+            if (timeDiff > 5 * 60 * 1000) {
+                checkUpdateInBackground()
+            }
+        }
     }
 
     override fun onPause() {
@@ -396,6 +415,11 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // 現在會載入和玩家頁面一致但無互動的刮卡顯示
         loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
         Toast.makeText(this, "歡迎回來，${loggedInUser.account}！", Toast.LENGTH_SHORT).show()
+
+        // 登入成功後檢查更新
+        if (updateManager.isAutoCheckEnabled()) {
+            checkUpdateInBackground()
+        }
     }
 
     override fun onLoginFailed() {
@@ -1100,7 +1124,134 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .show()
     }
 
+    /**
+     * 啟動時檢查更新
+     */
+    private fun checkUpdateOnStart() {
+        if (updateManager.isAutoCheckEnabled()) {
+            checkUpdateInBackground()
+        }
+    }
 
+    /**
+     * 背景檢查更新
+     */
+    private fun checkUpdateInBackground() {
+        lifecycleScope.launch {
+            try {
+                when (val result = updateManager.checkUpdate(isManual = false)) {
+                    is UpdateResult.HasUpdate -> {
+                        showUpdateDialog(result.versionInfo)
+                    }
+                    is UpdateResult.Maintenance -> {
+                        showMaintenanceDialog(result.message)
+                    }
+                    else -> {
+                        // NoUpdate 或 Error 時不顯示任何訊息
+                    }
+                }
+            } catch (e: Exception) {
+                // 靜默失敗，不影響使用者體驗
+                Log.e("MainActivity", "Background update check failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 顯示更新對話框
+     */
+    private fun showUpdateDialog(versionInfo: com.champion.king.data.api.dto.VersionInfo) {
+        val message = """
+        發現新版本：${versionInfo.versionName}
+        
+        更新內容：
+        ${versionInfo.updateMessage}
+    """.trimIndent()
+
+        val builder = android.app.AlertDialog.Builder(this)
+            .setTitle("發現新版本")
+            .setMessage(message)
+            .setPositiveButton("立即更新") { dialog, _ ->
+                dialog.dismiss()
+                startDownloadAndInstall(versionInfo.downloadUrl)
+            }
+
+        if (versionInfo.updateType != "force") {
+            builder.setNegativeButton("稍後提醒") { dialog, _ ->
+                dialog.dismiss()
+            }
+            builder.setCancelable(true)
+        } else {
+            builder.setCancelable(false)
+        }
+
+        builder.create().show()
+    }
+
+    /**
+     * 顯示維護模式對話框
+     */
+    private fun showMaintenanceDialog(message: String) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("系統維護中")
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("確定") { dialog, _ ->
+                dialog.dismiss()
+                finish() // 關閉 APP
+            }
+            .create()
+            .show()
+    }
+
+    /**
+     * 開始下載並安裝 APK
+     */
+    private fun startDownloadAndInstall(downloadUrl: String) {
+        val progressDialog = android.app.ProgressDialog(this).apply {
+            setTitle("正在下載更新")
+            setMessage("下載進度：0%")
+            setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL)
+            max = 100
+            setCancelable(false)
+            show()
+        }
+
+        val downloader = ApkDownloader(this)
+
+        downloader.downloadApk(
+            downloadUrl = downloadUrl,
+            onProgress = { progress ->
+                runOnUiThread {
+                    progressDialog.progress = progress
+                    progressDialog.setMessage("下載進度：$progress%")
+                }
+            },
+            onComplete = { success, message ->
+                runOnUiThread {
+                    progressDialog.dismiss()
+
+                    if (success) {
+                        toast("下載完成，準備安裝")
+                    } else {
+                        toast(message)
+                    }
+                }
+            }
+        )
+    }
+
+    /**
+     * 判斷使用者是否已登入
+     */
+    private fun isUserLoggedIn(): Boolean {
+        return try {
+            val userKey = (this as? UserSessionProvider)?.getCurrentUserFirebaseKey()
+            !userKey.isNullOrEmpty()
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     companion object {
         private const val TAG = "MainActivity"
