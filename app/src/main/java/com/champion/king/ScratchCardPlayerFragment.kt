@@ -20,6 +20,10 @@ import androidx.lifecycle.Lifecycle
 import com.champion.king.model.ScratchCard
 import com.google.firebase.database.*
 import android.widget.GridLayout
+import android.app.AlertDialog
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 
 class ScratchCardPlayerFragment : Fragment() {
 
@@ -82,6 +86,43 @@ class ScratchCardPlayerFragment : Fragment() {
     private fun canSafelyUpdateUi(): Boolean =
         isAdded && view != null &&
                 viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+
+    /**
+     * 檢查網路連線狀態
+     */
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Android 6.0 及以上版本
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        } else {
+            // Android 6.0 以下版本
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            networkInfo != null && networkInfo.isConnected
+        }
+    }
+
+    /**
+     * 顯示網路連線錯誤對話框
+     */
+    private fun showNetworkErrorDialog() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("無法連線")
+            .setMessage("目前無法連線，請檢查網路連線後再試")
+            .setPositiveButton("確定") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setCancelable(true)
+            .show()
+    }
 
     private fun loadUserScratchCards() {
         val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey()
@@ -255,6 +296,16 @@ class ScratchCardPlayerFragment : Fragment() {
 
         // 設定點擊事件
         cellView.setOnClickListener {
+
+            // 檢查網路連線
+            if (!isNetworkAvailable()) {
+                Log.w(TAG, "【網路檢查】無網路連線，拒絕刮卡")
+                showNetworkErrorDialog()
+                return@setOnClickListener
+            }
+
+            Log.d(TAG, "【網路檢查】網路連線正常，允許刮卡")
+
             if (numberConfig?.scratched != true && number != null) {
                 // 標記為正在刮的格子
                 scratchingCells.add(cellNumber)
