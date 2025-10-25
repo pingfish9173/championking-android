@@ -1,0 +1,21 @@
+{
+  "name": "a3-auto-deploy",
+  "version": "1.0.0",
+  "description": "Android App 自動化部署工具",
+  "main": "firebase-deploy.js",
+  "scripts": {
+    "deploy": "bash deploy.sh",
+    "firebase-upload": "node firebase-deploy.js"
+  },
+  "keywords": [
+    "android",
+    "deploy",
+    "firebase",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
