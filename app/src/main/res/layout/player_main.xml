@@ -87,8 +87,8 @@
 
                 <TextView
                     android:id="@+id/special_prize_text_view_player"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
                     android:background="@drawable/special_prize_gold_circle"
                     android:ellipsize="none"
                     android:gravity="center"

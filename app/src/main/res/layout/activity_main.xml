@@ -51,7 +51,7 @@
                 android:id="@+id/user_info_container_master"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="0.6"
+                android:layout_weight="0.5"
                 android:background="#FFFFFF"
                 android:padding="2dp"
                 android:layout_marginStart="6dp">
@@ -85,7 +85,7 @@
                         android:textSize="8sp"
                         android:textStyle="bold"
                         android:visibility="gone"
-                        android:paddingHorizontal="12dp"
+                        android:paddingHorizontal="8dp"
                         android:paddingVertical="4dp"
                         android:minHeight="0dp"
                         android:minWidth="0dp"
@@ -99,11 +99,11 @@
                 android:id="@+id/prize_info_container_master"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="3"
+                android:layout_weight="3.6"
                 android:background="#FFFFFF"
                 android:orientation="vertical"
-                android:padding="2dp"
-                android:layout_marginStart="6dp">
+                android:padding="1dp"
+                android:layout_marginStart="1dp">
 
                 <!-- 特獎 -->
                 <LinearLayout
@@ -120,12 +120,12 @@
                         android:textSize="26sp" />
                     <TextView
                         android:id="@+id/special_prize_text_view_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
                         android:background="@drawable/special_prize_gold_circle"
                         android:ellipsize="none"
                         android:gravity="center"
-                        android:textColor="@color/scratch_card_light_gray"
+                        android:textColor="@color/scratch_card_dark_gray"
                         android:textSize="20sp"
                         android:textStyle="bold"/>
                 </LinearLayout>
@@ -162,7 +162,7 @@
                 android:id="@+id/master_mode_buttons_container_master"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_weight="0.8"
                 android:background="#FFFFFF"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
@@ -243,7 +243,7 @@
                 android:id="@+id/master_mode_buttons_container_master2"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_weight="0.8"
                 android:background="#FFFFFF"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
@@ -342,19 +342,11 @@
             android:layout_alignParentBottom="true"
             android:layout_marginLeft="4dp"
             android:layout_marginBottom="4dp"
-            android:alpha="0.7"
+            android:alpha="0.8"
             android:text="V1.0.1"
             android:textAlignment="textStart"
             android:textColor="@android:color/black"
             android:textSize="10sp" />
-
-        <!-- 隱藏的版本號容器，保持原有的ID以免程式碼出錯 -->
-        <FrameLayout
-            android:id="@+id/version_container_master"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:visibility="gone" />
-
     </RelativeLayout>
 
     <FrameLayout

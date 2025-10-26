@@ -498,20 +498,21 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             specialPrizeTextViewPlayer to grandPrizeTextViewPlayer
         }
 
-        val grayColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
-        val defaultColor = ContextCompat.getColor(this, android.R.color.black)
+        val textColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
 
-        // 特獎使用金色圓框、白底、灰色文字
+        // === 特獎 ===
         specialPrizeTv?.apply {
             text = specialPrize ?: "無"
-            setTextColor(grayColor)
+            setTextColor(textColor)
             setBackgroundResource(R.drawable.special_prize_gold_circle)
         }
 
-        if (grandPrizeTv != null && grandPrizeTv is LinearLayout) {
+        // === 大獎 ===
+        if (grandPrizeTv is LinearLayout) {
             displayGrandPrizes(grandPrizeTv, grandPrize)
         }
     }
+
 
     private fun displayGrandPrizes(grandPrizeContainer: LinearLayout, grandPrizeStr: String?) {
         grandPrizeContainer.removeAllViews()
