@@ -37,6 +37,23 @@ class SettingsFragment : Fragment() {
         private const val SCRATCH_SWITCH_THRESHOLD = 0.5  // 50%
     }
 
+    // 大獎數量限制表
+    private val GRAND_LIMITS = mapOf(
+        10 to 3,
+        20 to 5,
+        25 to 6,
+        30 to 6,
+        40 to 8,
+        50 to 8,
+        60 to 10,
+        80 to 10,
+        100 to 10,
+        120 to 12,
+        160 to 12,
+        200 to 15,
+        240 to 15
+    )
+
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
 
@@ -655,14 +672,14 @@ class SettingsFragment : Fragment() {
     )
 
     private fun handleSaveSettings(data: SaveData) {
+        val limit = GRAND_LIMITS[data.scratchType] ?: 0
+        val gpList = data.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+        if (limit > 0 && gpList.size > limit) {
+            showToast("${data.scratchType}刮的大獎數量限制為 ${limit} 個")
+            return
+        }
         if (!validateBeforeSave(data)) return
-
         val sp = data.specialPrize?.toIntOrNull()
-        val gpList = data.grandPrize
-            ?.split(",")
-            ?.mapNotNull { it.trim().toIntOrNull() }
-            ?: emptyList()
-
         if (sp != null && gpList.contains(sp)) {
             showToast("無法儲存：特獎不可同時為大獎，請調整選取")
             currentPreviewFragment?.setSelectedNumber(sp)

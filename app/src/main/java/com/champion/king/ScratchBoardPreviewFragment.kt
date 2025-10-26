@@ -317,6 +317,14 @@ class ScratchBoardPreviewFragment : Fragment() {
             if (grandSelectedNumbers.contains(number)) {
                 grandSelectedNumbers.remove(number)
             } else {
+                // ★ 新增：依刮數類型限制大獎數量
+                val limit = getGrandLimitByScratchType()
+                if (limit > 0 && grandSelectedNumbers.size >= limit) {
+                    val currentCount = extractScratchCount(scratchesType ?: "")
+                    toast("${currentCount}刮的大獎數量限制為 ${limit} 個")
+                    return
+                }
+
                 grandSelectedNumbers.add(number)
             }
             setFragmentResult("grand_numbers_changed", Bundle().apply {
@@ -487,20 +495,23 @@ class ScratchBoardPreviewFragment : Fragment() {
     // ====== 公開方法供 SettingsFragment 調用 ======
 
     fun setSinglePickEnabled(enabled: Boolean) {
-        if (readonlyMode) return // 唯讀模式不允許變更
+        if (readonlyMode) return
         if (singlePickEnabled == enabled) return
         singlePickEnabled = enabled
-        if (enabled) multiPickEnabled = false // 互斥
-        applyModesAndMarkers()
+        if (enabled) multiPickEnabled = false
+        updateHintBarText()     // ✅ 改在這裡更新提示字
+        applyModesAndMarkers()  // ✅ 再刷新格子狀態
     }
 
     fun setMultiPickEnabled(enabled: Boolean) {
-        if (readonlyMode) return // 唯讀模式不允許變更
+        if (readonlyMode) return
         if (multiPickEnabled == enabled) return
         multiPickEnabled = enabled
-        if (enabled) singlePickEnabled = false // 互斥
-        applyModesAndMarkers()
+        if (enabled) singlePickEnabled = false
+        updateHintBarText()     // ✅ 改在這裡更新提示字
+        applyModesAndMarkers()  // ✅ 再刷新格子狀態
     }
+
 
     fun setSelectedNumber(number: Int?) {
         if (readonlyMode) return // 唯讀模式不允許變更
@@ -524,29 +535,44 @@ class ScratchBoardPreviewFragment : Fragment() {
 
     // ====== 輔助方法 ======
 
+    // 專職刷新格子狀態，不再動提示文字
     private fun applyModesAndMarkers() {
-        // 提示文字
-        when {
-            readonlyMode -> hintView?.apply {
-                visibility = View.VISIBLE
-                text = "此刮板為使用中狀態，不可修改特獎/大獎設定"
-            }
-            singlePickEnabled -> hintView?.apply {
-                visibility = View.VISIBLE
-                text = "請點選一個數字作為「特獎」"
-            }
-            multiPickEnabled -> hintView?.apply {
-                visibility = View.VISIBLE
-                text = "請點選一個或多個數字作為「大獎」（再點可取消）"
-            }
-            else -> hintView?.visibility = View.GONE
-        }
-
-        // 更新所有格子的顯示
+        // 根據模式套用格子顯示邏輯
         if (cellViews.isNotEmpty()) {
             updateXmlCells()
         } else {
             updateGridCells()
+        }
+    }
+
+    // 專職更新上方提示文字
+    private fun updateHintBarText() {
+        when {
+            readonlyMode -> {
+                hintView?.visibility = View.VISIBLE
+                hintView?.text = "此刮板為使用中狀態，不可修改特獎／大獎設定"
+            }
+
+            singlePickEnabled -> {
+                hintView?.visibility = View.VISIBLE
+                hintView?.text = "請點選一個數字作為「特獎」"
+            }
+
+            multiPickEnabled -> {
+                val count = extractScratchCount(scratchesType ?: "")
+                val limit = getGrandLimitByScratchType()
+                val text = if (limit > 0) {
+                    "請點選一個或多個數字作為「大獎」（再點可取消）\n${count}刮的大獎數量限制為 ${limit} 個"
+                } else {
+                    "請點選一個或多個數字作為「大獎」（再點可取消）"
+                }
+                hintView?.visibility = View.VISIBLE
+                hintView?.text = text
+            }
+
+            else -> {
+                hintView?.visibility = View.GONE
+            }
         }
     }
 
@@ -778,4 +804,18 @@ class ScratchBoardPreviewFragment : Fragment() {
 
     private fun buildCellBackgroundSelectedGreen(scratched: Boolean): GradientDrawable =
         buildCellBackgroundBase(scratched, 5, 0xFF43A047.toInt())
+
+    private fun getGrandLimitByScratchType(): Int {
+        val scratchCount = extractScratchCount(scratchesType ?: "")
+        return when (scratchCount) {
+            10 -> 3
+            20 -> 5
+            25, 30 -> 6
+            40, 50 -> 8
+            60, 80, 100 -> 10
+            120, 160 -> 12
+            200, 240 -> 15
+            else -> 0
+        }
+    }
 }
