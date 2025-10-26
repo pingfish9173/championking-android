@@ -92,8 +92,18 @@ class ShelfManager(
             append("${order}號板\n")
             append("刮數：${card.scratchesType} 刮\n")
             append("特獎：${card.specialPrize ?: "無"}\n")
-            append("大獎：${card.grandPrize ?: "無"}\n")
+
+            // ✅ 大獎顯示優化
+            val grandList = card.grandPrize?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+            val grandDisplay = when {
+                grandList.isEmpty() -> "無"
+                grandList.size <= 3 -> grandList.joinToString(",")
+                else -> grandList.take(3).joinToString(",") + "..."
+            }
+            append("大獎：$grandDisplay\n")
+
             append("夾 ${card.clawsCount ?: "無"} 刮 ${card.giveawayCount ?: "無"}\n")
         }
     }
+
 }
