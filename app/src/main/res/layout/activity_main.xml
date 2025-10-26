@@ -283,7 +283,7 @@
                         android:layout_height="36dp"
                         android:layout_marginHorizontal="4dp"
                         android:backgroundTint="#FF9800"
-                        android:text="換版密碼"
+                        android:text="換板密碼"
                         android:textColor="#FFFFFF"
                         android:textSize="11sp"
                         android:paddingHorizontal="10dp"

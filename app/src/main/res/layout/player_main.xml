@@ -66,7 +66,7 @@
             android:id="@+id/prize_info_container_player"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="3"
+            android:layout_weight="4.1"
             android:background="#FFFFFF"
             android:orientation="vertical"
             android:padding="8dp">
@@ -125,31 +125,31 @@
         </LinearLayout>
 
 
-        <!-- 「下一版」按鈕區塊 (佔 1 單位) -->
+        <!-- 「下一板」按鈕區塊 -->
         <FrameLayout
             android:id="@+id/player_mode_next_version_button_container_player"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="0.6"
             android:background="#FFFFFF">
 
             <Button
                 android:id="@+id/button_next_version_player"
-                android:layout_width="160dp"
+                android:layout_width="120dp"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:backgroundTint="#2196F3"
-                android:paddingVertical="8dp"
-                android:text="下一版"
+                android:paddingVertical="4dp"
+                android:text="下一板"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp" />
+                android:textSize="10sp" />
         </FrameLayout>
 
-        <!-- 時間區塊 (佔 1 單位) -->
+        <!-- 時間區塊 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="0.5"
+            android:layout_weight="0.3"
             android:background="#FFFFFF">
 
             <TextView
@@ -160,7 +160,7 @@
                 android:text="載入時間..."
                 android:textAlignment="center"
                 android:textColor="@android:color/black"
-                android:textSize="22sp" />
+                android:textSize="20sp" />
         </FrameLayout>
 
     </LinearLayout>

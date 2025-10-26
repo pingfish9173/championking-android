@@ -498,7 +498,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             specialPrizeTextViewPlayer to grandPrizeTextViewPlayer
         }
 
-        val grayColor = ContextCompat.getColor(this, R.color.scratch_card_light_gray)
+        val grayColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
         val defaultColor = ContextCompat.getColor(this, android.R.color.black)
 
         // 特獎使用金色圓框、白底、灰色文字
@@ -529,16 +529,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // 最多 12 個大獎，4 個一排
         val allNumbers = grandPrizeStr.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
-            .take(12)
+            .take(16)
         val chunked = allNumbers.chunked(4)
 
         val greenColor = ContextCompat.getColor(this, R.color.scratch_card_green)
         val whiteColor = ContextCompat.getColor(this, R.color.scratch_card_white)
-        val grayTextColor = ContextCompat.getColor(this, R.color.scratch_card_light_gray)
+        val grayTextColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
 
-        // 每顆圓圈大小約 28dp，比之前略小一點
-        val sizePx = (28 * resources.displayMetrics.density).toInt()
-        val marginPx = (2 * resources.displayMetrics.density).toInt()
+        val sizePx = (31 * resources.displayMetrics.density).toInt()
+        val marginPx = (3 * resources.displayMetrics.density).toInt()
 
         for (rowNumbers in chunked) {
             val rowLayout = LinearLayout(this).apply {
