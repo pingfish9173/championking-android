@@ -83,15 +83,7 @@ echo -e "   ${GREEN}✓${NC} APK 編譯完成 ($APK_SIZE)"
 # ========================================
 # Git Commit & Push
 # ========================================
-echo -e "${BLUE}[4/6]${NC} Git Commit & Push..."
-
-echo -n "   輸入 commit message（留空使用預設）: "
-read -r COMMIT_MSG
-
-if [ -z "$COMMIT_MSG" ]; then
-    COMMIT_MSG="chore: 發布版本 v$NEW_VERSION_NAME (build $NEW_VERSION_CODE)"
-fi
-
+COMMIT_MSG="chore: 自動發布版本 v$NEW_VERSION_NAME (build $NEW_VERSION_CODE)"
 git add "$BUILD_GRADLE_PATH"
 git commit -m "$COMMIT_MSG"
 git push
@@ -105,12 +97,8 @@ echo -e "${BLUE}[5/6]${NC} 上傳到 Firebase Storage 並更新 Firestore..."
 
 # 檢查是否有 Node.js 腳本
 if [ -f "$PROJECT_DIR/firebase-deploy.js" ]; then
-    echo -n "   請輸入本次更新說明（留空則使用預設）: "
-	read -r UPDATE_MESSAGE
-	if [ -z "$UPDATE_MESSAGE" ]; then
-		UPDATE_MESSAGE="例行版本更新與效能優化"
-	fi
-
+    UPDATE_MESSAGE="例行版本更新與效能優化"
+	
 	node "$PROJECT_DIR/firebase-deploy.js" "$NEW_VERSION_CODE" "$NEW_VERSION_NAME" "$APK_OUTPUT_PATH" "$UPDATE_MESSAGE"
 
     echo -e "   ${GREEN}✓${NC} Firebase 部署完成"
