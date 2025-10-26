@@ -3,6 +3,7 @@ package com.champion.king.ui.auth
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.champion.king.BuildConfig
 import com.champion.king.auth.FirebaseAuthHelper
 import com.champion.king.core.config.AppConfig
 import com.champion.king.data.AuthRepository
@@ -17,10 +18,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.encodeToString
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.suspendCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class LoginViewModel : ViewModel() {
 
@@ -155,13 +161,47 @@ class LoginViewModel : ViewModel() {
      * 執行密碼重設
      */
     private suspend fun performPasswordReset(account: String, email: String, phone: String): ResetPasswordResult {
-        return suspendCoroutine { continuation ->
-            repo.resetPasswordToPhone(account, email, phone) { success, message ->
-                if (success) {
-                    continuation.resume(ResetPasswordResult.Success)
-                } else {
-                    continuation.resume(ResetPasswordResult.Error(message ?: "請稍後重試"))
+        return try {
+            val ok = callResetPasswordApi(account, email, phone)
+            if (ok) ResetPasswordResult.Success
+            else ResetPasswordResult.Error("重設失敗，請稍後再試")
+        } catch (e: Exception) {
+            ResetPasswordResult.Error("重設失敗：${e.message}")
+        }
+    }
+
+    private suspend fun callResetPasswordApi(account: String, email: String, phone: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            val url = "https://resetpassword-qmvrvane7q-de.a.run.app"
+            val payload = """{"account":"$account","email":"$email","phone":"$phone"}"""
+
+            val client = okhttp3.OkHttpClient()
+            val requestBody = payload.toRequestBody("application/json".toMediaType())
+
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .addHeader("X-App-Auth", BuildConfig.APP_SECRET)
+                .addHeader("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    val code = response.code
+                    val bodyStr = response.body?.string()
+
+                    if (!response.isSuccessful) {
+                        throw Exception("伺服器回傳錯誤代碼 $code")
+                    }
+
+                    if (bodyStr.isNullOrEmpty()) {
+                        throw Exception("伺服器未回傳內容")
+                    }
+
+                    bodyStr.contains("\"success\":true", ignoreCase = true)
                 }
+            } catch (e: Exception) {
+                throw Exception("網路請求失敗：${e.message}")
             }
         }
     }

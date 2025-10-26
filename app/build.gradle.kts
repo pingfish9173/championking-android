@@ -83,6 +83,7 @@ dependencies {
     // 協程（與 Kotlin 2.1 相容）
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     // AndroidX 常用套件（可與你原本版本對齊）
     implementation("androidx.core:core-ktx:1.13.1")
