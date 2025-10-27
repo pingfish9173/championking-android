@@ -31,6 +31,11 @@ import com.champion.king.util.UpdateResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
 
 class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
@@ -41,6 +46,9 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
     // 更新管理器
     private val updateManager by lazy { UpdateManager(requireContext()) }
+
+    // HTTP 客戶端（用於 API 呼叫）
+    private val httpClient by lazy { OkHttpClient() }
 
     // 儲存原始資料
     private var originalAddress: String = ""
@@ -234,12 +242,6 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         confirmPassword: String,
         dialog: AlertDialog
     ) = requireContext().guardOnline {
-        val key = userSessionProvider?.getCurrentUserFirebaseKey()
-        if (key.isNullOrEmpty()) {
-            requireContext().toast(AppConfig.Msg.REQUIRE_LOGIN_SAVE)
-            return@guardOnline
-        }
-
         // 驗證輸入
         when {
             currentPassword.trim().isEmpty() -> {
@@ -263,77 +265,87 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             }
         }
 
-        // 驗證現在密碼
-        verifyCurrentPassword(key, currentPassword.trim()) { isValid, message ->
-            if (isValid) {
-                // 更新密碼
-                updatePassword(key, newPassword.trim()) { success, msg ->
-                    if (success) {
-                        requireContext().toast("密碼變更成功")
-                        dialog.dismiss()
-                    } else {
-                        requireContext().toast("密碼變更失敗：$msg")
-                    }
+        // 獲取帳號資訊
+        val account = binding.textAccount.text.toString()
+        if (account.isEmpty()) {
+            requireContext().toast("無法取得帳號資訊")
+            return@guardOnline
+        }
+
+        // 使用 API 變更密碼
+        changePasswordViaApi(
+            account = account,
+            currentPassword = currentPassword.trim(),
+            newPassword = newPassword.trim(),
+            onSuccess = {
+                requireContext().toast("密碼變更成功")
+                dialog.dismiss()
+            },
+            onError = { errorMsg ->
+                requireContext().toast(errorMsg)
+            }
+        )
+    }
+
+    /**
+     * 透過 API 變更密碼
+     */
+    private fun changePasswordViaApi(
+        account: String,
+        currentPassword: String,  // 👈 參數名稱改為 currentPassword
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        lifecycleScope.launch {
+            try {
+                val jsonObject = JSONObject().apply {
+                    put("account", account)
+                    put("currentPassword", currentPassword)
+                    put("newPassword", newPassword)
                 }
-            } else {
-                requireContext().toast("現在密碼錯誤：$message")
+
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val requestBody = jsonObject.toString().toRequestBody(mediaType)
+
+                val request = Request.Builder()
+                    .url("https://changepassword-qmvrvane7q-de.a.run.app")
+                    .addHeader("X-App-Auth", BuildConfig.APP_SECRET)
+                    .post(requestBody)
+                    .build()
+
+                httpClient.newCall(request).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        requireActivity().runOnUiThread {
+                            onError("網路錯誤：${e.message}")
+                        }
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        response.use {
+                            val responseBody = it.body?.string()
+                            requireActivity().runOnUiThread {
+                                if (it.isSuccessful) {
+                                    onSuccess()
+                                } else {
+                                    try {
+                                        val errorJson = JSONObject(responseBody ?: "{}")
+                                        val errorMsg = errorJson.optString("error", "密碼變更失敗")
+                                        onError(errorMsg)
+                                    } catch (e: Exception) {
+                                        onError("密碼變更失敗")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    onError("發生錯誤：${e.message}")
+                }
             }
         }
-    }
-
-    private fun verifyCurrentPassword(
-        userKey: String,
-        inputPassword: String,
-        callback: (Boolean, String?) -> Unit
-    ) {
-        val database = FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
-        database.child("users").child(userKey)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val salt = snapshot.child("salt").getValue(String::class.java)
-                    val storedHash = snapshot.child("passwordHash").getValue(String::class.java)
-
-                    if (salt.isNullOrEmpty() || storedHash.isNullOrEmpty()) {
-                        callback(false, "用戶資料不完整")
-                        return
-                    }
-
-                    val inputHash = PasswordUtils.sha256Hex(salt, inputPassword)
-                    val isValid = inputHash.equals(storedHash, ignoreCase = true)
-
-                    callback(isValid, if (isValid) null else "密碼錯誤")
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    callback(false, "驗證失敗：${error.message}")
-                }
-            })
-    }
-
-    private fun updatePassword(
-        userKey: String,
-        newPassword: String,
-        callback: (Boolean, String?) -> Unit
-    ) {
-        val database = FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
-
-        // 生成新的 salt 和 hash
-        val salt = PasswordUtils.generateSaltBase64()
-        val newPasswordHash = PasswordUtils.sha256Hex(salt, newPassword)
-
-        val updates = hashMapOf<String, Any>(
-            "salt" to salt,
-            "passwordHash" to newPasswordHash
-        )
-
-        database.child("users").child(userKey)
-            .updateChildren(updates)
-            .addOnSuccessListener {
-                callback(true, null)
-            }
-            .addOnFailureListener { e ->
-                callback(false, e.message)
-            }
     }
 
     // ==================== 版本更新相關方法 ====================
