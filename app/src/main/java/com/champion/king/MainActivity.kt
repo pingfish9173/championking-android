@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import com.champion.king.util.UpdateManager
 import com.champion.king.util.UpdateResult
 import com.champion.king.util.toast
+import com.champion.king.data.AuthRepository
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -82,6 +83,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private lateinit var versionInfoTextViewMaster: TextView
     // 更新管理器
     private val updateManager by lazy { UpdateManager(this) }
+
+    private val authRepository by lazy {
+        AuthRepository(FirebaseDatabase.getInstance(DB_URL).reference)
+    }
 
     // 如果你已有 AppConfig 可置換此常數，避免重複字串
     private val DB_URL =
@@ -897,39 +902,21 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         passwordInput: String,
         onResult: (Boolean, String?) -> Unit
     ) {
-        database.child("users").child(account)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(s: DataSnapshot) {
-                    if (!s.exists()) {
-                        onResult(false, "登入失敗：帳號不存在！")
-                        return
-                    }
-                    val user = s.getValue(User::class.java)
-                    val salt = s.child("salt").getValue(String::class.java)
-                    val storedHash = s.child("passwordHash").getValue(String::class.java)
-
-                    if (salt.isNullOrEmpty() || storedHash.isNullOrEmpty() || user == null) {
-                        onResult(false, "此帳號資料不完整，請聯絡管理員")
-                        return
-                    }
-
-                    val inputHash = PasswordUtils.sha256Hex(salt, passwordInput)
-                    if (inputHash.equals(storedHash, ignoreCase = true)) {
-                        currentUser = user.apply { firebaseKey = s.key }
-                        render(Mode.MASTER)
-                        loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
-                        Toast.makeText(this@MainActivity, "已切換至台主頁面！", Toast.LENGTH_SHORT)
-                            .show()
-                        onResult(true, null)
-                    } else {
-                        onResult(false, "登入失敗：密碼錯誤！")
-                    }
+        authRepository.login(account, passwordInput) { success, user, message ->
+            runOnUiThread {
+                if (success && user != null) {
+                    currentUser = user
+                    render(Mode.MASTER)
+                    loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+                    Toast.makeText(this@MainActivity, "已切換至台主頁面！", Toast.LENGTH_SHORT).show()
+                    onResult(true, null)
+                } else {
+                    val errorMsg = message ?: "登入失敗，請確認帳號密碼"
+                    Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_SHORT).show()
+                    onResult(false, errorMsg)
                 }
-
-                override fun onCancelled(error: DatabaseError) {
-                    onResult(false, "登入失敗：${error.message}")
-                }
-            })
+            }
+        }
     }
 
     // ====== Helpers ======

@@ -23,39 +23,6 @@ class AuthRepository(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private fun users() = root.child("users")
-    private fun devicePasswords() = root.child("devicePasswords")
-
-//    fun login(
-//        account: String,
-//        password: String,
-//        onResult: (success: Boolean, user: User?, message: String?) -> Unit
-//    ) {
-//        users().child(account).addListenerForSingleValueEvent(object : ValueEventListener {
-//            override fun onDataChange(snap: DataSnapshot) {
-//                if (!snap.exists()) {
-//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-//                }
-//                val salt = snap.child("salt").getValue(String::class.java)
-//                val stored = snap.child("passwordHash").getValue(String::class.java)
-//                if (salt.isNullOrEmpty() || stored.isNullOrEmpty()) {
-//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-//                }
-//                val inputHash = PasswordUtils.sha256Hex(salt, password)
-//                if (!inputHash.equals(stored, ignoreCase = true)) {
-//                    onResult(false, null, AppConfig.Msg.LOGIN_FAIL); return
-//                }
-//                val user = snap.getValue(User::class.java) ?: User()
-//                user.account = account
-//                user.firebaseKey = snap.key
-//                onResult(true, user, null)
-//            }
-//
-//            override fun onCancelled(error: DatabaseError) {
-//                onResult(false, null, dbErrorToHumanMessage(error))
-//            }
-//        })
-//    }
-
     fun login(
         account: String,
         password: String,
@@ -102,33 +69,6 @@ class AuthRepository(
                 }
             }
         }
-    }
-
-    fun resetPasswordToPhone(
-        account: String, email: String, phone: String,
-        onResult: (success: Boolean, message: String?) -> Unit
-    ) {
-        users().child(account).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snap: DataSnapshot) {
-                if (!snap.exists()) {
-                    onResult(false, "帳號不存在"); return
-                }
-                val dbEmail = snap.child("email").getValue(String::class.java)
-                val dbPhone = snap.child("phone").getValue(String::class.java)
-                if (!email.equals(dbEmail, true) || phone != dbPhone) {
-                    onResult(false, "驗證失敗：Email 或手機不符"); return
-                }
-                val newSalt = PasswordUtils.generateSaltBase64(16)
-                val newHash = PasswordUtils.sha256Hex(newSalt, phone)
-                snap.ref.updateChildren(mapOf("salt" to newSalt, "passwordHash" to newHash))
-                    .addOnSuccessListener { onResult(true, null) }
-                    .addOnFailureListener { e -> onResult(false, e.message) }
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                onResult(false, dbErrorToHumanMessage(error))
-            }
-        })
     }
 
     fun registerUser(
@@ -199,17 +139,6 @@ class AuthRepository(
             }
         } catch (e: Exception) {
             "註冊失敗：${response.message()}"
-        }
-    }
-
-    private fun dbErrorToHumanMessage(error: com.google.firebase.database.DatabaseError): String {
-        return when (error.code) {
-            com.google.firebase.database.DatabaseError.PERMISSION_DENIED ->
-                "權限不足或尚未登入。"  // 不再提示 App Check
-            com.google.firebase.database.DatabaseError.NETWORK_ERROR ->
-                "網路錯誤：請檢查連線。"
-
-            else -> "資料庫錯誤（${error.code}）：${error.message}"
         }
     }
 }
