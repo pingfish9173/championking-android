@@ -100,6 +100,7 @@ if [ -f "$PROJECT_DIR/firebase-deploy.js" ]; then
     UPDATE_MESSAGE="例行版本更新與效能優化"
 	
 	node "$PROJECT_DIR/firebase-deploy.js" "$NEW_VERSION_CODE" "$NEW_VERSION_NAME" "$APK_OUTPUT_PATH" "$UPDATE_MESSAGE"
+    echo -e "   ${GREEN}✓${NC} 已上傳為 release-app-$NEW_VERSION_NAME.apk"
 
     echo -e "   ${GREEN}✓${NC} Firebase 部署完成"
 else
