@@ -400,8 +400,8 @@ class ScratchCardPlayerFragment : Fragment() {
             }
             cellView.background = drawable
 
-            // 數字顏色：統一為灰色
-            val textColor = R.color.scratch_card_light_gray
+            // 數字顏色：統一為黑色
+            val textColor = R.color.black
 
             if (cellView is TextView) {
                 cellView.text = number.toString()

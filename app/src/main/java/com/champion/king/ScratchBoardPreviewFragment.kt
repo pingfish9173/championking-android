@@ -361,7 +361,7 @@ class ScratchBoardPreviewFragment : Fragment() {
             cellView.background = background
 
             val textColor = if (isScratched) {
-                ContextCompat.getColor(cellView.context, R.color.scratch_card_medium_gray)
+                ContextCompat.getColor(cellView.context, R.color.black)
             } else {
                 ContextCompat.getColor(cellView.context, R.color.scratch_card_light_gray)
             }
