@@ -30,6 +30,7 @@ class ScratchDialog(
     private var hasTriggeredScratchStart = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        (context as? MainActivity)?.enableImmersiveMode()
         super.onCreate(savedInstanceState)
 
         window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -219,4 +220,14 @@ class ScratchDialog(
         mediaPlayer = null
         super.dismiss()
     }
+
+    override fun onStart() {
+        super.onStart()
+        (context as? MainActivity)?.enableImmersiveMode()
+    }
+    override fun onStop() {
+        super.onStop()
+        (context as? MainActivity)?.enableImmersiveMode()
+    }
+
 }

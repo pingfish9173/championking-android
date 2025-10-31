@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
         }
         updateCurrentTime()
+        enableImmersiveMode()
     }
 
     override fun onResume() {
@@ -166,6 +167,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 setContentView(R.layout.player_main)
                 initPlayerViews()
                 updateCurrentTime()
+                enableImmersiveMode()
                 currentUser?.firebaseKey?.let { key ->
                     fetchAndDisplayPrizeInfo(key, isMaster = false)
                     fetchAndDisplayClawsGiveawayInfo(key, giveawayCountTextViewPlayer)
@@ -1238,6 +1240,23 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun enableImmersiveMode() {
+        // 只隱藏狀態列（電量、時間等）
+        window.decorView.systemUiVisibility =
+            (View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+    }
+
+    override fun onBackPressed() {
+        if (mode == Mode.PLAYER) {
+            // 玩家模式下不允許返回
+            return
+        }
+        super.onBackPressed()
     }
 
     companion object {

@@ -324,6 +324,7 @@ class ScratchCardPlayerFragment : Fragment() {
                 Log.d(TAG, "點擊格子 $cellNumber: 總格數=$totalCells, 已刮=$scratchedCount, 剩餘=$remainingCount")
                 Log.d(TAG, "是否倒數第二刮=$isSecondToLast, 剩餘是否有獎項=$hasUnscatchedPrizes")
 
+                (activity as? MainActivity)?.enableImmersiveMode()
                 // 顯示刮卡彈窗
                 val dialog = ScratchDialog(
                     requireContext(),
@@ -361,6 +362,7 @@ class ScratchCardPlayerFragment : Fragment() {
                         scratchingCells.remove(cellNumber)
                         updateCellDisplay(cellView, cellNumber, false, number)
                     }
+                    (activity as? MainActivity)?.enableImmersiveMode()
                 }
                 dialog.show()
             }
