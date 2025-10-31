@@ -161,6 +161,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         null, null
                     )
                 }
+                unlockAppFromScreen()
             }
 
             Mode.PLAYER -> {
@@ -182,6 +183,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 loadFragment(ScratchCardPlayerFragment(), containerIdFor(Mode.PLAYER))
                 Toast.makeText(this, "已切換至玩家頁面", Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "已切換至玩家頁面。")
+                lockAppToScreen()
             }
         }
     }
@@ -1258,6 +1260,24 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
         super.onBackPressed()
     }
+
+    private fun lockAppToScreen() {
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            if (activityManager.lockTaskModeState == android.app.ActivityManager.LOCK_TASK_MODE_NONE) {
+                startLockTask()
+                toast("已啟用鎖定模式，無法跳出遊戲")
+            }
+        }
+    }
+
+    private fun unlockAppFromScreen() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            stopLockTask()
+            toast("已解除鎖定模式")
+        }
+    }
+
 
     companion object {
         private const val TAG = "MainActivity"
