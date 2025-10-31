@@ -96,6 +96,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 🎨 立即切換回正常主題（移除啟動海報背景）
+        setTheme(R.style.Theme_A3)
+
         // 🔹 避免螢幕自動休眠或關閉
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -1277,7 +1280,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun unlockAppFromScreen() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
-            toast("已解除鎖定模式")
         }
     }
 
