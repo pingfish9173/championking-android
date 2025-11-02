@@ -1,8 +1,12 @@
 package com.champion.king.data
 
+import android.util.Log
 import com.champion.king.core.config.AppConfig
 import com.champion.king.model.ShopItem
 import com.google.firebase.database.*
+import com.google.firebase.database.FirebaseDatabase
+import com.champion.king.model.PurchaseRecord
+import com.champion.king.model.PurchaseItem
 
 /** 可移除的監聽句柄 */
 data class DbListenerHandle(val query: Query, val listener: ValueEventListener) {
@@ -90,6 +94,96 @@ class ShopRepository(
                     .addOnFailureListener { e -> onResult(false, e.message) }
             }
             .addOnFailureListener { e -> onResult(false, e.message) }
+    }
+
+    /**
+     * 保存購買紀錄到資料庫
+     * @param userKey 用戶Key
+     * @param username 用戶名稱（可選）
+     * @param totalPoints 總花費點數
+     * @param purchaseDetails 購買詳細資料 Map<商品名稱, Pair<購買數量, 贈送數量>>
+     * @param itemPrices 商品單價 Map<商品名稱, 單價>
+     * @param callback 回調函數
+     */
+    fun savePurchaseRecord(
+        userKey: String,
+        username: String = "",
+        totalPoints: Int,
+        purchaseDetails: Map<String, Pair<Int, Int>>,  // <商品名, <購買數, 贈送數>>
+        itemPrices: Map<String, Int>,  // <商品名, 單價>
+        callback: (success: Boolean, message: String?) -> Unit
+    ) {
+        try {
+            val database = FirebaseDatabase.getInstance()
+            val purchaseRecordsRef = database.getReference("purchase_records")
+
+            // 生成唯一的紀錄ID
+            val recordId = purchaseRecordsRef.push().key ?: run {
+                callback(false, "無法生成紀錄ID")
+                return
+            }
+
+            // 準備購買項目資料
+            val items = mutableMapOf<String, PurchaseItem>()
+            purchaseDetails.forEach { (productName, quantities) ->
+                val (purchasedQty, bonusQty) = quantities
+                val pricePerUnit = itemPrices[productName] ?: 0
+                val subtotal = purchasedQty * pricePerUnit
+
+                items[productName] = PurchaseItem(
+                    productName = productName,
+                    purchasedQuantity = purchasedQty,
+                    bonusQuantity = bonusQty,
+                    pricePerUnit = pricePerUnit,
+                    subtotal = subtotal
+                )
+            }
+
+            // 創建購買紀錄
+            val purchaseRecord = PurchaseRecord(
+                recordId = recordId,
+                userKey = userKey,
+                username = username,
+                purchaseTime = System.currentTimeMillis(),
+                totalPoints = totalPoints,
+                items = items
+            )
+
+            // 保存到資料庫
+            purchaseRecordsRef.child(recordId).setValue(purchaseRecord)
+                .addOnSuccessListener {
+                    callback(true, "購買紀錄已保存")
+                }
+                .addOnFailureListener { e ->
+                    callback(false, "保存購買紀錄失敗：${e.message}")
+                }
+
+        } catch (e: Exception) {
+            callback(false, "保存購買紀錄異常：${e.message}")
+        }
+    }
+
+    /**
+     * 獲取用戶帳號
+     * @param userKey 用戶 Key
+     * @param callback 回調函數 (成功, 帳號名稱)
+     */
+    fun getUserAccount(userKey: String, callback: (success: Boolean, account: String?) -> Unit) {
+        try {
+            val database = FirebaseDatabase.getInstance()
+            val userRef = database.getReference("users").child(userKey).child("account")
+
+            userRef.get().addOnSuccessListener { snapshot ->
+                val account = snapshot.getValue(String::class.java)
+                callback(true, account)
+            }.addOnFailureListener { e ->
+                Log.e("ShopRepository", "獲取用戶帳號失敗：${e.message}")
+                callback(false, null)
+            }
+        } catch (e: Exception) {
+            Log.e("ShopRepository", "獲取用戶帳號異常：${e.message}")
+            callback(false, null)
+        }
     }
 
     companion object {

@@ -351,26 +351,83 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         // 準備購買資料，包含贈送項目
         val purchaseData = preparePurchaseData()
 
-        repo.purchase(userKey, totalAmount, purchaseData) { ok, msg ->
-            if (!isAdded || this@ShopFragment.view == null) return@purchase
-            if (ok) {
-                val bonusMessage = getBonusMessage()
-                val successMessage = if (bonusMessage.isNotEmpty()) {
-                    "購買成功！總計扣除 ${totalAmount}點。$bonusMessage"
+        // ✨ 新增：準備購買紀錄資料
+        val purchaseDetails = preparePurchaseDetailsForRecord()
+        val itemPrices = prepareItemPrices()
+
+        // ✨ 修改：先獲取用戶帳號
+        repo.getUserAccount(userKey) { success, account ->
+            if (!isAdded || this@ShopFragment.view == null) return@getUserAccount
+
+            val username = account ?: userKey  // 如果獲取失敗，使用 userKey 作為備用
+
+            // 執行購買
+            repo.purchase(userKey, totalAmount, purchaseData) { ok, msg ->
+                if (!isAdded || this@ShopFragment.view == null) return@purchase
+                if (ok) {
+                    // ✨ 新增：購買成功後保存購買紀錄
+                    repo.savePurchaseRecord(
+                        userKey = userKey,
+                        username = username,  // 使用從 Firebase 獲取的帳號
+                        totalPoints = totalAmount,
+                        purchaseDetails = purchaseDetails,
+                        itemPrices = itemPrices
+                    ) { recordSuccess, recordMsg ->
+                        if (!recordSuccess) {
+                            Log.e("ShopFragment", "保存購買紀錄失敗：$recordMsg")
+                        }
+                    }
+
+                    val bonusMessage = getBonusMessage()
+                    val successMessage = if (bonusMessage.isNotEmpty()) {
+                        "購買成功！總計扣除 ${totalAmount}點。$bonusMessage"
+                    } else {
+                        "購買成功！總計扣除 ${totalAmount}點。"
+                    }
+                    requireContext().toast(successMessage)
+                    itemQuantities.clear()
+                    displayShopItems()
                 } else {
-                    "購買成功！總計扣除 ${totalAmount}點。"
-                }
-                requireContext().toast(successMessage)
-                itemQuantities.clear()
-                displayShopItems()
-            } else {
-                when (msg) {
-                    "購物車為空" -> requireContext().toast("您的購物車是空的，請先選擇商品！")
-                    "點數不足"   -> requireContext().toast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
-                    else          -> requireContext().toast("購買失敗：${msg ?: "請稍後再試"}")
+                    when (msg) {
+                        "購物車為空" -> requireContext().toast("您的購物車是空的，請先選擇商品！")
+                        "點數不足"   -> requireContext().toast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
+                        else          -> requireContext().toast("購買失敗：${msg ?: "請稍後再試"}")
+                    }
                 }
             }
         }
+    }
+
+    // ✨ 新增：準備購買詳細資料用於紀錄（分離購買數量和贈送數量）
+    private fun preparePurchaseDetailsForRecord(): Map<String, Pair<Int, Int>> {
+        val details = mutableMapOf<String, Pair<Int, Int>>()
+
+        itemQuantities.forEach { (name, quantity) ->
+            if (quantity > 0) {
+                val bonusQuantity = if (quantity >= 10) {
+                    (quantity / 10) * 10
+                } else {
+                    0
+                }
+                details[name] = Pair(quantity, bonusQuantity)
+            }
+        }
+
+        return details
+    }
+
+    // ✨ 新增：準備商品單價資料
+    private fun prepareItemPrices(): Map<String, Int> {
+        val prices = mutableMapOf<String, Int>()
+
+        shopItems.forEach { item ->
+            val name = item.productName ?: ""
+            if (name.isNotEmpty()) {
+                prices[name] = item.price
+            }
+        }
+
+        return prices
     }
 
     // 新增：準備購買資料，包含原購買數量和贈送數量
