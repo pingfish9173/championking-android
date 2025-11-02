@@ -231,7 +231,42 @@
                 android:lineSpacingMultiplier="1.3"
                 android:paddingBottom="16dp" />
 
+            <!-- 六、軟體說明 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="六、軟體說明"
+                android:textSize="20sp"
+                android:textColor="@android:color/black"
+                android:textStyle="bold"
+                android:paddingBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="1. 冠軍王App內建永不休眠模式，故無需再另外設定。"
+                android:textSize="16sp"
+                android:textColor="#333333"
+                android:lineSpacingMultiplier="1.3"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="2. 當待機時間15分鐘，則直接跳轉廣告頁面。"
+                android:textSize="16sp"
+                android:textColor="#333333"
+                android:lineSpacingMultiplier="1.3"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="3. 換板密碼係提供部分射板玩家使用，如有需要，台主可提供密碼給玩家，請自行判斷。"
+                android:textSize="16sp"
+                android:textColor="#333333"
+                android:lineSpacingMultiplier="1.3"
+                android:paddingBottom="16dp" />
         </LinearLayout>
     </ScrollView>
-
 </LinearLayout>
