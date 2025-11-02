@@ -207,7 +207,7 @@
             android:layout_width="96dp"
             android:layout_height="wrap_content"
             android:gravity="end"
-            android:text="地址："
+            android:text="縣市地區："
             android:textColor="#333333"
             android:textSize="14sp"
             android:layout_marginEnd="8dp" />
