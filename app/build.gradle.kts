@@ -29,11 +29,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.champion.king"  // ← 改成你原本的 applicationId
-        minSdk = 24                          // ← 依你原本設定
-        targetSdk = 34                       // ← 依你原本設定
-        versionCode = 43
-        versionName = "1.0.43"
+        applicationId = "com.champion.king"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 44
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
