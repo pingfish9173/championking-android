@@ -144,12 +144,23 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
                 quantityEditText.addTextChangedListener(object : TextWatcher {
                     override fun afterTextChanged(s: Editable?) {
-                        val newQuantity = s?.toString()?.toIntOrNull() ?: 0
+                        val textValue = s?.toString().orEmpty()
+                        val newQuantity = textValue.toIntOrNull() ?: 0
+
+                        // 🔹 防呆：限制最多 9999
+                        if (newQuantity > 9999) {
+                            quantityEditText.setText("9999")
+                            quantityEditText.setSelection(quantityEditText.text.length)
+                            requireContext().toast("單一商品數量上限為 9999")
+                            return
+                        }
+
                         itemQuantities[name] = newQuantity.coerceAtLeast(0)
                         updateTotalAmount()
                         displayPurchaseList()
-                        displayBonusList() // 新增：更新贈送清單
+                        displayBonusList()
                     }
+
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 })
@@ -159,8 +170,15 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     quantityEditText.setText((q - 1).coerceAtLeast(0).toString())
                 }
                 increaseButton.setOnClickListener {
-                    val q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
-                    quantityEditText.setText((q + 1).toString())
+                    var q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
+                    if (q >= 9999) {
+                        q = 9999
+                        requireContext().toast("單一商品數量上限為 9999")
+                    } else {
+                        q += 1
+                    }
+                    quantityEditText.setText(q.toString())
+                    quantityEditText.setSelection(quantityEditText.text.length)
                 }
 
                 rowLayout?.addView(itemLayout)

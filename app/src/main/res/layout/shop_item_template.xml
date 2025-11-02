@@ -68,6 +68,7 @@
             android:gravity="center"
             android:layout_gravity="center_vertical"
             android:minWidth="30dp"
+            android:maxLength="4"
             android:inputType="number"
             android:background="@android:color/transparent"
             tools:ignore="Autofill,LabelFor" />
