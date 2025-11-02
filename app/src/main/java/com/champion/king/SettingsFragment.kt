@@ -486,8 +486,9 @@ class SettingsFragment : Fragment() {
             viewLifecycleOwner
         ) { _, result ->
             val arr = result.getIntArray("numbers") ?: intArrayOf()
-            val display = arr.sorted().joinToString(",")
-            binding.editTextGrandPrize.setText(display) // 右側唯讀欄位顯示
+            // 在每個逗號後面插入零寬空白字元 (U+200B)，讓系統只在逗號後可換行
+            val display = arr.sorted().joinToString(", \u200B")
+            binding.editTextGrandPrize.setText(display)
         }
     }
 
