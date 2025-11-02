@@ -42,6 +42,24 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
         super.onViewCreated(view, savedInstanceState)
         setupCityDistrictSpinners()
         setupValidation()
+
+        // ⬇⬇⬇ 在這裡加上以下兩段
+        binding.editTextDevicePassword.doOnTextChanged { text, _, _, _ ->
+            val upper = text?.toString()?.uppercase() ?: ""
+            if (binding.editTextDevicePassword.text.toString() != upper) {
+                binding.editTextDevicePassword.setText(upper)
+                binding.editTextDevicePassword.setSelection(upper.length)
+            }
+        }
+
+        binding.editTextReferralCode.doOnTextChanged { text, _, _, _ ->
+            val upper = text?.toString()?.uppercase() ?: ""
+            if (binding.editTextReferralCode.text.toString() != upper) {
+                binding.editTextReferralCode.setText(upper)
+                binding.editTextReferralCode.setSelection(upper.length)
+            }
+        }
+
         binding.buttonRegister.setThrottledClick { tryRegister() }
     }
 
