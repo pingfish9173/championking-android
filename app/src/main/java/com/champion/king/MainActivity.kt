@@ -68,6 +68,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     // ====== Time updater ======
     private val handler = Handler(Looper.getMainLooper())
+
+    // === 廣告閒置顯示機制 ===
+    private var lastInteractionTime: Long = System.currentTimeMillis()
+    private val idleTimeoutMillis = 15 * 60 * 1000L // 15分鐘
+    private val idleHandler = Handler(Looper.getMainLooper())
+    private val idleRunnable = Runnable { showAdPoster() }
+
     private val updateTimeRunnable = object : Runnable {
         override fun run() {
             updateCurrentTime()
@@ -123,6 +130,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
         updateCurrentTime()
         enableImmersiveMode()
+        resetIdleTimer() // 啟動閒置監測計時
     }
 
     override fun onResume() {
@@ -144,6 +152,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(updateTimeRunnable)
+        idleHandler.removeCallbacks(idleRunnable) // 停止閒置檢查
     }
 
     // ====== Rendering ======
@@ -1257,6 +1266,54 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        lastInteractionTime = System.currentTimeMillis()
+        resetIdleTimer()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun resetIdleTimer() {
+        idleHandler.removeCallbacks(idleRunnable)
+        idleHandler.postDelayed(idleRunnable, idleTimeoutMillis)
+    }
+
+    private fun showAdPoster() {
+        runOnUiThread {
+            // 🔹 建立海報ImageView
+            val imageView = ImageView(this).apply {
+                setImageResource(R.drawable.splash_poster)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                alpha = 0f // 一開始透明
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+
+            // 🔹 點擊海報時移除並重新啟動計時
+            imageView.setOnClickListener {
+                it.animate()
+                    .alpha(0f)
+                    .setDuration(800)
+                    .withEndAction {
+                        (window.decorView as FrameLayout).removeView(it)
+                        resetIdleTimer()
+                    }
+                    .start()
+            }
+
+            // 🔹 將海報加入畫面
+            val decorView = window.decorView as FrameLayout
+            decorView.addView(imageView)
+
+            // 🔹 執行淡入動畫
+            imageView.animate()
+                .alpha(1f)
+                .setDuration(800)
+                .start()
+        }
     }
 
     override fun onBackPressed() {
