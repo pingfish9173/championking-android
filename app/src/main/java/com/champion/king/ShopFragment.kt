@@ -142,43 +142,37 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 val currentQ = (itemQuantities[name] ?: 0).coerceAtLeast(0)
                 quantityEditText.setText(currentQ.toString())
 
-                quantityEditText.addTextChangedListener(object : TextWatcher {
-                    override fun afterTextChanged(s: Editable?) {
-                        val textValue = s?.toString().orEmpty()
-                        val newQuantity = textValue.toIntOrNull() ?: 0
+                // 🔹 方案三：禁用直接輸入，改用對話框
+                quantityEditText.isFocusable = false
+                quantityEditText.isCursorVisible = false
+                quantityEditText.setOnClickListener {
+                    showQuantityInputDialog(name, quantityEditText)
+                }
 
-                        // 🔹 防呆：限制最多 9999
-                        if (newQuantity > 9999) {
-                            quantityEditText.setText("9999")
-                            quantityEditText.setSelection(quantityEditText.text.length)
-                            requireContext().toast("單一商品數量上限為 9999")
-                            return
-                        }
-
-                        itemQuantities[name] = newQuantity.coerceAtLeast(0)
-                        updateTotalAmount()
-                        displayPurchaseList()
-                        displayBonusList()
-                    }
-
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-                })
-
+                // 保留 +/- 按鈕功能
                 decreaseButton.setOnClickListener {
                     val q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
-                    quantityEditText.setText((q - 1).coerceAtLeast(0).toString())
+                    val newValue = (q - 1).coerceAtLeast(0)
+                    itemQuantities[name] = newValue
+                    quantityEditText.setText(newValue.toString())
+                    updateTotalAmount()
+                    displayPurchaseList()
+                    displayBonusList()
                 }
+
                 increaseButton.setOnClickListener {
-                    var q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
-                    if (q >= 9999) {
-                        q = 9999
+                    val q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
+                    val newValue = if (q >= 9999) {
                         requireContext().toast("單一商品數量上限為 9999")
+                        9999
                     } else {
-                        q += 1
+                        q + 1
                     }
-                    quantityEditText.setText(q.toString())
-                    quantityEditText.setSelection(quantityEditText.text.length)
+                    itemQuantities[name] = newValue
+                    quantityEditText.setText(newValue.toString())
+                    updateTotalAmount()
+                    displayPurchaseList()
+                    displayBonusList()
                 }
 
                 rowLayout?.addView(itemLayout)
@@ -191,7 +185,130 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
         updateTotalAmount()
         displayPurchaseList()
-        displayBonusList() // 新增：顯示贈送清單
+        displayBonusList()
+    }
+
+    // 🔹 方案三：顯示自定義數字鍵盤對話框
+    private fun showQuantityInputDialog(productName: String, editText: EditText) {
+        val dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_quantity_input, null)
+
+        val dialogEditText = dialogView.findViewById<EditText>(R.id.dialog_quantity_edit)
+        val btnMinus = dialogView.findViewById<Button>(R.id.dialog_btn_minus)
+        val btnPlus = dialogView.findViewById<Button>(R.id.dialog_btn_plus)
+        val btnClear = dialogView.findViewById<Button>(R.id.dialog_btn_clear)
+        val btnDelete = dialogView.findViewById<Button>(R.id.dialog_btn_delete)
+
+        // 數字按鈕 0-9
+        val btn0 = dialogView.findViewById<Button>(R.id.dialog_btn_0)
+        val btn1 = dialogView.findViewById<Button>(R.id.dialog_btn_1)
+        val btn2 = dialogView.findViewById<Button>(R.id.dialog_btn_2)
+        val btn3 = dialogView.findViewById<Button>(R.id.dialog_btn_3)
+        val btn4 = dialogView.findViewById<Button>(R.id.dialog_btn_4)
+        val btn5 = dialogView.findViewById<Button>(R.id.dialog_btn_5)
+        val btn6 = dialogView.findViewById<Button>(R.id.dialog_btn_6)
+        val btn7 = dialogView.findViewById<Button>(R.id.dialog_btn_7)
+        val btn8 = dialogView.findViewById<Button>(R.id.dialog_btn_8)
+        val btn9 = dialogView.findViewById<Button>(R.id.dialog_btn_9)
+
+        // 設置當前數量
+        val currentQuantity = itemQuantities[productName] ?: 0
+        dialogEditText.setText(currentQuantity.toString())
+        dialogEditText.setSelection(dialogEditText.text.length)
+
+        // 禁用系統鍵盤
+        dialogEditText.showSoftInputOnFocus = false
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle("輸入 $productName 數量")
+            .setView(dialogView)
+            .setPositiveButton("確定") { d, _ ->
+                val newQuantity = dialogEditText.text.toString().toIntOrNull() ?: 0
+                itemQuantities[productName] = newQuantity.coerceIn(0, 9999)
+                editText.setText(itemQuantities[productName].toString())
+                updateTotalAmount()
+                displayPurchaseList()
+                displayBonusList()
+                d.dismiss()
+            }
+            .setNegativeButton("取消", null)
+            .create()
+
+        // 數字按鈕點擊事件
+        val numberClickListener = View.OnClickListener { view ->
+            val button = view as Button
+            val number = button.text.toString()
+            val currentText = dialogEditText.text.toString()
+            val currentValue = if (currentText == "0") "" else currentText
+            val newText = "$currentValue$number"
+
+            if (newText.length <= 4) {
+                val newValue = newText.toIntOrNull() ?: 0
+                if (newValue <= 9999) {
+                    dialogEditText.setText(newText)
+                    dialogEditText.setSelection(dialogEditText.text.length)
+                } else {
+                    requireContext().toast("單一商品數量上限為 9999")
+                }
+            }
+        }
+
+        btn0.setOnClickListener(numberClickListener)
+        btn1.setOnClickListener(numberClickListener)
+        btn2.setOnClickListener(numberClickListener)
+        btn3.setOnClickListener(numberClickListener)
+        btn4.setOnClickListener(numberClickListener)
+        btn5.setOnClickListener(numberClickListener)
+        btn6.setOnClickListener(numberClickListener)
+        btn7.setOnClickListener(numberClickListener)
+        btn8.setOnClickListener(numberClickListener)
+        btn9.setOnClickListener(numberClickListener)
+
+        // 減少按鈕
+        btnMinus.setOnClickListener {
+            val current = dialogEditText.text.toString().toIntOrNull() ?: 0
+            val newValue = (current - 1).coerceAtLeast(0)
+            dialogEditText.setText(newValue.toString())
+            dialogEditText.setSelection(dialogEditText.text.length)
+        }
+
+        // 增加按鈕
+        btnPlus.setOnClickListener {
+            val current = dialogEditText.text.toString().toIntOrNull() ?: 0
+            val newValue = (current + 1).coerceAtMost(9999)
+            if (newValue >= 9999) {
+                requireContext().toast("單一商品數量上限為 9999")
+            }
+            dialogEditText.setText(newValue.toString())
+            dialogEditText.setSelection(dialogEditText.text.length)
+        }
+
+        // 清除按鈕
+        btnClear.setOnClickListener {
+            dialogEditText.setText("0")
+            dialogEditText.setSelection(dialogEditText.text.length)
+        }
+
+        // 刪除按鈕（退格）
+        btnDelete.setOnClickListener {
+            val currentText = dialogEditText.text.toString()
+            if (currentText.isNotEmpty()) {
+                val newText = if (currentText.length > 1) {
+                    currentText.substring(0, currentText.length - 1)
+                } else {
+                    "0"
+                }
+                dialogEditText.setText(newText)
+                dialogEditText.setSelection(dialogEditText.text.length)
+            }
+        }
+
+        dialog.show()
+
+        // 點擊 EditText 時也禁用系統鍵盤
+        dialogEditText.setOnClickListener {
+            // 不做任何事，阻止系統鍵盤彈出
+        }
     }
 
     private fun displayPurchaseList() {
@@ -207,52 +324,49 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     text = "$name $q 張"
                     textSize = 16f
                     setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
-                    setPadding(8.toPx(), 4.toPx(), 8.toPx(), 4.toPx())
+                    setPadding(4.toPx(), 2.toPx(), 4.toPx(), 2.toPx())
                 }
                 list.addView(tv)
             }
         }
     }
 
-    // 新增：顯示贈送清單（買10送10功能）
     private fun displayBonusList() {
-        val bonusList = binding.bonusListContainer
-        bonusList.removeAllViews()
+        val list = binding.bonusListContainer
+        list.removeAllViews()
 
-        var hasBonusItems = false
+        val hasBonusTitle = TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            text = "🎁 贈送"
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(4.toPx(), 4.toPx(), 4.toPx(), 2.toPx())
+        }
 
+        var hasBonus = false
         itemQuantities.forEach { (name, quantity) ->
             if (quantity >= 10) {
-                val bonusQuantity = (quantity / 10) * 10 // 計算贈送數量
+                val bonusQuantity = (quantity / 10) * 10
                 if (bonusQuantity > 0) {
-                    if (!hasBonusItems) {
-                        // 添加贈送標題
-                        val titleTv = TextView(requireContext()).apply {
-                            layoutParams = LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT
-                            )
-                            text = "贈送："
-                            textSize = 14f
-                            setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark))
-                            setPadding(8.toPx(), 8.toPx(), 8.toPx(), 4.toPx())
-                            setTypeface(null, android.graphics.Typeface.BOLD)
-                        }
-                        bonusList.addView(titleTv)
-                        hasBonusItems = true
+                    if (!hasBonus) {
+                        list.addView(hasBonusTitle)
+                        hasBonus = true
                     }
-
-                    val bonusTv = TextView(requireContext()).apply {
+                    val tv = TextView(requireContext()).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
                         )
                         text = "$name ${bonusQuantity}張"
                         textSize = 14f
-                        setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark))
-                        setPadding(16.toPx(), 2.toPx(), 8.toPx(), 2.toPx())
+                        setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
+                        setPadding(4.toPx(), 2.toPx(), 4.toPx(), 2.toPx())
                     }
-                    bonusList.addView(bonusTv)
+                    list.addView(tv)
                 }
             }
         }
