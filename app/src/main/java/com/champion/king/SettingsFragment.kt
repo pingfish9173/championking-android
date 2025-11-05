@@ -3,6 +3,7 @@ package com.champion.king
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.Layout
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -29,6 +30,8 @@ import com.champion.king.ui.settings.SettingsUIManager
 import com.champion.king.ui.settings.ShelfManager
 import com.google.firebase.database.*
 import kotlinx.coroutines.launch
+import android.text.SpannableStringBuilder
+import android.text.method.ScrollingMovementMethod
 
 class SettingsFragment : Fragment() {
 
@@ -486,9 +489,20 @@ class SettingsFragment : Fragment() {
             viewLifecycleOwner
         ) { _, result ->
             val arr = result.getIntArray("numbers") ?: intArrayOf()
-            // 在每個逗號後面插入零寬空白字元 (U+200B)，讓系統只在逗號後可換行
-            val display = arr.sorted().joinToString(", \u200B")
-            binding.editTextGrandPrize.setText(display)
+            val display = arr.sorted().joinToString(", ")
+
+            val spannable = SpannableStringBuilder(display)
+
+            binding.editTextGrandPrize.apply {
+                setText(spannable, TextView.BufferType.SPANNABLE)
+                setHorizontallyScrolling(false)
+                isSingleLine = false
+                maxLines = 3
+                // ✅ Android 6 以上都有：設定高品質換行策略
+                breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
+                hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+                movementMethod = ScrollingMovementMethod.getInstance()
+            }
         }
     }
 
