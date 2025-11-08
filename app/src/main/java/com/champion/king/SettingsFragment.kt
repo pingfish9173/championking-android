@@ -227,6 +227,7 @@ class SettingsFragment : Fragment() {
         binding.buttonToggleInuse.setOnClickListener { handleToggleInUseClick() }
         binding.buttonReturnSelected.setOnClickListener { handleReturnClick() }
         binding.buttonDeleteSelected.setOnClickListener { handleDeleteClick() }
+        binding.buttonRefreshScratch.setOnClickListener { handleRefreshScratchClick() }
 
         // 新增：「特獎」按鈕 → 進入/退出 單選挑選模式
         binding.buttonPickSpecialPrize.setOnClickListener {
@@ -573,8 +574,6 @@ class SettingsFragment : Fragment() {
     // 狀態管理相關方法
     // ===========================================
 
-    // 移除重複定義，因為已經在上面定義過了
-
     private fun showUnsetShelfState() {
         isShowingUnsetState = true
         showPreviewUnset()
@@ -588,6 +587,17 @@ class SettingsFragment : Fragment() {
         setButtonsEnabled(save = true, toggleInUse = false, returnBtn = false, delete = false)
         uiManager.updateInUseButtonUI(null)
         uiManager.updateActionButtonsUI(null)
+        updateRefreshButtonVisibility()
+    }
+
+    /** 🔘 根據目前狀態顯示／隱藏重新整理圖示 **/
+    private fun updateRefreshButtonVisibility() {
+        // 當「未設置」狀態時顯示刷新按鈕，否則隱藏
+        if (isShowingUnsetState) {
+            binding.buttonRefreshScratch.visibility = View.VISIBLE
+        } else {
+            binding.buttonRefreshScratch.visibility = View.GONE
+        }
     }
 
     // 檢查刮板是否已被刮過（1刮含以上）
@@ -629,6 +639,7 @@ class SettingsFragment : Fragment() {
         showScratchTypeLabel(selectedCard.scratchesType)
         uiManager.updateInUseButtonUI(selectedCard)
         uiManager.updateActionButtonsUI(selectedCard)
+        updateRefreshButtonVisibility()
     }
 
     // 移除 handleCardsUpdate 方法，因為已經在 observeViewModel 中直接處理
@@ -787,6 +798,39 @@ class SettingsFragment : Fragment() {
 
     private fun handleDeleteClick() {
         actionHandler.handleDelete(shelfManager.selectedShelfOrder, viewModel.cards.value)
+    }
+
+    /** 🔄 刮數重新整理按鈕邏輯 **/
+    private fun handleRefreshScratchClick() {
+        val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
+        if (selectedItem == null) {
+            showToast("請先選擇刮數")
+            return
+        }
+
+        val scratchType = selectedItem.getScratchType()
+        val stock = selectedItem.stock
+
+        if (stock <= 0) {
+            showToast("此刮數無庫存，無法重新整理")
+            return
+        }
+
+        showToast("重新生成 ${scratchType}刮 配置中…")
+
+        // 重新建立新的隨機預覽板
+        currentPreviewFragment = ScratchBoardPreviewFragment.newInstance(
+            "${scratchType}刮 (${getScratchDimensions(scratchType)})"
+        )
+
+        // 更新預覽區域
+        childFragmentManager.beginTransaction()
+            .replace(binding.scratchBoardArea.id, currentPreviewFragment!!)
+            .commitAllowingStateLoss()
+
+        // 清空特獎與大獎欄位
+        binding.editTextSpecialPrize.text?.clear()
+        binding.editTextGrandPrize.text?.clear()
     }
 
     // ===========================================
@@ -1292,12 +1336,8 @@ class SettingsFragment : Fragment() {
             }
 
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                return createTextView(position, convertView, parent) {
-                    super.getView(
-                        position,
-                        convertView,
-                        parent
-                    )
+                return createCustomTextView(position, convertView, parent) {
+                    super.getView(position, convertView, parent)
                 }
             }
 
@@ -1306,16 +1346,13 @@ class SettingsFragment : Fragment() {
                 convertView: View?,
                 parent: ViewGroup
             ): View {
-                return createTextView(position, convertView, parent) {
-                    super.getDropDownView(
-                        position,
-                        convertView,
-                        parent
-                    )
+                return createCustomTextView(position, convertView, parent) {
+                    super.getDropDownView(position, convertView, parent)
                 }
             }
 
-            private fun createTextView(
+            /** 🔹 自訂每一行的文字樣式（縮小字體、防裁切） **/
+            private fun createCustomTextView(
                 position: Int,
                 convertView: View?,
                 parent: ViewGroup,
@@ -1325,6 +1362,10 @@ class SettingsFragment : Fragment() {
                     val view = defaultView() as TextView
                     val enabled = isEnabled(position)
                     view.setTextColor(if (enabled) Color.BLACK else Color.GRAY)
+                    view.textSize = 13f            // ✅ 調小字體
+                    view.setPadding(12, 6, 12, 6)  // ✅ 減少內邊距
+                    view.isSingleLine = true       // ✅ 單行顯示
+                    view.ellipsize = android.text.TextUtils.TruncateAt.END // ✅ 超出用…
                     view
                 } catch (e: Exception) {
                     TextView(requireContext()).apply {

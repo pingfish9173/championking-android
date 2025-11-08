@@ -100,6 +100,7 @@
 
             <!-- 刮數設定 -->
             <LinearLayout
+                android:id="@+id/layout_scratch_count_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="6dp"
@@ -120,7 +121,18 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:entries="@array/scratches_count_options" />
+
+                <!-- 🔹 新增重新整理按鈕 -->
+                <ImageButton
+                    android:id="@+id/button_refresh_scratch"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@android:color/transparent"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="重新整理" />
             </LinearLayout>
+
 
             <!-- 特獎設定：左側按鈕；右側唯讀顯示 -->
             <LinearLayout
