@@ -24,6 +24,12 @@ import android.app.AlertDialog
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 class ScratchCardPlayerFragment : Fragment() {
 
@@ -150,8 +156,18 @@ class ScratchCardPlayerFragment : Fragment() {
 
                     val toShow = available.minByOrNull { it.second.order!! }
                     if (toShow != null) {
-                        Log.d(TAG, "顯示刮刮卡: order=${toShow.second.order}, scratchesType=${toShow.second.scratchesType}")
-                        displayScratchCard(toShow.first, toShow.second)
+                        val newSerial = toShow.first
+                        val newCard = toShow.second
+
+                        // 只在序號改變時重建UI
+                        if (currentScratchCard?.serialNumber != newSerial) {
+                            Log.d(TAG, "切換刮刮卡序號: $newSerial")
+                            displayScratchCard(newSerial, newCard)
+                        } else {
+                            // 同一張卡，只更新格子狀態
+                            currentScratchCard = newCard
+                            updateExistingScratchCardUI(newCard)
+                        }
                     } else {
                         displayNoScratchCardMessage("目前沒有可用的刮刮卡。")
                     }
@@ -167,8 +183,20 @@ class ScratchCardPlayerFragment : Fragment() {
             })
     }
 
+    private fun updateExistingScratchCardUI(updatedCard: ScratchCard) {
+        updatedCard.numberConfigurations?.forEach { config ->
+            val cellView = cellViews[config.id] ?: return@forEach
+            updateCellDisplay(
+                cellView,
+                config.id,
+                config.scratched == true,
+                config.number
+            )
+        }
+    }
+
     private fun displayScratchCard(serialNumber: String, card: ScratchCard) {
-        currentScratchCard = card
+        currentScratchCard = card.apply { this.serialNumber = serialNumber }
 
         val scratchesType = card.scratchesType ?: 10
 
@@ -440,45 +468,68 @@ class ScratchCardPlayerFragment : Fragment() {
     }
 
     /**
-     * 標記格子為已觸發刮卡（防弊機制）
+     * 標記格子為已觸發刮卡（防弊機制 - 非阻塞）
+     * 僅單向寫入，不等待回傳，也不監聽 onSuccess / onFailure。
+     */
+    /**
+     * 標記格子為已觸發刮卡（防弊機制 - 完全非阻塞）
+     * 不讀資料，不等待回傳，不依賴 listener。
+     */
+    /**
+     * 完全 fire-and-forget：不查 index，直接發出寫入。
+     * 適合你不在意結果、不在意 index 精準的情境。
+     */
+    /**
+     * 完全非阻塞版：防弊寫入，不讀資料，不等待，不綁回調。
+     * ✅ 不會卡頓
+     * ✅ 不會影響主執行緒
+     * ✅ 仍會寫入 hasTriggeredScratchStart = true
      */
     private fun markCellAsTriggered(serialNumber: String, cellNumber: Int) {
-        val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+        val appAuthSecret = BuildConfig.APP_SECRET
 
-        database.child("users")
-            .child(currentUserFirebaseKey)
-            .child("scratchCards")
-            .child(serialNumber)
-            .child("numberConfigurations")
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    for ((index, child) in snapshot.children.withIndex()) {
-                        val id = child.child("id").getValue(Int::class.java)
-                        if (id == cellNumber) {
-                            // 標記 hasTriggeredScratchStart 為 true
-                            database.child("users")
-                                .child(currentUserFirebaseKey)
-                                .child("scratchCards")
-                                .child(serialNumber)
-                                .child("numberConfigurations")
-                                .child(index.toString())
-                                .child("hasTriggeredScratchStart")
-                                .setValue(true)
-                                .addOnSuccessListener {
-                                    Log.d(TAG, "格子 $cellNumber 的 hasTriggeredScratchStart 已標記為 true")
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e(TAG, "標記格子 $cellNumber 的 hasTriggeredScratchStart 失敗: ${e.message}", e)
-                                }
-                            break
-                        }
-                    }
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val url = "https://marktriggered-qmvrvane7q-de.a.run.app"
+                val jsonBody = JSONObject().apply {
+                    put("userKey", userKey)
+                    put("serialNumber", serialNumber)
+                    put("cellNumber", cellNumber)
                 }
 
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e(TAG, "讀取格子配置失敗: ${error.message}", error.toException())
-                }
-            })
+                // ✅ 在送出前寫入詳細 LOG（安全版，不印出完整金鑰）
+                val maskedSecret = if (appAuthSecret.length > 6)
+                    appAuthSecret.take(3) + "***" + appAuthSecret.takeLast(3)
+                else
+                    "***"
+                Log.d(
+                    TAG,
+                    """
+                🔹【送出防弊 API】
+                URL: $url
+                Header → X-App-Auth: $maskedSecret
+                Body → userKey: $userKey, serialNumber: $serialNumber, cellNumber: $cellNumber
+                """.trimIndent()
+                )
+
+                // 實際送出請求
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("X-App-Auth", appAuthSecret)
+                conn.doOutput = true
+                conn.outputStream.use { it.write(jsonBody.toString().toByteArray()) }
+
+                // fire-and-forget，不處理回應
+                conn.inputStream.close()
+                conn.disconnect()
+
+                Log.d(TAG, "✅ markCellAsTriggered(): 已送出請求（不等待回應）")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ markCellAsTriggered 發生錯誤: ${e.message}")
+            }
+        }
     }
 
     /**
