@@ -314,10 +314,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .setTitle("切換至玩家頁面")
             .setMessage("確定要切換至玩家頁面嗎？")
             .setPositiveButton("確定") { dialog, _ ->
-                // 切換到玩家頁面前，先執行防弊檢查
-                Log.d(TAG, "【切換玩家頁面】執行防弊檢查")
-                performAnticheatCheck()
-
                 render(Mode.PLAYER)
                 dialog.dismiss()
             }
@@ -434,7 +430,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
-        performAnticheatCheck()
         performScratchTempSync()
 
         // 現在會載入和玩家頁面一致但無互動的刮卡顯示
@@ -1020,94 +1015,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         logoutButtonMaster.visibility = View.VISIBLE
         buttonScratchCardPasswordMaster.isEnabled = true
         updateWatermarkDisplay(true)
-    }
-
-    // 在 MainActivity 類中添加這個方法（放在 companion object 之前）
-
-    /**
-     * 執行防弊檢查：將所有 hasTriggeredScratchStart=true 且 scratched=false 的格子標記為 scratched=true
-     * 針對當前使用中的刮刮卡版位
-     */
-    private fun performAnticheatCheck() {
-        val currentUserFirebaseKey = currentUser?.firebaseKey ?: return
-
-        Log.d(TAG, "【執行防弊檢查】針對用戶 $currentUserFirebaseKey 的使用中刮刮卡")
-
-        database.child("users")
-            .child(currentUserFirebaseKey)
-            .child("scratchCards")
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    // 找到使用中的刮刮卡
-                    var inUsedSerialNumber: String? = null
-                    for (child in snapshot.children) {
-                        val serialNumber = child.key ?: continue
-                        val card = child.getValue(ScratchCard::class.java)
-                        if (card != null && card.inUsed == true) {
-                            inUsedSerialNumber = serialNumber
-                            Log.d(TAG, "【防弊檢查】找到使用中的刮刮卡: $serialNumber (版位 ${card.order})")
-                            break
-                        }
-                    }
-
-                    if (inUsedSerialNumber == null) {
-                        Log.d(TAG, "【防弊檢查】沒有找到使用中的刮刮卡")
-                        return
-                    }
-
-                    // 檢查該刮刮卡的所有格子
-                    database.child("users")
-                        .child(currentUserFirebaseKey)
-                        .child("scratchCards")
-                        .child(inUsedSerialNumber)
-                        .child("numberConfigurations")
-                        .addListenerForSingleValueEvent(object : ValueEventListener {
-                            override fun onDataChange(configSnapshot: DataSnapshot) {
-                                var foundTriggered = false
-
-                                for ((index, child) in configSnapshot.children.withIndex()) {
-                                    val id = child.child("id").getValue(Int::class.java) ?: continue
-                                    val scratched = child.child("scratched").getValue(Boolean::class.java) ?: false
-                                    val hasTriggered = child.child("hasTriggeredScratchStart").getValue(Boolean::class.java) ?: false
-
-                                    // 如果已觸發但尚未標記為 scratched，則補上
-                                    if (hasTriggered && !scratched) {
-                                        foundTriggered = true
-                                        Log.d(TAG, "【防弊檢查】發現格子 $id 已觸發但未刮開 (hasTriggeredScratchStart=true, scratched=false)")
-                                        Log.d(TAG, "【防弊檢查】補標記格子 $id 為 scratched=true")
-
-                                        database.child("users")
-                                            .child(currentUserFirebaseKey)
-                                            .child("scratchCards")
-                                            .child(inUsedSerialNumber!!)
-                                            .child("numberConfigurations")
-                                            .child(index.toString())
-                                            .child("scratched")
-                                            .setValue(true)
-                                            .addOnSuccessListener {
-                                                Log.d(TAG, "【防弊檢查】✓ 格子 $id 已成功補標記為 scratched=true")
-                                            }
-                                            .addOnFailureListener { e ->
-                                                Log.e(TAG, "【防弊檢查】✗ 補標記格子 $id 失敗: ${e.message}", e)
-                                            }
-                                    }
-                                }
-
-                                if (!foundTriggered) {
-                                    Log.d(TAG, "【防弊檢查】沒有發現需要補標記的格子")
-                                }
-                            }
-
-                            override fun onCancelled(error: DatabaseError) {
-                                Log.e(TAG, "【防弊檢查】讀取格子配置失敗: ${error.message}", error.toException())
-                            }
-                        })
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e(TAG, "【防弊檢查】讀取刮刮卡失敗: ${error.message}", error.toException())
-                }
-            })
     }
 
     /**
