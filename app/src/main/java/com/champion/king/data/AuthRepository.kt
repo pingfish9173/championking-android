@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import com.google.gson.Gson
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
+import android.util.Log
 
 class AuthRepository(
     private val root: DatabaseReference,
@@ -140,5 +141,48 @@ class AuthRepository(
         } catch (e: Exception) {
             "註冊失敗：${response.message()}"
         }
+    }
+
+    fun syncScratchTempToMain(userKey: String, onComplete: (() -> Unit)? = null) {
+        val db = FirebaseDatabase.getInstance().reference
+        val tempRef = db.child("users").child(userKey).child("scratchCardsTemp")
+
+        tempRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    Log.d("AuthRepository", "沒有 scratchCardsTemp 紀錄可同步。")
+                    onComplete?.invoke()
+                    return
+                }
+
+                val updates = mutableMapOf<String, Any?>()
+
+                for (child in snapshot.children) {
+                    val cardId = child.child("cardId").getValue(String::class.java)
+                    val cellNumber = child.child("cellNumber").getValue(Int::class.java)
+
+                    if (!cardId.isNullOrEmpty() && cellNumber != null) {
+                        updates["users/$userKey/scratchCards/$cardId/numberConfigurations/$cellNumber/scratched"] = true
+                    }
+                }
+
+                // 寫入更新並清空 temp
+                db.updateChildren(updates)
+                    .addOnSuccessListener {
+                        Log.d("AuthRepository", "✅ 已成功同步 ${updates.size} 筆紀錄到 scratchCards。")
+                        tempRef.removeValue()
+                        onComplete?.invoke()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("AuthRepository", "❌ 同步 scratchCardsTemp 失敗: ${e.message}")
+                        onComplete?.invoke()
+                    }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("AuthRepository", "讀取 scratchCardsTemp 失敗: ${error.message}")
+                onComplete?.invoke()
+            }
+        })
     }
 }

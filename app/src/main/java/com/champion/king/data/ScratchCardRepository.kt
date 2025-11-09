@@ -42,4 +42,22 @@ class ScratchCardRepository {
         ref.addValueEventListener(l)
         return DbListenerHandle(ref, l)
     }
+
+    fun addTempScratch(
+        userKey: String,
+        serialNumber: String,
+        cellNumber: Int,
+        onComplete: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        val ref = db.child("users").child(userKey).child("scratchCardsTemp").push()
+        val payload = mapOf(
+            "serialNumber" to serialNumber,
+            "cellNumber" to cellNumber,
+            "createdAt" to ServerValue.TIMESTAMP
+        )
+        ref.setValue(payload)
+            .addOnSuccessListener { onComplete?.invoke() }
+            .addOnFailureListener { e -> onError?.invoke(e.message ?: "unknown error") }
+    }
 }

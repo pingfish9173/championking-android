@@ -435,6 +435,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
         performAnticheatCheck()
+        performScratchTempSync()
 
         // 現在會載入和玩家頁面一致但無互動的刮卡顯示
         loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
@@ -444,6 +445,72 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         if (updateManager.isAutoCheckEnabled()) {
             checkUpdateInBackground()
         }
+    }
+
+    /**
+     * 將 scratchCardsTemp 中的紀錄同步到正式 scratchCards
+     * 並清空 scratchCardsTemp
+     */
+    private fun performScratchTempSync() {
+        val userKey = currentUser?.firebaseKey ?: return
+        Log.d(TAG, "【同步 scratchCardsTemp】開始同步用戶 $userKey 的暫存刮卡紀錄")
+
+        val userRef = database.child("users").child(userKey)
+        val tempRef = userRef.child("scratchCardsTemp")
+
+        tempRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    Log.d(TAG, "【同步 scratchCardsTemp】沒有暫存紀錄，略過。")
+                    return
+                }
+
+                val updates = mutableListOf<Pair<String, Int>>()
+                for (child in snapshot.children) {
+                    val cardId = child.child("cardId").getValue(String::class.java)
+                    val cellNumber = child.child("cellNumber").getValue(Int::class.java)
+                    if (cardId != null && cellNumber != null) {
+                        updates.add(cardId to cellNumber)
+                    }
+                }
+
+                if (updates.isEmpty()) {
+                    Log.d(TAG, "【同步 scratchCardsTemp】沒有有效的紀錄可同步。")
+                    return
+                }
+
+                Log.d(TAG, "【同步 scratchCardsTemp】共 ${updates.size} 筆要更新")
+
+                for ((cardId, cellNumber) in updates) {
+                    val targetRef = userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                    targetRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                        override fun onDataChange(configSnapshot: DataSnapshot) {
+                            for ((index, config) in configSnapshot.children.withIndex()) {
+                                val id = config.child("id").getValue(Int::class.java)
+                                if (id == cellNumber) {
+                                    targetRef.child(index.toString()).child("scratched").setValue(true)
+                                    Log.d(TAG, "【同步 scratchCardsTemp】已補寫 scratched=true: 卡=$cardId, 格=$cellNumber")
+                                    break
+                                }
+                            }
+                        }
+
+                        override fun onCancelled(error: DatabaseError) {
+                            Log.e(TAG, "【同步 scratchCardsTemp】讀取格子失敗: ${error.message}")
+                        }
+                    })
+                }
+
+                // 全部同步後清空暫存表
+                tempRef.removeValue()
+                    .addOnSuccessListener { Log.d(TAG, "【同步 scratchCardsTemp】已清空暫存紀錄") }
+                    .addOnFailureListener { e -> Log.e(TAG, "【同步 scratchCardsTemp】清空失敗: ${e.message}") }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "【同步 scratchCardsTemp】讀取失敗: ${error.message}", error.toException())
+            }
+        })
     }
 
     override fun onLoginFailed() {
@@ -926,6 +993,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 if (success && user != null) {
                     currentUser = user
                     render(Mode.MASTER)
+                    performScratchTempSync()
                     loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
                     Toast.makeText(this@MainActivity, "已切換至台主頁面！", Toast.LENGTH_SHORT).show()
                     onResult(true, null)

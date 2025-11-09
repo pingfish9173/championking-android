@@ -324,6 +324,15 @@ class ScratchCardPlayerFragment : Fragment() {
 
         // 設定點擊事件
         cellView.setOnClickListener {
+            // ✅ 每次點擊都重新檢查最新狀態，避免使用舊的 numberConfig
+            val refreshedConfig = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }
+            val isAlreadyScratched = refreshedConfig?.scratched == true
+
+            // ✅ 若已刮開，完全忽略點擊
+            if (isAlreadyScratched) {
+                Log.d(TAG, "⚠️ 格子 $cellNumber 已刮開，忽略點擊。")
+                return@setOnClickListener
+            }
 
             // 檢查網路連線
             if (!isNetworkAvailable()) {
@@ -334,25 +343,19 @@ class ScratchCardPlayerFragment : Fragment() {
 
             Log.d(TAG, "【網路檢查】網路連線正常，允許刮卡")
 
-            if (numberConfig?.scratched != true && number != null) {
-                // 標記為正在刮的格子
+            // ✅ 只允許「未刮開」且 number 有效的格子進行互動
+            if (refreshedConfig?.scratched != true && number != null) {
                 scratchingCells.add(cellNumber)
-
-                // 立即更新顯示為漩渦效果
                 updateCellDisplay(cellView, cellNumber, false, number)
 
-                // 判斷是否為倒數第二刮
                 val isSecondToLast = isSecondToLastScratch()
-
-                // 判斷剩餘未刮格子中是否有特獎或大獎
                 val hasUnscatchedPrizes = hasUnscatchedPrizes()
-
-                // 獲取統計資訊用於除錯
                 val (totalCells, scratchedCount, remainingCount) = getScratchCardStats()
                 Log.d(TAG, "點擊格子 $cellNumber: 總格數=$totalCells, 已刮=$scratchedCount, 剩餘=$remainingCount")
                 Log.d(TAG, "是否倒數第二刮=$isSecondToLast, 剩餘是否有獎項=$hasUnscatchedPrizes")
 
                 (activity as? MainActivity)?.enableImmersiveMode()
+
                 // 顯示刮卡彈窗
                 val dialog = ScratchDialog(
                     requireContext(),
@@ -362,31 +365,19 @@ class ScratchCardPlayerFragment : Fragment() {
                     isSecondToLast,
                     hasUnscatchedPrizes,
                     onScratchStart = {
-                        // 防弊機制：標記 hasTriggeredScratchStart 為 true
-                        Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡，標記 hasTriggeredScratchStart = true")
-                        markCellAsTriggered(serialNumber, cellNumber)
+                        // 原本的防弊寫入可註解掉或改成 scratchCardsTemp 寫入
+                        Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡")
+                        writeTempScratch(serialNumber, cellNumber)
                     },
                     onScratchComplete = {
-                        // 刮開完成後的回調（音效播放完畢後觸發）
-                        // 正常刮完，標記 scratched 為 true
                         Log.d(TAG, "格子 $cellNumber 刮卡完成，標記 scratched = true")
                         scratchCell(serialNumber, cellNumber, cellView)
                     }
                 )
 
-                // 監聽對話框關閉事件
                 dialog.setOnDismissListener {
-                    // 檢查是否已經開始刮卡
                     val hasStartedScratching = dialog.hasStartedScratching()
-
-                    if (hasStartedScratching) {
-                        // 情況1：正常刮完關閉（刮到75%或點擊一鍵刮開）
-                        // 保持漩渦效果，直到數字開出來
-                        Log.d(TAG, "對話框關閉：格子 $cellNumber 已開始刮卡，保持漩渦效果等待數字顯示")
-                    } else {
-                        // 情況2：玩家沒刮就關閉（點擊外部關閉）
-                        // 恢復黑色蓋板
-                        Log.d(TAG, "對話框關閉：格子 $cellNumber 未開始刮卡，恢復黑色蓋板")
+                    if (!hasStartedScratching) {
                         scratchingCells.remove(cellNumber)
                         updateCellDisplay(cellView, cellNumber, false, number)
                     }
@@ -394,6 +385,32 @@ class ScratchCardPlayerFragment : Fragment() {
                 }
                 dialog.show()
             }
+        }
+    }
+
+    // ✅ 寫入 scratchCardsTemp 的防弊暫存紀錄
+    private fun writeTempScratch(serialNumber: String, cellNumber: Int) {
+        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        try {
+            val db = FirebaseDatabase.getInstance().reference
+            val tempRef = db.child("users").child(userKey).child("scratchCardsTemp").push()
+
+            val data = mapOf(
+                "cardId" to serialNumber,
+                "cellNumber" to cellNumber,
+                "createdAt" to System.currentTimeMillis()
+            )
+
+            tempRef.setValue(data)
+                .addOnSuccessListener {
+                    Log.d(TAG, "✅ 已寫入 scratchCardsTemp: cardId=$serialNumber, cellNumber=$cellNumber")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "❌ 寫入 scratchCardsTemp 失敗: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ writeTempScratch() 例外錯誤: ${e.message}")
         }
     }
 
