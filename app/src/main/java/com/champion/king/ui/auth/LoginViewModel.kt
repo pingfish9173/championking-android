@@ -63,8 +63,8 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val user = performActualLogin(account, password, context)
-                _loginResult.value = LoginResult.Success(user)
+                val result = performActualLogin(account, password, context)
+                _loginResult.value = result
             } catch (ce: CancellationException) {
                 Log.d("LoginViewModel", "Login cancelled")
             } catch (e: Exception) {
@@ -72,6 +72,42 @@ class LoginViewModel : ViewModel() {
                 _loginResult.value = LoginResult.Error("登入失敗：${e.message ?: "請稍後再試"}")
             } finally {
                 _uiState.value = _uiState.value.copy(isLoading = false)
+            }
+        }
+    }
+
+    /**
+     * 🔹 新增：手動執行裝置綁定
+     */
+    fun performDeviceBinding(
+        user: User,
+        deviceInfo: DeviceInfoUtil.DeviceInfo,
+        onResult: (success: Boolean, message: String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                suspendCoroutine<Unit> { continuation ->
+                    repo.bindDevice(
+                        uid = user.firebaseKey ?: "",
+                        deviceId = deviceInfo.deviceId,
+                        deviceModel = deviceInfo.deviceModel,
+                        deviceBrand = deviceInfo.deviceBrand,
+                        androidVersion = deviceInfo.androidVersion
+                    ) { success, message ->
+                        if (success) {
+                            Log.d("LoginViewModel", "✅ 裝置綁定成功")
+                            onResult(true, message)
+                            continuation.resume(Unit)
+                        } else {
+                            Log.e("LoginViewModel", "❌ 裝置綁定失敗：$message")
+                            onResult(false, message)
+                            continuation.resume(Unit)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("LoginViewModel", "裝置綁定發生錯誤", e)
+                onResult(false, "綁定失敗：${e.message}")
             }
         }
     }
@@ -143,44 +179,28 @@ class LoginViewModel : ViewModel() {
     }
 
     /**
-     * 執行實際的使用者登入
+     * 🔹 修改：執行實際的使用者登入（不自動綁定）
      */
-    private suspend fun performActualLogin(account: String, password: String, context: Context): User {
+    private suspend fun performActualLogin(account: String, password: String, context: Context): LoginResult {
         return suspendCoroutine { continuation ->
-            // 🔹 獲取裝置資訊
+            // 獲取裝置資訊
             val deviceInfo = DeviceInfoUtil.getDeviceInfo(context)
 
-            repo.login(account, password, deviceInfo.deviceId) { success, user, message, needBinding ->  // 🔹 接收 needBinding
+            repo.login(account, password, deviceInfo.deviceId) { success, user, message, needBinding ->
                 if (success && user != null) {
                     // 🔹 檢查是否需要綁定裝置
                     if (needBinding == true) {
-                        Log.d("LoginViewModel", "需要綁定裝置，開始自動綁定...")
-
-                        // 🔹 自動綁定裝置
-                        repo.bindDevice(
-                            uid = user.firebaseKey ?: "",
-                            deviceId = deviceInfo.deviceId,
-                            deviceModel = deviceInfo.deviceModel,
-                            deviceBrand = deviceInfo.deviceBrand,
-                            androidVersion = deviceInfo.androidVersion
-                        ) { bindSuccess, bindMessage ->
-                            if (bindSuccess) {
-                                Log.d("LoginViewModel", "✅ 裝置綁定成功")
-                                continuation.resume(user)
-                            } else {
-                                Log.e("LoginViewModel", "❌ 裝置綁定失敗：$bindMessage")
-                                // 即使綁定失敗，仍然允許登入（可根據需求調整）
-                                continuation.resume(user)
-                            }
-                        }
+                        Log.d("LoginViewModel", "需要綁定裝置，返回 NeedBinding 狀態")
+                        // 🔹 返回需要綁定的狀態，讓 Fragment 顯示確認對話框
+                        continuation.resume(LoginResult.NeedBinding(user, deviceInfo))
                     } else {
                         // 不需要綁定或已經綁定，直接返回
                         Log.d("LoginViewModel", "裝置已綁定或不需綁定")
-                        continuation.resume(user)
+                        continuation.resume(LoginResult.Success(user))
                     }
                 } else {
-                    continuation.resumeWithException(
-                        Exception(message ?: AppConfig.Msg.LOGIN_FAIL)
+                    continuation.resume(
+                        LoginResult.Error(message ?: AppConfig.Msg.LOGIN_FAIL)
                     )
                 }
             }
@@ -252,6 +272,7 @@ data class LoginUiState(
  */
 sealed class LoginResult {
     data class Success(val user: User) : LoginResult()
+    data class NeedBinding(val user: User, val deviceInfo: DeviceInfoUtil.DeviceInfo) : LoginResult()  // 🔹 新增：需要綁定裝置
     data class Error(val message: String) : LoginResult()
 }
 

@@ -17,6 +17,7 @@ import com.champion.king.ui.auth.LoginViewModel
 import com.champion.king.ui.auth.LoginResult
 import com.champion.king.ui.auth.ResetPasswordResult
 import com.champion.king.ui.auth.InputValidationError
+import com.champion.king.util.DeviceInfoUtil
 import com.champion.king.util.attachPasswordToggle
 import com.champion.king.util.guardOnline
 import com.champion.king.util.setThrottledClick
@@ -26,6 +27,10 @@ import kotlinx.coroutines.launch
 class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
 
     companion object {
+        // 測試用帳號密碼 (生產環境應移除)
+        private const val TEST_ACCOUNT = "billy1"
+        private const val TEST_PASSWORD = "123456"
+
         // UI 尺寸常數
         private const val DIALOG_PADDING_HORIZONTAL = 48
         private const val DIALOG_PADDING_VERTICAL_TOP = 24
@@ -109,6 +114,34 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
                         authFlowListener?.onLoginSuccess(result.user)
                         viewModel.clearResults()
                     }
+
+                    // 🔹 新增：處理需要綁定裝置的情況
+                    is LoginResult.NeedBinding -> {
+                        // 檢查帳號狀態
+                        val accountStatus = result.user.accountStatus
+
+                        if (accountStatus != "ACTIVE") {
+                            // 帳號未開通或已停用，顯示告警
+                            val statusText = when (accountStatus) {
+                                "SUSPENDED" -> "停用"
+                                else -> accountStatus
+                            }
+
+                            android.app.AlertDialog.Builder(requireContext())
+                                .setTitle("無法登入")
+                                .setMessage("您的帳號狀態為${statusText}，無法登入，請聯繫小編進行帳號開通。")
+                                .setPositiveButton("確定") { dialog, _ -> dialog.dismiss() }
+                                .show()
+
+                            viewModel.clearResults()
+                            return@collect
+                        }
+
+                        // 顯示裝置綁定確認對話框
+                        showDeviceBindingDialog(result.user, result.deviceInfo)
+                        viewModel.clearResults()
+                    }
+
                     is LoginResult.Error -> {
                         requireContext().toast(result.message)
                         viewModel.clearResults()
@@ -140,6 +173,75 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
             }
         }
     }
+
+    // ==================== 🔹 裝置綁定確認對話框 ====================
+
+    /**
+     * 顯示裝置綁定確認對話框
+     */
+    private fun showDeviceBindingDialog(user: com.champion.king.model.User, deviceInfo: DeviceInfoUtil.DeviceInfo) {
+        val message = """
+            您的帳號尚未進行裝置綁定，是否現在綁定此裝置？
+            
+            說明：
+            1. 綁定此裝置後，將不允許此帳號用其他裝置登入，藉此提高帳號的安全性，避免有心人士用其他平板登入。
+            2. 如有解除裝置綁定需求(更換平板、平板遺損)，可至用戶編輯介面設定，或聯繫小編。
+        """.trimIndent()
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("裝置綁定")
+            .setMessage(message)
+            .setPositiveButton("確定") { dialog, _ ->
+                dialog.dismiss()
+                performDeviceBinding(user, deviceInfo)
+            }
+            .setNegativeButton("取消") { dialog, _ ->
+                dialog.dismiss()
+                // 取消綁定，直接登入
+                authFlowListener?.onLoginSuccess(user)
+            }
+            .setCancelable(false)  // 禁止點擊外部關閉
+            .show()
+    }
+
+    /**
+     * 執行裝置綁定
+     */
+    private fun performDeviceBinding(user: com.champion.king.model.User, deviceInfo: DeviceInfoUtil.DeviceInfo) {
+        // 顯示載入提示
+        val loadingDialog = android.app.AlertDialog.Builder(requireContext())
+            .setTitle("處理中")
+            .setMessage("正在綁定裝置...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
+
+        // 執行綁定
+        viewModel.performDeviceBinding(user, deviceInfo) { success, message ->
+            loadingDialog.dismiss()
+
+            if (success) {
+                requireContext().toast(message ?: "裝置綁定成功")
+                // 綁定成功，完成登入
+                authFlowListener?.onLoginSuccess(user)
+            } else {
+                // 綁定失敗，詢問是否繼續登入
+                android.app.AlertDialog.Builder(requireContext())
+                    .setTitle("綁定失敗")
+                    .setMessage("裝置綁定失敗：${message ?: "未知錯誤"}\n\n是否仍要繼續登入？")
+                    .setPositiveButton("繼續登入") { dialog, _ ->
+                        dialog.dismiss()
+                        authFlowListener?.onLoginSuccess(user)
+                    }
+                    .setNegativeButton("取消") { dialog, _ ->
+                        dialog.dismiss()
+                    }
+                    .show()
+            }
+        }
+    }
+
+    // ==================== 記憶帳號功能 ====================
 
     private fun setupRememberAccount() {
         // 初始化記憶帳號狀態
