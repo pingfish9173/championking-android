@@ -1139,9 +1139,20 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     /**
      * 顯示更新對話框
      */
+    /**
+     * 顯示更新對話框（包含目前版本）
+     */
     private fun showUpdateDialog(versionInfo: com.champion.king.data.api.dto.VersionInfo) {
+        // 取得目前版本資訊
+        val currentVersionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: Exception) {
+            "未知版本"
+        }
+
         val message = """
-        發現新版本：${versionInfo.versionName}
+        目前版本：$currentVersionName
+        最新版本：${versionInfo.versionName}
         
         更新內容：
         ${versionInfo.updateMessage}
