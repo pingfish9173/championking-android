@@ -177,30 +177,25 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
     // ==================== 🔹 裝置綁定確認對話框 ====================
 
     /**
-     * 顯示裝置綁定確認對話框
+     * 顯示裝置綁定確認對話框（僅允許確認綁定）
      */
-    private fun showDeviceBindingDialog(user: com.champion.king.model.User, deviceInfo: DeviceInfoUtil.DeviceInfo) {
+    private fun showDeviceBindingDialog(
+        user: com.champion.king.model.User,
+        deviceInfo: DeviceInfoUtil.DeviceInfo
+    ) {
         val message = """
-            您的帳號尚未進行裝置綁定，是否現在綁定此裝置？
-            
-            說明：
-            1. 綁定此裝置後，將不允許此帳號用其他裝置登入，藉此提高帳號的安全性，避免有心人士用其他平板登入。
-            2. 如有解除裝置綁定需求(更換平板、平板遺損)，可至用戶編輯介面設定，或聯繫小編。
-        """.trimIndent()
+        您的帳號尚未進行裝置綁定，點擊「確認綁定此裝置」後，將不允許此帳號用其他裝置登入，藉此提高帳號的安全性，避免有心人士用其他平板登入。
+        如有解除裝置綁定需求(更換平板、平板遺失或損壞)，可至用戶編輯介面設定，或聯繫小編。
+    """.trimIndent()
 
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("裝置綁定")
             .setMessage(message)
-            .setPositiveButton("確定") { dialog, _ ->
+            .setPositiveButton("確認綁定此裝置") { dialog, _ ->
                 dialog.dismiss()
                 performDeviceBinding(user, deviceInfo)
             }
-            .setNegativeButton("取消") { dialog, _ ->
-                dialog.dismiss()
-                // 取消綁定，直接登入
-                authFlowListener?.onLoginSuccess(user)
-            }
-            .setCancelable(false)  // 禁止點擊外部關閉
+            .setCancelable(false) // 禁止外部或返回鍵關閉
             .show()
     }
 
