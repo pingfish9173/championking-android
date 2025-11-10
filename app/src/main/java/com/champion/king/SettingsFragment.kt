@@ -574,6 +574,7 @@ class SettingsFragment : Fragment() {
     // 狀態管理相關方法
     // ===========================================
 
+    /** 顯示未設置狀態的預覽與按鈕狀態 **/
     private fun showUnsetShelfState() {
         isShowingUnsetState = true
         showPreviewUnset()
@@ -588,7 +589,14 @@ class SettingsFragment : Fragment() {
         uiManager.updateInUseButtonUI(null)
         uiManager.updateActionButtonsUI(null)
         updateRefreshButtonVisibility()
+
+        // 🔹 新增：未設置狀態下，禁用「特獎」與「大獎」挑選
+        binding.buttonPickSpecialPrize.isEnabled = false
+        binding.buttonPickGrandPrize.isEnabled = false
+        binding.buttonPickSpecialPrize.alpha = 0.5f
+        binding.buttonPickGrandPrize.alpha = 0.5f
     }
+
 
     /** 🔘 根據目前狀態顯示／隱藏重新整理圖示 **/
     private fun updateRefreshButtonVisibility() {
@@ -831,6 +839,12 @@ class SettingsFragment : Fragment() {
         // 清空特獎與大獎欄位
         binding.editTextSpecialPrize.text?.clear()
         binding.editTextGrandPrize.text?.clear()
+
+        // ✅ 當預覽產生新數字配置時，恢復特獎與大獎按鈕可用
+        binding.buttonPickSpecialPrize.isEnabled = true
+        binding.buttonPickGrandPrize.isEnabled = true
+        binding.buttonPickSpecialPrize.alpha = 1.0f
+        binding.buttonPickGrandPrize.alpha = 1.0f
     }
 
     // ===========================================
@@ -1116,6 +1130,11 @@ class SettingsFragment : Fragment() {
         if (selectedCard == null) {
             Log.d("SettingsFragment", "更新預覽，刮數類型: ${scratchType}刮")
             displayScratchBoardPreview(scratchType, null)
+            // ✅ 若成功建立預覽板，恢復特獎與大獎可用
+            binding.buttonPickSpecialPrize.isEnabled = true
+            binding.buttonPickGrandPrize.isEnabled = true
+            binding.buttonPickSpecialPrize.alpha = 1.0f
+            binding.buttonPickGrandPrize.alpha = 1.0f
         }
     }
 
