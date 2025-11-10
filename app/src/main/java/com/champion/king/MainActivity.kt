@@ -131,6 +131,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         updateCurrentTime()
         enableImmersiveMode()
         resetIdleTimer() // 啟動閒置監測計時
+        checkUpdateOnStart()
     }
 
     override fun onResume() {
@@ -435,11 +436,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // 現在會載入和玩家頁面一致但無互動的刮卡顯示
         loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
         Toast.makeText(this, "歡迎回來，${loggedInUser.account}！", Toast.LENGTH_SHORT).show()
-
-        // 登入成功後檢查更新
-        if (updateManager.isAutoCheckEnabled()) {
-            checkUpdateInBackground()
-        }
     }
 
     /**
