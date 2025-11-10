@@ -9,6 +9,8 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 import com.champion.king.data.api.dto.LoginRequest
 import com.champion.king.data.api.dto.LoginResponse
+import com.champion.king.data.api.dto.UnbindDeviceRequest
+import com.champion.king.data.api.dto.UnbindDeviceResponse
 import com.champion.king.data.api.dto.VersionInfo
 import retrofit2.http.GET
 
@@ -25,4 +27,7 @@ interface ApiService {
 
     @POST("https://binddevice-qmvrvane7q-de.a.run.app")
     suspend fun bindDevice(@Body request: BindDeviceRequest): Response<BindDeviceResponse>
+
+    @POST("https://unbinddevice-qmvrvane7q-de.a.run.app")
+    suspend fun unbindDevice(@Body request: UnbindDeviceRequest): Response<UnbindDeviceResponse>
 }

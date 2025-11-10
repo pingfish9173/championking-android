@@ -167,24 +167,48 @@
                 android:focusable="true" />
         </LinearLayout>
 
-        <!-- 變更密碼 -->
-        <Button
-            android:id="@+id/button_change_password"
-            android:layout_width="wrap_content"
+        <!-- 按鈕區域（變更密碼 & 解除裝置綁定） -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="變更密碼"
-            android:textSize="16sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#2196F3"
-            android:paddingHorizontal="32dp"
-            android:paddingVertical="12dp"
-            android:layout_gravity="start" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <!-- 變更密碼 -->
+            <Button
+                android:id="@+id/button_change_password"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="變更密碼"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#2196F3"
+                android:paddingHorizontal="32dp"
+                android:paddingVertical="12dp" />
+
+            <!-- 間距 -->
+            <Space
+                android:layout_width="16dp"
+                android:layout_height="wrap_content" />
+
+            <!-- 解除裝置綁定 -->
+            <Button
+                android:id="@+id/button_unbind_device"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="解除裝置綁定"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#FF9800"
+                android:paddingHorizontal="24dp"
+                android:paddingVertical="12dp" />
+        </LinearLayout>
 
         <!-- 分隔線 -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             android:layout_marginBottom="16dp"
             android:background="#E0E0E0" />
 

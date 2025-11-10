@@ -29,36 +29,30 @@ class AuthRepository(
         account: String,
         password: String,
         deviceId: String,
-        onResult: (success: Boolean, user: User?, message: String?, needBinding: Boolean?) -> Unit  // 🔹 加入 needBinding
+        onResult: (success: Boolean, user: User?, message: String?, needBinding: Boolean?) -> Unit
     ) {
         scope.launch {
             try {
-                // 1. 建立 API 請求
                 val request = com.champion.king.data.api.dto.LoginRequest(
                     account = account,
                     password = password,
                     deviceId = deviceId
                 )
 
-                // 2. 呼叫登入 API
                 val response = apiService.login(request)
 
-                // 3. 處理回應
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful && response.body() != null) {
                         val body = response.body()!!
 
-                        // 🔹 使用 Custom Token 登入 Firebase Auth
                         try {
                             FirebaseAuth.getInstance()
                                 .signInWithCustomToken(body.token)
                                 .await()
 
-                            // Firebase Auth 登入成功，回傳使用者資料和 needBinding
-                            onResult(true, body.user, body.message, body.needBinding)  // 🔹 回傳 needBinding
+                            onResult(true, body.user, body.message, body.needBinding)
 
                         } catch (authError: Exception) {
-                            // Custom Token 登入失敗
                             onResult(false, null, "Firebase 認證失敗：${authError.message}", null)
                         }
                     } else {
@@ -120,7 +114,7 @@ class AuthRepository(
     }
 
     /**
-     * 🔹 新增：綁定裝置
+     * 綁定裝置
      */
     fun bindDevice(
         uid: String,
@@ -159,6 +153,44 @@ class AuthRepository(
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     val errorMsg = "綁定裝置時發生錯誤：${e.message ?: "未知錯誤"}"
+                    Log.e("AuthRepository", "❌ $errorMsg")
+                    onResult(false, errorMsg)
+                }
+            }
+        }
+    }
+
+    /**
+     * 🔹 新增：解除裝置綁定
+     */
+    fun unbindDevice(
+        uid: String,
+        onResult: (success: Boolean, message: String?) -> Unit
+    ) {
+        scope.launch {
+            try {
+                val request = com.champion.king.data.api.dto.UnbindDeviceRequest(
+                    uid = uid,
+                    requestSource = "USER"
+                )
+
+                val response = apiService.unbindDevice(request)
+
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val body = response.body()!!
+                        Log.d("AuthRepository", "✅ 裝置解除綁定成功：${body.message}")
+                        onResult(true, body.message)
+                    } else {
+                        val errorMsg = parseErrorMessage(response)
+                        Log.e("AuthRepository", "❌ 裝置解除綁定失敗：$errorMsg")
+                        onResult(false, errorMsg)
+                    }
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    val errorMsg = "解除裝置綁定時發生錯誤：${e.message ?: "未知錯誤"}"
                     Log.e("AuthRepository", "❌ $errorMsg")
                     onResult(false, errorMsg)
                 }

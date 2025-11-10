@@ -36,6 +36,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import com.google.firebase.auth.FirebaseAuth
 
 class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
@@ -78,6 +79,11 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         // 設定變更密碼按鈕點擊事件
         binding.buttonChangePassword.setThrottledClick {
             showChangePasswordDialog()
+        }
+
+        // 🔹 設定解除裝置綁定按鈕點擊事件
+        binding.buttonUnbindDevice.setThrottledClick {
+            showUnbindDeviceDialog()
         }
 
         // 設定地址眼睛開關點擊事件
@@ -180,6 +186,92 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         }
     }
 
+    // ==================== 🔹 解除裝置綁定功能 ====================
+
+    /**
+     * 顯示解除裝置綁定確認對話框
+     */
+    private fun showUnbindDeviceDialog() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("解除裝置綁定")
+            .setMessage("解除裝置綁定後，此帳號將允許其他裝置登入，\n是否確認解除裝置綁定？")
+            .setPositiveButton("確定") { dialog, _ ->
+                dialog.dismiss()
+                performUnbindDevice()
+            }
+            .setNegativeButton("取消") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .create()
+            .show()
+    }
+
+    /**
+     * 執行解除裝置綁定
+     */
+    private fun performUnbindDevice() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid.isNullOrEmpty()) {
+            requireContext().toast("無法取得用戶資訊")
+            return
+        }
+
+        // 顯示載入提示
+        val loadingDialog = AlertDialog.Builder(requireContext())
+            .setTitle("處理中")
+            .setMessage("正在解除裝置綁定...")
+            .setCancelable(false)
+            .create()
+        loadingDialog.show()
+
+        // 呼叫 Repository 執行解除綁定
+        repo.unbindDevice(
+            uid = uid,
+            onResult = { success, message ->
+                loadingDialog.dismiss()
+
+                if (success) {
+                    requireContext().toast(message ?: "裝置綁定已解除")
+
+                    // 可選：詢問用戶是否要登出
+                    AlertDialog.Builder(requireContext())
+                        .setTitle("解除綁定成功")
+                        .setMessage("裝置綁定已解除。建議重新登入以確保帳號安全。是否現在登出?")
+                        .setPositiveButton("立即登出") { _, _ ->
+                            performLogout()
+                        }
+                        .setNegativeButton("稍後") { dialog, _ ->
+                            dialog.dismiss()
+                        }
+                        .create()
+                        .show()
+                } else {
+                    requireContext().toast(message ?: "解除綁定失敗")
+                }
+            }
+        )
+    }
+
+    /**
+     * 執行登出
+     */
+    private fun performLogout() {
+        // 清除 Firebase Auth
+        FirebaseAuth.getInstance().signOut()
+
+        // 清除 Session
+        userSessionProvider?.setCurrentUserFirebaseKey(null)
+        userSessionProvider?.updateLoginStatus(false)
+        userSessionProvider?.setCurrentlyDisplayedScratchCardOrder(null)
+
+        // 返回登入頁面或關閉當前 Activity
+        requireActivity().finish()
+        // 如果需要導航到特定的登入頁面，可以使用：
+        // startActivity(Intent(requireContext(), LoginActivity::class.java))
+    }
+
+    // ==================== 變更密碼功能 ====================
+
     private fun showChangePasswordDialog() {
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.dialog_change_password, null)
@@ -223,56 +315,53 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             .create()
 
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                handleChangePassword(
-                    currentPasswordInput.text.toString(),
-                    newPasswordInput.text.toString(),
-                    confirmPasswordInput.text.toString(),
-                    dialog
-                )
+            val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            positiveButton.setOnClickListener {
+                val currentPassword = currentPasswordInput.text.toString().trim()
+                val newPassword = newPasswordInput.text.toString().trim()
+                val confirmPassword = confirmPasswordInput.text.toString().trim()
+
+                // 驗證輸入
+                when {
+                    currentPassword.isEmpty() -> {
+                        requireContext().toast("請輸入當前密碼")
+                    }
+                    newPassword.isEmpty() -> {
+                        requireContext().toast("請輸入新密碼")
+                    }
+                    !ValidationRules.isValidPasswordLen(newPassword) -> {
+                        requireContext().toast(AppConfig.Msg.ERR_PASSWORD_LEN)
+                    }
+                    newPassword != confirmPassword -> {
+                        requireContext().toast("新密碼與確認密碼不一致")
+                    }
+                    else -> {
+                        // 驗證通過，執行密碼變更
+                        performPasswordChange(
+                            dialog = dialog,
+                            currentPassword = currentPassword,
+                            newPassword = newPassword
+                        )
+                    }
+                }
             }
         }
 
         dialog.show()
     }
 
-    private fun handleChangePassword(
+    private fun performPasswordChange(
+        dialog: AlertDialog,
         currentPassword: String,
-        newPassword: String,
-        confirmPassword: String,
-        dialog: AlertDialog
-    ) = requireContext().guardOnline {
-        // 驗證輸入
-        when {
-            currentPassword.trim().isEmpty() -> {
-                requireContext().toast("請輸入現在密碼")
-                return@guardOnline
-            }
-
-            newPassword.trim().isEmpty() -> {
-                requireContext().toast("請輸入新密碼")
-                return@guardOnline
-            }
-
-            !ValidationRules.isValidPasswordLen(newPassword.trim()) -> {
-                requireContext().toast(AppConfig.Msg.ERR_PASSWORD_LEN)
-                return@guardOnline
-            }
-
-            newPassword.trim() != confirmPassword.trim() -> {
-                requireContext().toast("新密碼與確認密碼不一致")
-                return@guardOnline
-            }
-        }
-
-        // 獲取帳號資訊
+        newPassword: String
+    ) {
         val account = binding.textAccount.text.toString()
+
         if (account.isEmpty()) {
             requireContext().toast("無法取得帳號資訊")
-            return@guardOnline
+            return
         }
 
-        // 使用 API 變更密碼
         changePasswordViaApi(
             account = account,
             currentPassword = currentPassword.trim(),
@@ -292,7 +381,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
      */
     private fun changePasswordViaApi(
         account: String,
-        currentPassword: String,  // 👈 參數名稱改為 currentPassword
+        currentPassword: String,
         newPassword: String,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
