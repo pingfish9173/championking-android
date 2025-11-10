@@ -96,17 +96,4 @@
         android:text="註冊新帳號"
         android:textColor="#FFFFFF"
         android:textSize="18sp" />
-
-    <!-- 新增的「以billy身分登入」按鈕 -->
-    <Button
-        android:id="@+id/button_login_as_billy"
-        android:layout_width="420dp"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:backgroundTint="#FF9800"
-        android:paddingVertical="12dp"
-        android:text="以billy身分登入 (測試用)"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp" />
-
 </LinearLayout>

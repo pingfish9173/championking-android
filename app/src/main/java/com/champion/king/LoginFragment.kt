@@ -26,10 +26,6 @@ import kotlinx.coroutines.launch
 class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
 
     companion object {
-        // 測試用帳號密碼 (生產環境應移除)
-        private const val TEST_ACCOUNT = "billy1"
-        private const val TEST_PASSWORD = "123456"
-
         // UI 尺寸常數
         private const val DIALOG_PADDING_HORIZONTAL = 48
         private const val DIALOG_PADDING_VERTICAL_TOP = 24
@@ -72,12 +68,6 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
         binding.buttonRegisterFromLogin.setThrottledClick { authFlowListener?.onNavigateToRegister() }
         binding.textForgotPassword.setThrottledClick { showForgotPasswordDialog() }
 
-        // 測試登入按鈕 (生產環境應移除或只在 DEBUG 模式顯示)
-        binding.buttonLoginAsBilly.setThrottledClick {
-            binding.editTextLoginAccount.setText(TEST_ACCOUNT)
-            binding.editTextLoginPassword.setText(TEST_PASSWORD)
-            binding.buttonLogin.performClick()
-        }
     }
 
     private fun observeViewModel() {
