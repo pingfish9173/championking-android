@@ -32,5 +32,19 @@ data class User(
     var switchScratchCardPassword: String? = null,
     var salt: String? = null,
     var passwordHash: String? = null,
-    var devicePasswords: String? = null
+    var devicePasswords: String? = null,
+
+    // 🔹 新增：裝置綁定相關欄位
+    var deviceBindingStatus: String? = null,  // "BOUND" 或 "UNBOUND"
+    var boundDeviceInfo: BoundDeviceInfo? = null  // 綁定的裝置資訊
+)
+
+// 🔹 新增：綁定裝置資訊
+data class BoundDeviceInfo(
+    val deviceId: String? = null,
+    val deviceModel: String? = null,
+    val deviceBrand: String? = null,
+    val androidVersion: String? = null,
+    val bindingTime: Long? = null,
+    val bindingTimestamp: String? = null
 )

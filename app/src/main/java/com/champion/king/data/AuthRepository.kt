@@ -24,17 +24,20 @@ class AuthRepository(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private fun users() = root.child("users")
+
     fun login(
         account: String,
         password: String,
-        onResult: (success: Boolean, user: User?, message: String?) -> Unit
+        deviceId: String,
+        onResult: (success: Boolean, user: User?, message: String?, needBinding: Boolean?) -> Unit  // 🔹 加入 needBinding
     ) {
         scope.launch {
             try {
                 // 1. 建立 API 請求
                 val request = com.champion.king.data.api.dto.LoginRequest(
                     account = account,
-                    password = password
+                    password = password,
+                    deviceId = deviceId
                 )
 
                 // 2. 呼叫登入 API
@@ -51,22 +54,22 @@ class AuthRepository(
                                 .signInWithCustomToken(body.token)
                                 .await()
 
-                            // Firebase Auth 登入成功，回傳使用者資料
-                            onResult(true, body.user, body.message)
+                            // Firebase Auth 登入成功，回傳使用者資料和 needBinding
+                            onResult(true, body.user, body.message, body.needBinding)  // 🔹 回傳 needBinding
 
                         } catch (authError: Exception) {
                             // Custom Token 登入失敗
-                            onResult(false, null, "Firebase 認證失敗：${authError.message}")
+                            onResult(false, null, "Firebase 認證失敗：${authError.message}", null)
                         }
                     } else {
                         val errorMsg = parseErrorMessage(response)
-                        onResult(false, null, errorMsg)
+                        onResult(false, null, errorMsg, null)
                     }
                 }
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    onResult(false, null, "網路錯誤：${e.message ?: "未知錯誤"}")
+                    onResult(false, null, "網路錯誤：${e.message ?: "未知錯誤"}", null)
                 }
             }
         }
@@ -80,12 +83,11 @@ class AuthRepository(
         city: String,
         district: String,
         deviceNum: String,
-        referralCode: String? = null,  // 🔹 新增：推薦碼參數（選填）
+        referralCode: String? = null,
         onResult: (success: Boolean, message: String?) -> Unit
     ) {
         scope.launch {
             try {
-                // 1. 建立 API 請求
                 val request = com.champion.king.data.api.dto.RegisterRequest(
                     account = account,
                     password = password,
@@ -97,24 +99,19 @@ class AuthRepository(
                     referralCode = referralCode
                 )
 
-                // 2. 呼叫註冊 API
                 val response = apiService.register(request)
 
-                // 3. 處理回應
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful && response.body() != null) {
-                        // API 成功
                         val body = response.body()!!
                         onResult(true, body.message)
                     } else {
-                        // API 失敗，解析錯誤訊息
                         val errorMsg = parseErrorMessage(response)
                         onResult(false, errorMsg)
                     }
                 }
 
             } catch (e: Exception) {
-                // 網路或其他異常
                 withContext(Dispatchers.Main) {
                     onResult(false, "網路錯誤：${e.message ?: "未知錯誤"}")
                 }
@@ -123,13 +120,56 @@ class AuthRepository(
     }
 
     /**
-     * 解析 API 錯誤訊息
+     * 🔹 新增：綁定裝置
      */
+    fun bindDevice(
+        uid: String,
+        deviceId: String,
+        deviceModel: String,
+        deviceBrand: String,
+        androidVersion: String,
+        onResult: (success: Boolean, message: String?) -> Unit
+    ) {
+        scope.launch {
+            try {
+                val request = com.champion.king.data.api.dto.BindDeviceRequest(
+                    uid = uid,
+                    deviceId = deviceId,
+                    deviceInfo = com.champion.king.data.api.dto.DeviceInfo(
+                        deviceModel = deviceModel,
+                        deviceBrand = deviceBrand,
+                        androidVersion = androidVersion
+                    )
+                )
+
+                val response = apiService.bindDevice(request)
+
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val body = response.body()!!
+                        Log.d("AuthRepository", "✅ 裝置綁定成功：${body.message}")
+                        onResult(true, body.message)
+                    } else {
+                        val errorMsg = parseErrorMessage(response)
+                        Log.e("AuthRepository", "❌ 裝置綁定失敗：$errorMsg")
+                        onResult(false, errorMsg)
+                    }
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    val errorMsg = "綁定裝置時發生錯誤：${e.message ?: "未知錯誤"}"
+                    Log.e("AuthRepository", "❌ $errorMsg")
+                    onResult(false, errorMsg)
+                }
+            }
+        }
+    }
+
     private fun parseErrorMessage(response: retrofit2.Response<*>): String {
         return try {
             val errorBody = response.errorBody()?.string()
             if (errorBody != null) {
-                // 嘗試解析 JSON 錯誤訊息 {"error": "..."}
                 val errorResponse = Gson().fromJson(
                     errorBody,
                     com.champion.king.data.api.dto.ErrorResponse::class.java
@@ -166,7 +206,6 @@ class AuthRepository(
                     }
                 }
 
-                // 寫入更新並清空 temp
                 db.updateChildren(updates)
                     .addOnSuccessListener {
                         Log.d("AuthRepository", "✅ 已成功同步 ${updates.size} 筆紀錄到 scratchCards。")

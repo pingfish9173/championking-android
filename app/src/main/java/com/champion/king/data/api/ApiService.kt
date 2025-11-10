@@ -1,5 +1,7 @@
 package com.champion.king.data.api
 
+import com.champion.king.data.api.dto.BindDeviceRequest
+import com.champion.king.data.api.dto.BindDeviceResponse
 import com.champion.king.data.api.dto.RegisterRequest
 import com.champion.king.data.api.dto.RegisterResponse
 import retrofit2.Response
@@ -20,4 +22,7 @@ interface ApiService {
 
     @GET("https://checkversion-qmvrvane7q-de.a.run.app/")
     suspend fun checkVersion(): Response<VersionInfo>
+
+    @POST("https://binddevice-qmvrvane7q-de.a.run.app")
+    suspend fun bindDevice(@Body request: BindDeviceRequest): Response<BindDeviceResponse>
 }

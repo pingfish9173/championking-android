@@ -1,5 +1,6 @@
 package com.champion.king.ui.auth
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,7 @@ import com.champion.king.auth.FirebaseAuthHelper
 import com.champion.king.core.config.AppConfig
 import com.champion.king.data.AuthRepository
 import com.champion.king.model.User
+import com.champion.king.util.DeviceInfoUtil
 import com.champion.king.util.ValidationRules
 import com.google.firebase.Firebase
 import com.google.firebase.appcheck.appCheck
@@ -49,7 +51,7 @@ class LoginViewModel : ViewModel() {
     /**
      * 執行登入
      */
-    fun login(account: String, password: String) {
+    fun login(account: String, password: String, context: Context) {
         // 輸入驗證
         val validationError = validateLoginInput(account, password)
         if (validationError != null) {
@@ -61,8 +63,8 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val user = performActualLogin(account, password)  // ← 接收回傳的 User
-                _loginResult.value = LoginResult.Success(user)    // ← 設定登入成功結果
+                val user = performActualLogin(account, password, context)
+                _loginResult.value = LoginResult.Success(user)
             } catch (ce: CancellationException) {
                 Log.d("LoginViewModel", "Login cancelled")
             } catch (e: Exception) {
@@ -143,11 +145,39 @@ class LoginViewModel : ViewModel() {
     /**
      * 執行實際的使用者登入
      */
-    private suspend fun performActualLogin(account: String, password: String): User {
+    private suspend fun performActualLogin(account: String, password: String, context: Context): User {
         return suspendCoroutine { continuation ->
-            repo.login(account, password) { success, user, message ->
+            // 🔹 獲取裝置資訊
+            val deviceInfo = DeviceInfoUtil.getDeviceInfo(context)
+
+            repo.login(account, password, deviceInfo.deviceId) { success, user, message, needBinding ->  // 🔹 接收 needBinding
                 if (success && user != null) {
-                    continuation.resume(user)
+                    // 🔹 檢查是否需要綁定裝置
+                    if (needBinding == true) {
+                        Log.d("LoginViewModel", "需要綁定裝置，開始自動綁定...")
+
+                        // 🔹 自動綁定裝置
+                        repo.bindDevice(
+                            uid = user.firebaseKey ?: "",
+                            deviceId = deviceInfo.deviceId,
+                            deviceModel = deviceInfo.deviceModel,
+                            deviceBrand = deviceInfo.deviceBrand,
+                            androidVersion = deviceInfo.androidVersion
+                        ) { bindSuccess, bindMessage ->
+                            if (bindSuccess) {
+                                Log.d("LoginViewModel", "✅ 裝置綁定成功")
+                                continuation.resume(user)
+                            } else {
+                                Log.e("LoginViewModel", "❌ 裝置綁定失敗：$bindMessage")
+                                // 即使綁定失敗，仍然允許登入（可根據需求調整）
+                                continuation.resume(user)
+                            }
+                        }
+                    } else {
+                        // 不需要綁定或已經綁定，直接返回
+                        Log.d("LoginViewModel", "裝置已綁定或不需綁定")
+                        continuation.resume(user)
+                    }
                 } else {
                     continuation.resumeWithException(
                         Exception(message ?: AppConfig.Msg.LOGIN_FAIL)

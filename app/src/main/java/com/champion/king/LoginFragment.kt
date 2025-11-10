@@ -190,7 +190,7 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
         val password = binding.editTextLoginPassword.text.toString().trim()
 
         // 委託給 ViewModel 處理
-        viewModel.login(account, password)
+        viewModel.login(account, password, requireContext())
     }
 
     // ==================== 忘記密碼對話框 ====================

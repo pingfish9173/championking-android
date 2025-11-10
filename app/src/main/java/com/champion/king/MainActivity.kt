@@ -983,7 +983,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         passwordInput: String,
         onResult: (Boolean, String?) -> Unit
     ) {
-        authRepository.login(account, passwordInput) { success, user, message ->
+        // 🔹 獲取裝置 ID
+        val deviceId = com.champion.king.util.DeviceInfoUtil.getDeviceId(this)
+        authRepository.login(account, passwordInput, deviceId) { success, user, message, needBinding ->
             runOnUiThread {
                 if (success && user != null) {
                     currentUser = user
