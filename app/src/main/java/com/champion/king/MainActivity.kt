@@ -2,6 +2,7 @@ package com.champion.king
 
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
@@ -1265,39 +1266,124 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun showAdPoster() {
         runOnUiThread {
-            // 🔹 建立海報ImageView
-            val imageView = ImageView(this).apply {
+            val decorView = window.decorView as FrameLayout
+
+            // 🔹 建立最外層容器（保持滿版、可放置海報與文字）
+            val posterContainer = FrameLayout(this).apply {
+                alpha = 0f
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(android.graphics.Color.BLACK)
+            }
+
+            // 🔹 建立海報 (全螢幕延展，避免裁切)
+            val posterImage = ImageView(this).apply {
                 setImageResource(R.drawable.splash_poster)
                 scaleType = ImageView.ScaleType.FIT_XY
-                alpha = 0f // 一開始透明
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
             }
 
-            // 🔹 點擊海報時移除並重新啟動計時
-            imageView.setOnClickListener {
-                it.animate()
+            posterContainer.addView(posterImage)
+
+            // 🔹 點擊海報時，淡出並移除
+            posterContainer.setOnClickListener {
+                posterContainer.animate()
                     .alpha(0f)
-                    .setDuration(800)
+                    .setDuration(400)
                     .withEndAction {
-                        (window.decorView as FrameLayout).removeView(it)
+                        decorView.removeView(posterContainer)
                         resetIdleTimer()
                     }
                     .start()
             }
 
-            // 🔹 將海報加入畫面
-            val decorView = window.decorView as FrameLayout
-            decorView.addView(imageView)
+            // 🔹 放進畫面
+            decorView.addView(posterContainer)
 
-            // 🔹 執行淡入動畫
-            imageView.animate()
+            // 🔹 整體淡入
+            posterContainer.animate()
                 .alpha(1f)
-                .setDuration(800)
+                .setDuration(400)
+                .withEndAction {
+                    // ⭐ 開始啟動「請點我」飄浮動畫
+                    startFloatingTapHint(posterContainer)
+                }
                 .start()
         }
+    }
+
+    private fun startFloatingTapHint(container: FrameLayout) {
+
+        val textView = TextView(this).apply {
+            text = "請點我"
+            textSize = 56f
+            setTextColor(android.graphics.Color.WHITE)
+
+            typeface = Typeface.create("Microsoft JhengHei", Typeface.NORMAL)
+
+            // ⭐⭐⭐ 強化視覺：白字 + 黑色粗陰影 + 外發光感
+            setShadowLayer(
+                24f,     // 陰影/光暈半徑（越大越明顯）
+                0f, 0f,  // x, y 偏移（0=中心光暈）
+                android.graphics.Color.parseColor("#AA000044") // ⭐ 半透明深藍色
+            )
+
+            alpha = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        container.addView(textView)
+
+        val handler = Handler(Looper.getMainLooper())
+
+        val runnable = object : Runnable {
+            override fun run() {
+
+                // 隨機位置
+                val maxX = container.width - textView.width
+                val maxY = container.height - textView.height
+                if (maxX > 0 && maxY > 0) {
+                    textView.x = (0..maxX).random().toFloat()
+                    textView.y = (0..maxY).random().toFloat()
+                }
+
+                // 計時：總共約 2秒
+                val fadeIn = 250L
+                val stay = 1500L
+                val fadeOut = 250L
+                val total = fadeIn + stay + fadeOut
+
+                // 淡入 → 停留 → 淡出
+                textView.animate()
+                    .alpha(1f)
+                    .setDuration(fadeIn)
+                    .withEndAction {
+                        textView.animate()
+                            .alpha(1f)
+                            .setDuration(stay)
+                            .withEndAction {
+                                textView.animate()
+                                    .alpha(0f)
+                                    .setDuration(fadeOut)
+                                    .start()
+                            }
+                            .start()
+                    }
+                    .start()
+
+                handler.postDelayed(this, total)
+            }
+        }
+
+        handler.postDelayed(runnable, 500)
     }
 
     override fun onBackPressed() {
