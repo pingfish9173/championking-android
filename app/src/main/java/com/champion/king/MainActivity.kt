@@ -1268,7 +1268,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             // 🔹 建立海報ImageView
             val imageView = ImageView(this).apply {
                 setImageResource(R.drawable.splash_poster)
-                scaleType = ImageView.ScaleType.CENTER_CROP
+                scaleType = ImageView.ScaleType.FIT_XY
                 alpha = 0f // 一開始透明
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
