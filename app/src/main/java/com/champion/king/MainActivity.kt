@@ -1310,7 +1310,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 .alpha(1f)
                 .setDuration(400)
                 .withEndAction {
-                    // ⭐ 開始啟動「請點我」飄浮動畫
+                    // ⭐ 這裡會呼叫你的 startFloatingTapHint
                     startFloatingTapHint(posterContainer)
                 }
                 .start()
@@ -1319,40 +1319,61 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun startFloatingTapHint(container: FrameLayout) {
 
-        val textView = TextView(this).apply {
-            text = "請點我"
-            textSize = 56f
-            setTextColor(android.graphics.Color.WHITE)
+        // 建議將尺寸加大，以容納 56f 的字體和爆炸圖。
+        val containerSizeDp = 350 // 調整為 350dp (可根據實際爆炸圖效果微調)
+        val containerSizePx = (containerSizeDp * resources.displayMetrics.density).toInt()
 
-            typeface = Typeface.create("Microsoft JhengHei", Typeface.NORMAL)
-
-            // ⭐⭐⭐ 強化視覺：白字 + 黑色粗陰影 + 外發光感
-            setShadowLayer(
-                24f,     // 陰影/光暈半徑（越大越明顯）
-                0f, 0f,  // x, y 偏移（0=中心光暈）
-                android.graphics.Color.parseColor("#AA000044") // ⭐ 半透明深藍色
+        // 🔹 1. 建立外層容器：用於顯示爆炸背景圖
+        val tapHintContainer = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                containerSizePx, // 寬度跟著變大
+                containerSizePx  // 高度跟著變大
             )
 
-            alpha = 0f
+            // ❗❗ 假設你新增了一個名為 R.drawable.explosion_icon 的爆炸圖資源 ❗❗
+            background = ContextCompat.getDrawable(context, R.drawable.explosion_icon)?.apply {
+                // 90% 不透明度
+                alpha = (255 * 0.9f).toInt()
+            }
+            alpha = 0f // 初始設定為透明，等待動畫淡入
+        }
+
+        // 🔹 2. 建立內層 TextView：「請點我」
+        val textView = TextView(this).apply {
+            text = "請點我"
+            // 調整字體大小為 56f
+            textSize = 56f
+            // 為了明顯度，將文字顏色改為黑色
+            setTextColor(android.graphics.Color.WHITE)
+            typeface = Typeface.create("Microsoft JhengHei", Typeface.BOLD) // 粗體
+            gravity = Gravity.CENTER // 文字在容器內置中
+
+            // 移除或不設定陰影，因為文字已改為黑色並有爆炸背景圖
+
             layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
 
-        container.addView(textView)
+        // 將文字加入容器
+        tapHintContainer.addView(textView)
+        // 將容器加入畫面的最外層容器
+        container.addView(tapHintContainer)
 
         val handler = Handler(Looper.getMainLooper())
 
         val runnable = object : Runnable {
             override fun run() {
 
-                // 隨機位置
-                val maxX = container.width - textView.width
-                val maxY = container.height - textView.height
+                // 隨機位置：現在是移動 tapHintContainer
+                val maxX = container.width - tapHintContainer.width
+                val maxY = container.height - tapHintContainer.height
+
+                // 確保容器寬高已正確計算，避免錯誤
                 if (maxX > 0 && maxY > 0) {
-                    textView.x = (0..maxX).random().toFloat()
-                    textView.y = (0..maxY).random().toFloat()
+                    tapHintContainer.x = (0..maxX).random().toFloat()
+                    tapHintContainer.y = (0..maxY).random().toFloat()
                 }
 
                 // 計時：總共約 2秒
@@ -1361,16 +1382,16 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 val fadeOut = 250L
                 val total = fadeIn + stay + fadeOut
 
-                // 淡入 → 停留 → 淡出
-                textView.animate()
+                // 淡入 → 停留 → 淡出 (針對 tapHintContainer 執行)
+                tapHintContainer.animate()
                     .alpha(1f)
                     .setDuration(fadeIn)
                     .withEndAction {
-                        textView.animate()
+                        tapHintContainer.animate()
                             .alpha(1f)
                             .setDuration(stay)
                             .withEndAction {
-                                textView.animate()
+                                tapHintContainer.animate()
                                     .alpha(0f)
                                     .setDuration(fadeOut)
                                     .start()
