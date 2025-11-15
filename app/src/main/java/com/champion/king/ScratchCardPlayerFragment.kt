@@ -45,6 +45,9 @@ class ScratchCardPlayerFragment : Fragment() {
     // 追蹤正在刮的格子 ID
     private val scratchingCells = mutableSetOf<Int>()
 
+    // ✅ 新增：是否已有刮卡小視窗正在顯示（避免多指同時開多個）
+    private var isScratchDialogShowing: Boolean = false
+
     // 新增：儲存漩渦View和動畫
     private val swirlViews = mutableMapOf<Int, SwirlView>()
     private val cellAnimators = mutableMapOf<Int, List<ObjectAnimator>>()
@@ -328,6 +331,13 @@ class ScratchCardPlayerFragment : Fragment() {
 
         // 設定點擊事件
         cellView.setOnClickListener {
+
+            // ✅ 若已有刮卡視窗在顯示中，直接忽略這次點擊
+            if (isScratchDialogShowing) {
+                Log.d(TAG, "已有刮卡視窗顯示中，忽略格子 $cellNumber 的點擊")
+                return@setOnClickListener
+            }
+
             // ✅ 每次點擊都重新檢查最新狀態，避免使用舊的 numberConfig
             val refreshedConfig = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }
             val isAlreadyScratched = refreshedConfig?.scratched == true
@@ -349,6 +359,10 @@ class ScratchCardPlayerFragment : Fragment() {
 
             // ✅ 只允許「未刮開」且 number 有效的格子進行互動
             if (refreshedConfig?.scratched != true && number != null) {
+
+                // ✅ 一旦決定要開小視窗，就先鎖住（防止多指連續觸發）
+                isScratchDialogShowing = true
+
                 scratchingCells.add(cellNumber)
                 updateCellDisplay(cellView, cellNumber, false, number)
 
@@ -369,7 +383,6 @@ class ScratchCardPlayerFragment : Fragment() {
                     isSecondToLast,
                     hasUnscatchedPrizes,
                     onScratchStart = {
-                        // 原本的防弊寫入可註解掉或改成 scratchCardsTemp 寫入
                         Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡")
                         writeTempScratch(serialNumber, cellNumber)
                     },
@@ -380,6 +393,9 @@ class ScratchCardPlayerFragment : Fragment() {
                 )
 
                 dialog.setOnDismissListener {
+                    // ✅ 小視窗關閉後解除鎖定，允許下一次點擊
+                    isScratchDialogShowing = false
+
                     val hasStartedScratching = dialog.hasStartedScratching()
                     if (!hasStartedScratching) {
                         scratchingCells.remove(cellNumber)
