@@ -48,6 +48,8 @@ class ScratchCardPlayerFragment : Fragment() {
     // 新增：儲存漩渦View和動畫
     private val swirlViews = mutableMapOf<Int, SwirlView>()
     private val cellAnimators = mutableMapOf<Int, List<ObjectAnimator>>()
+    private var remainingScratchTextView: TextView? = null
+
 
     companion object {
         private const val TAG = "ScratchCardPlayerFragment"
@@ -81,6 +83,7 @@ class ScratchCardPlayerFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         scratchCardContainer = view.findViewById(R.id.scratch_card_container)
         noScratchCardText = view.findViewById(R.id.no_scratch_card_text)
+        remainingScratchTextView = activity?.findViewById(R.id.remaining_scratches_text_view)
         loadUserScratchCards()
     }
 
@@ -199,6 +202,7 @@ class ScratchCardPlayerFragment : Fragment() {
         currentScratchCard = card.apply { this.serialNumber = serialNumber }
 
         val scratchesType = card.scratchesType ?: 10
+        updateRemainingScratchesDisplay()
 
         try {
             scratchCardContainer.removeAllViews()
@@ -612,6 +616,7 @@ class ScratchCardPlayerFragment : Fragment() {
                                 .child("scratched")
                                 .setValue(true)
                                 .addOnSuccessListener {
+                                    updateRemainingScratchesDisplay()
                                     Log.d(TAG, "格子 $cellNumber 刮開成功")
                                     // ValueEventListener 會自動觸發UI更新
                                     // 此時會調用 updateCellDisplay，顯示白色背景和數字
@@ -636,6 +641,44 @@ class ScratchCardPlayerFragment : Fragment() {
                     cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }
                 }
             })
+    }
+
+    private fun loadUserDisplaySetting(onLoaded: (Boolean) -> Unit) {
+        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        val ref = FirebaseDatabase.getInstance()
+            .getReference("users")
+            .child(userKey)
+            .child("isShowRemainingScratches")
+
+        ref.get().addOnSuccessListener { snapshot ->
+            val value = snapshot.getValue(Boolean::class.java) ?: false
+            onLoaded(value)
+        }.addOnFailureListener {
+            onLoaded(false)
+        }
+    }
+
+    /**
+     * 更新左側下方顯示的 刮數/剩餘刮數
+     */
+    private fun updateRemainingScratchesDisplay() {
+        val view = remainingScratchTextView ?: return
+        val card = currentScratchCard ?: return
+
+        loadUserDisplaySetting { shouldShow ->
+
+            if (!shouldShow) {
+                view.visibility = View.GONE
+                return@loadUserDisplaySetting
+            }
+
+            val total = card.scratchesType ?: 0
+            val remaining = card.numberConfigurations?.count { it.scratched == false } ?: 0
+
+            view.text = "$total/$remaining"
+            view.visibility = View.VISIBLE
+        }
     }
 
     private fun displayNoScratchCardMessage(message: String) {
