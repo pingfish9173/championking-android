@@ -184,19 +184,201 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
         deviceInfo: DeviceInfoUtil.DeviceInfo
     ) {
         val message = """
-        您的帳號尚未進行裝置綁定，點擊「確認綁定此裝置」後，將不允許此帳號用其他裝置登入，藉此提高帳號的安全性，避免有心人士用其他平板登入。
-        如有解除裝置綁定需求(更換平板、平板遺失或損壞)，可至用戶編輯介面設定，或聯繫小編。
+        1.您的帳號尚未進行裝置綁定，請閱讀「免責聲明」後，點擊「確認綁定此裝置」。
+        2.綁定此裝置後，將不允許此帳號用其他裝置登入，藉此提高帳號的安全性，避免有心人士用其他裝置登入。
+        3.如有解除裝置綁定需求(更換平板、平板遺失或損壞)，可至用戶編輯介面設定，或聯繫小編。
     """.trimIndent()
 
-        android.app.AlertDialog.Builder(requireContext())
+        // 免責聲明內容
+        val disclaimerText = """
+冠軍王電子刮板｜免責聲明
+
+為保障使用者權益，並維護「冠軍王電子刮板」平台（以下簡稱「本平台」）之正常運作，請使用者在使用本平台提供之服務前，詳閱以下免責聲明。當使用者開始使用本平台，即視為已閱讀、了解並同意遵守本免責聲明之全部內容。
+
+一、服務使用風險
+使用者明白並同意，於本平台進行刮卡、遊戲或相關操作時，可能因網路環境、裝置狀況、系統更新、不可抗力等因素造成延遲、錯誤、中斷或資料遺失，本平台不負任何賠償責任。
+本平台遊戲內容之結果為系統隨機生成，並無任何人工操控、保證中獎、特別待遇或其他不當行為。
+
+二、帳號安全與裝置綁定
+本平台採用裝置綁定與驗證機制以保障使用者安全。
+使用者應妥善保管帳號、密碼及綁定裝置，因個人疏忽導致之損害，本平台不負賠償責任。
+
+三、點數、道具及虛擬物品
+所有點數與虛擬物品均無現金價值，亦不可兌換為現金或其他資產。
+如因誤操作、第三方惡意行為或系統問題造成虛擬物品遺失，本平台將依紀錄協助查詢，但不保證補發。
+
+四、內容正確性與資訊更新
+本平台展示之圖片、商品資訊、活動內容僅供參考，本平台得隨時修改或移除相關資訊。
+因資訊錯誤或變更導致之損失，本平台不負責任。
+
+五、設備、使用環境與外在因素
+使用者應確保運行本平台之裝置處於正常且合適之環境，例如：
+- 避免陽光直射裝置
+- 避免高溫、潮濕、灰塵、強震動、強磁場等極端環境
+- 避免電量不足、裝置老化或散熱不良等狀況
+若因不當使用環境而影響本平台運行，本平台不負責任。
+本平台之功能可能因不同裝置規格、效能或使用者自行安裝之第三方軟體造成差異，本平台不保證於各型號裝置皆能完全正常運作。
+
+六、第三方服務
+對於本平台連結之外部網站、金流或其他第三方服務，其內容與安全性皆由第三方負責，本平台不負責任。
+
+七、系統維護與服務中止
+本平台可能因維護、更新、故障或不可抗力而暫停服務。
+因上述原因造成的資料遺漏或使用不便，本平台不負任何賠償責任。
+
+八、法律責任限制
+除法律強制規定外，本平台對使用者因使用服務而產生之任何直接或間接損害，概不負責。
+
+九、本聲明之修改
+本平台得隨時修訂本免責聲明並公告於平台，使用者於公告後繼續使用即視為同意修訂內容。
+        """.trimIndent()
+
+        // 創建自定義對話框布局
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 24)
+        }
+
+        // 主要訊息
+        val messageTextView = android.widget.TextView(requireContext()).apply {
+            text = message
+            textSize = 16f
+            setTextColor(android.graphics.Color.parseColor("#333333"))
+        }
+        container.addView(messageTextView)
+
+        // 免責聲明展開按鈕
+        val disclaimerToggleButton = android.widget.TextView(requireContext()).apply {
+            text = "免責聲明 ▼"
+            textSize = 16f
+            setTextColor(android.graphics.Color.parseColor("#1976D2"))
+            setPadding(0, 32, 0, 16)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        container.addView(disclaimerToggleButton)
+
+        // 免責聲明內容容器（初始隱藏）
+        val disclaimerContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+
+        // 免責聲明文字區域（ScrollView）
+        val scrollView = android.widget.ScrollView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                250
+            )
+        }
+
+        val disclaimerTextView = android.widget.TextView(requireContext()).apply {
+            text = disclaimerText
+            textSize = 14f
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(android.graphics.Color.parseColor("#F5F5F5"))
+        }
+        scrollView.addView(disclaimerTextView)
+        disclaimerContainer.addView(scrollView)
+
+        // 倒數計時文字
+        val countdownTextView = android.widget.TextView(requireContext()).apply {
+            text = "閱讀中...5"
+            textSize = 14f
+            setTextColor(android.graphics.Color.parseColor("#FF6B6B"))
+            setPadding(0, 8, 0, 8)
+            gravity = android.view.Gravity.CENTER
+        }
+        disclaimerContainer.addView(countdownTextView)
+
+        // 確認閱讀 Checkbox（初始隱藏）
+        val confirmCheckbox = android.widget.CheckBox(requireContext()).apply {
+            text = "我已完成閱讀免責聲明"
+            textSize = 16f
+            visibility = View.GONE
+            setPadding(0, 0, 0, 0)
+        }
+        disclaimerContainer.addView(confirmCheckbox)
+
+        container.addView(disclaimerContainer)
+
+        // 創建對話框
+        val dialog = android.app.AlertDialog.Builder(requireContext())
             .setTitle("裝置綁定")
-            .setMessage(message)
-            .setPositiveButton("確認綁定此裝置") { dialog, _ ->
+            .setView(container)
+            .setPositiveButton("確認綁定此裝置", null) // 先設為 null，稍後手動設置
+            .setNegativeButton("取消", null)
+            .setCancelable(false)
+            .create()
+
+        // 倒數計時器變數
+        var countdownJob: kotlinx.coroutines.Job? = null
+
+        // 展開/收合免責聲明
+        disclaimerToggleButton.setOnClickListener {
+            if (disclaimerContainer.visibility == View.GONE) {
+                // 展開
+                disclaimerContainer.visibility = View.VISIBLE
+                disclaimerToggleButton.text = "免責聲明 ▲"
+
+                // 開始 5 秒倒數
+                countdownJob?.cancel()
+                countdownJob = viewLifecycleOwner.lifecycleScope.launch {
+                    for (i in 5 downTo 1) {
+                        countdownTextView.text = "閱讀中...$i"
+                        kotlinx.coroutines.delay(1000)
+                    }
+                    // 倒數結束，顯示 checkbox
+                    countdownTextView.visibility = View.GONE
+                    confirmCheckbox.visibility = View.VISIBLE
+                }
+            } else {
+                // 收合
+                disclaimerContainer.visibility = View.GONE
+                disclaimerToggleButton.text = "免責聲明 ▼"
+                countdownJob?.cancel()
+                countdownTextView.visibility = View.VISIBLE
+                countdownTextView.text = "閱讀中...5"
+                confirmCheckbox.visibility = View.GONE
+                confirmCheckbox.isChecked = false
+            }
+        }
+
+        dialog.setOnShowListener {
+            val positiveButton = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            val negativeButton = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+
+            // 一開始不能按「確認」
+            positiveButton.isEnabled = false
+
+            // 監聽 checkbox 狀態變化
+            confirmCheckbox.setOnCheckedChangeListener { _, isChecked ->
+                positiveButton.isEnabled = isChecked
+            }
+
+            // 設置確認綁定按鈕點擊事件
+            positiveButton.setOnClickListener {
                 dialog.dismiss()
+                countdownJob?.cancel() // 取消倒數計時
                 performDeviceBinding(user, deviceInfo)
             }
-            .setCancelable(false) // 禁止外部或返回鍵關閉
-            .show()
+
+            negativeButton.setOnClickListener {
+                countdownJob?.cancel()
+                dialog.dismiss()
+                // 你如果想加額外動作（例如回到登入畫面）也可以在這裡加入
+            }
+        }
+
+        dialog.show()
+
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.85).toInt(),
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     /**
