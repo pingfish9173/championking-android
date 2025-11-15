@@ -24,7 +24,13 @@ class AboutTabletFragment : Fragment() {
     private lateinit var tabAboutIndicator: View
     private lateinit var tabDisclaimerIndicator: View
 
-    private lateinit var contentText: TextView
+    private lateinit var contentScrollUpdateLog: View
+    private lateinit var contentScrollAbout: View
+    private lateinit var contentScrollDisclaimer: View
+
+    private lateinit var contentTextUpdateLog: TextView
+    private lateinit var contentTextAbout: TextView
+    private lateinit var contentTextDisclaimer: TextView
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -50,7 +56,13 @@ class AboutTabletFragment : Fragment() {
         tabAboutIndicator = view.findViewById(R.id.tab_about_indicator)
         tabDisclaimerIndicator = view.findViewById(R.id.tab_disclaimer_indicator)
 
-        contentText = view.findViewById(R.id.content_text)
+        contentScrollUpdateLog = view.findViewById(R.id.content_scroll_update_log)
+        contentScrollAbout = view.findViewById(R.id.content_scroll_about)
+        contentScrollDisclaimer = view.findViewById(R.id.content_scroll_disclaimer)
+
+        contentTextUpdateLog = view.findViewById(R.id.content_text_update_log)
+        contentTextAbout = view.findViewById(R.id.content_text_about)
+        contentTextDisclaimer = view.findViewById(R.id.content_text_disclaimer)
 
         // --- 三種內文 ----
         val contentUpdateLog = """
@@ -94,8 +106,6 @@ class AboutTabletFragment : Fragment() {
 
 
         val contentDisclaimer = """
-冠軍王電子刮板│免責聲明
-
 為保障使用者權益,並維護「冠軍王電子刮板」平台(以下簡稱「本平台」)之正常運作,請使用者在使用本平台提供之服務前,詳閱以下免責聲明。當使用者開始使用本平台,即視為已閱讀、了解並同意遵守本免責聲明之全部內容。
 
 一、服務使用風險
@@ -137,23 +147,24 @@ class AboutTabletFragment : Fragment() {
 本平台得隨時修訂本免責聲明並公告於平台,使用者於公告後繼續使用即視為同意修訂內容。
         """.trimIndent()
 
-        // 預設顯示更新紀錄並設定選中狀態
-        contentText.text = contentUpdateLog
+        // 為每個 TextView 設置內容
+        contentTextUpdateLog.text = contentUpdateLog
+        contentTextAbout.text = contentAbout
+        contentTextDisclaimer.text = contentDisclaimer
+
+        // 預設顯示更新紀錄頁簽
         selectTab(TabType.UPDATE_LOG)
 
         // 點擊事件
         tabUpdateLog.setOnClickListener {
-            contentText.text = contentUpdateLog
             selectTab(TabType.UPDATE_LOG)
         }
 
         tabAbout.setOnClickListener {
-            contentText.text = contentAbout
             selectTab(TabType.ABOUT)
         }
 
         tabDisclaimer.setOnClickListener {
-            contentText.text = contentDisclaimer
             selectTab(TabType.DISCLAIMER)
         }
     }
@@ -167,11 +178,25 @@ class AboutTabletFragment : Fragment() {
         resetTabState(tabAboutText, tabAboutIndicator)
         resetTabState(tabDisclaimerText, tabDisclaimerIndicator)
 
-        // 設定選中的 tab 為選中狀態
+        // 隱藏所有內容區域
+        contentScrollUpdateLog.visibility = View.GONE
+        contentScrollAbout.visibility = View.GONE
+        contentScrollDisclaimer.visibility = View.GONE
+
+        // 設定選中的 tab 為選中狀態並顯示對應內容
         when (selectedTab) {
-            TabType.UPDATE_LOG -> setTabSelected(tabUpdateLogText, tabUpdateLogIndicator)
-            TabType.ABOUT -> setTabSelected(tabAboutText, tabAboutIndicator)
-            TabType.DISCLAIMER -> setTabSelected(tabDisclaimerText, tabDisclaimerIndicator)
+            TabType.UPDATE_LOG -> {
+                setTabSelected(tabUpdateLogText, tabUpdateLogIndicator)
+                contentScrollUpdateLog.visibility = View.VISIBLE
+            }
+            TabType.ABOUT -> {
+                setTabSelected(tabAboutText, tabAboutIndicator)
+                contentScrollAbout.visibility = View.VISIBLE
+            }
+            TabType.DISCLAIMER -> {
+                setTabSelected(tabDisclaimerText, tabDisclaimerIndicator)
+                contentScrollDisclaimer.visibility = View.VISIBLE
+            }
         }
     }
 
