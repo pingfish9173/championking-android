@@ -6,267 +6,141 @@
     android:background="#FFFFFF"
     android:padding="24dp">
 
-    <TextView
-        android:id="@+id/about_title"
+    <!-- 標題 + Tabs -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="關於平板使用說明"
-        android:textSize="28sp"
-        android:textColor="@android:color/black"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:paddingBottom="16dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-    <ScrollView
+        <!-- 左側標題 -->
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="公告"
+            android:textSize="28sp"
+            android:textColor="@android:color/black"
+            android:textStyle="bold"
+            android:gravity="start" />
+
+        <!-- 右側三個頁籤 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- 更新紀錄 Tab -->
+            <LinearLayout
+                android:id="@+id/tab_update_log"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tab_update_log_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="更新紀錄"
+                    android:textSize="18sp"
+                    android:textColor="#444444" />
+
+                <View
+                    android:id="@+id/tab_update_log_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#FF6B35"
+                    android:visibility="visible" />
+            </LinearLayout>
+
+            <!-- 關於平板 Tab -->
+            <LinearLayout
+                android:id="@+id/tab_about"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:layout_marginLeft="16dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tab_about_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="關於平板"
+                    android:textSize="18sp"
+                    android:textColor="#444444" />
+
+                <View
+                    android:id="@+id/tab_about_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#FF6B35"
+                    android:visibility="invisible" />
+            </LinearLayout>
+
+            <!-- 免責聲明 Tab -->
+            <LinearLayout
+                android:id="@+id/tab_disclaimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:layout_marginLeft="16dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tab_disclaimer_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="免責聲明"
+                    android:textSize="18sp"
+                    android:textColor="#444444" />
+
+                <View
+                    android:id="@+id/tab_disclaimer_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#FF6B35"
+                    android:visibility="invisible" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+
+    <!-- 分隔線 -->
+    <View
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="1dp"
+        android:background="#DDDDDD"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- Scroll 區塊（動態切換） -->
+    <ScrollView
+        android:id="@+id/content_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:fillViewport="true">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/content_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <!-- 一、購買與使用 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="一、購買與使用"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 冠軍王電子刮板屬虛擬商品，僅供消遣娛樂，不得折換現金或其他財物。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 點數發送至帳號後，恕不退換或轉讓。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 在商城確認購買刮板後，恕不退換或轉讓。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-
-            <!-- 二、獎項與中獎規則 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="二、獎項與中獎規則"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 獎項為特獎及大獎。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 刮中對應的特獎及大獎數字表示中獎。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 特獎、大獎號碼由台主自由選定。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="4. 特獎僅能設定一個數字，大獎依照不同的刮板數有設定上限。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="5. 任一刮板數，如刮開部分超過該板數的1/2（含），且特獎尚未刮出時，不可將其刪除、換版。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-
-            <!-- 三、帳號安全 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="三、帳號安全"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 請妥善保管帳號與密碼，因外洩造成損失，恕不補發。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 點數、刮板不得跨帳號或合併。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 請使用官方刮板裝置，避免非正版裝置導致帳號異常，造成權益受損，本公司恕不負責。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-
-            <!-- 四、合規限制 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="四、合規限制"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 未滿18歲之使用者，需經家長同意方可購買。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 僅供台灣境內使用，海外用戶須自行確認合法性。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 如發現盜刷、外掛、作弊等行為，主辦方有權終止帳號。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-
-            <!-- 五、其他說明 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="五、其他說明"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 本商品屬虛擬商品，不適用七日鑑賞期。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 系統維護期間，可能暫停購買或使用，敬請見諒。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 主辦方保留活動解釋及調整之權利。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-
-            <!-- 六、軟體說明 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="六、軟體說明"
-                android:textSize="20sp"
-                android:textColor="@android:color/black"
-                android:textStyle="bold"
-                android:paddingBottom="8dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. 冠軍王App內建永不休眠模式，故無需再另外設定。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. 當待機時間15分鐘，則直接跳轉廣告頁面。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. 換板密碼係提供部分射板玩家使用，如有需要，台主可提供密碼給玩家，請自行判斷。"
-                android:textSize="16sp"
-                android:textColor="#333333"
-                android:lineSpacingMultiplier="1.3"
-                android:paddingBottom="16dp" />
-        </LinearLayout>
+            android:textColor="#333333"
+            android:textSize="16sp"
+            android:lineSpacingMultiplier="1.35"
+            android:padding="8dp" />
     </ScrollView>
+
 </LinearLayout>
