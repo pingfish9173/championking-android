@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><!-- 設置介面的佈局檔案，將作為 Fragment 載入到主內容區塊 -->
+<?xml version="1.0" encoding="utf-8"?><!-- 設置介面的佈局檔案,將作為 Fragment 載入到主內容區塊 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -134,7 +134,7 @@
             </LinearLayout>
 
 
-            <!-- 特獎設定：左側按鈕；右側唯讀顯示 -->
+            <!-- 特獎設定：左側按鈕；右側輸入框與鉛筆圖標 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -155,21 +155,42 @@
                     android:textColor="#FFFFFF"
                     android:textSize="14sp" />
 
-                <EditText
-                    android:id="@+id/edit_text_special_prize"
+                <!-- ✅ 新增：輸入框與鉛筆圖標的容器 -->
+                <FrameLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:clickable="false"
-                    android:enabled="false"
-                    android:focusable="false"
-                    android:hint="請點選「特獎」，並選取1個特獎數字"
-                    android:inputType="none"
-                    android:padding="6dp"
-                    android:textSize="12sp" />
+                    android:layout_weight="1">
+
+                    <EditText
+                        android:id="@+id/edit_text_special_prize"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:enabled="true"
+                        android:focusable="false"
+                        android:focusableInTouchMode="false"
+                        android:hint="請點選「特獎」,並選取1個特獎數字"
+                        android:inputType="none"
+                        android:padding="6dp"
+                        android:paddingEnd="32dp"
+                        android:textSize="12sp" />
+
+                    <!-- ✅ 鉛筆圖標按鈕 -->
+                    <ImageButton
+                        android:id="@+id/button_special_prize_keyboard"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="end|center_vertical"
+                        android:layout_marginEnd="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="使用數字鍵盤輸入"
+                        android:padding="4dp"
+                        android:src="@android:drawable/ic_menu_edit"
+                        app:tint="#757575" />
+                </FrameLayout>
             </LinearLayout>
 
-            <!-- 大獎設定：左側按鈕（多選）；右側唯讀顯示（逗號分隔） -->
+            <!-- 大獎設定：左側按鈕（多選）；右側輸入框與鉛筆圖標 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -190,21 +211,42 @@
                     android:textColor="#FFFFFF"
                     android:textSize="14sp" />
 
-                <EditText
-                    android:id="@+id/edit_text_grand_prize"
+                <!-- ✅ 新增：輸入框與鉛筆圖標的容器 -->
+                <FrameLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:clickable="false"
-                    android:enabled="false"
-                    android:focusable="false"
-                    android:hint="請點選「大獎」，並選取多個大獎數字"
-                    android:inputType="none"
-                    android:padding="6dp"
-                    android:textSize="12sp" />
+                    android:layout_weight="1">
+
+                    <EditText
+                        android:id="@+id/edit_text_grand_prize"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:enabled="true"
+                        android:focusable="false"
+                        android:focusableInTouchMode="false"
+                        android:hint="請點選「大獎」,並選取多個大獎數字"
+                        android:inputType="none"
+                        android:padding="6dp"
+                        android:paddingEnd="32dp"
+                        android:textSize="12sp" />
+
+                    <!-- ✅ 鉛筆圖標按鈕 -->
+                    <ImageButton
+                        android:id="@+id/button_grand_prize_keyboard"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="end|center_vertical"
+                        android:layout_marginEnd="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="使用數字鍵盤輸入"
+                        android:padding="4dp"
+                        android:src="@android:drawable/ic_menu_edit"
+                        app:tint="#757575" />
+                </FrameLayout>
             </LinearLayout>
 
-            <!-- 夾出X樣，贈送Y刮 -->
+            <!-- 夾出X樣,贈送Y刮 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -328,7 +370,7 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
-            <!-- 推到下方的空白填充，讓提醒固定在最底 -->
+            <!-- 推到下方的空白填充,讓提醒固定在最底 -->
             <Space
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -342,7 +384,7 @@
                 android:layout_marginTop="6dp"
                 android:layout_marginEnd="4dp"
                 android:gravity="end"
-                android:text="溫馨提醒：在設定特獎及大獎時，請注意後面有眼👀"
+                android:text="溫馨提醒：在設定特獎及大獎時,請注意後面有眼👀"
                 android:textColor="#9E9E9E"
                 android:textSize="8sp" />
 

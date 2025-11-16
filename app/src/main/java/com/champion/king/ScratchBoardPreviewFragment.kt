@@ -818,4 +818,144 @@ class ScratchBoardPreviewFragment : Fragment() {
             else -> 0
         }
     }
+
+    /**
+     * 標記特獎數字（數字鍵盤輸入模式）
+     *
+     * @param specialPrizeNumber 特獎數字
+     */
+    fun markSpecialPrize(specialPrizeNumber: Int) {
+        // 檢查是否在唯讀模式
+        if (readonlyMode) {
+            toast("唯讀模式下無法修改特獎")
+            return
+        }
+
+        // 檢查數字是否在有效範圍內
+        val scratchCount = extractScratchCount(scratchesType ?: "")
+        if (specialPrizeNumber < 1 || specialPrizeNumber > scratchCount) {
+            toast("特獎數字必須在 1 到 $scratchCount 之間")
+            return
+        }
+
+        // 檢查是否與大獎衝突
+        if (grandSelectedNumbers.contains(specialPrizeNumber)) {
+            toast("此數字已在大獎清單，請先移除大獎")
+            return
+        }
+
+        // 更新特獎標記
+        lastPickedNumber = specialPrizeNumber
+
+        // 通知外部（與選取模式保持一致）
+        setFragmentResult(
+            "scratch_number_selected",
+            Bundle().apply { putInt("number", specialPrizeNumber) }
+        )
+
+        // 重新應用所有標記（更新 UI）
+        applyModesAndMarkers()
+
+        Log.d(TAG, "特獎已標記：$specialPrizeNumber")
+    }
+
+    /**
+     * 標記大獎數字列表（數字鍵盤輸入模式）
+     *
+     * @param grandPrizeNumbers 大獎數字列表
+     */
+    fun markGrandPrizes(grandPrizeNumbers: List<Int>) {
+        // 檢查是否在唯讀模式
+        if (readonlyMode) {
+            toast("唯讀模式下無法修改大獎")
+            return
+        }
+
+        // 檢查數字是否在有效範圍內
+        val scratchCount = extractScratchCount(scratchesType ?: "")
+        val invalidNumbers = grandPrizeNumbers.filter { it < 1 || it > scratchCount }
+        if (invalidNumbers.isNotEmpty()) {
+            toast("大獎數字必須在 1 到 $scratchCount 之間")
+            return
+        }
+
+        // 檢查是否與特獎衝突
+        if (grandPrizeNumbers.contains(lastPickedNumber)) {
+            toast("大獎清單包含特獎數字 $lastPickedNumber，請重新設定")
+            return
+        }
+
+        // 檢查大獎數量限制
+        val maxGrandPrizes = getGrandLimitByScratchType()
+        if (grandPrizeNumbers.size > maxGrandPrizes) {
+            toast("此刮數的大獎數量上限為 $maxGrandPrizes 個")
+            return
+        }
+
+        // 更新大獎標記
+        grandSelectedNumbers.clear()
+        grandSelectedNumbers.addAll(grandPrizeNumbers)
+
+        // 通知外部（與選取模式保持一致）
+        setFragmentResult(
+            "grand_numbers_changed",
+            Bundle().apply { putIntArray("numbers", grandSelectedNumbers.toIntArray()) }
+        )
+
+        // 重新應用所有標記（更新 UI）
+        applyModesAndMarkers()
+
+        Log.d(TAG, "大獎已標記：${grandPrizeNumbers.joinToString(", ")}")
+    }
+
+    /**
+     * 清除特獎標記
+     */
+    fun clearSpecialPrize() {
+        lastPickedNumber = null
+        applyModesAndMarkers()
+        Log.d(TAG, "特獎標記已清除")
+    }
+
+    /**
+     * 清除大獎標記
+     */
+    fun clearGrandPrizes() {
+        grandSelectedNumbers.clear()
+        applyModesAndMarkers()
+        Log.d(TAG, "大獎標記已清除")
+    }
+
+    /**
+     * 清除所有標記（特獎和大獎）
+     */
+    fun clearAllPrizes() {
+        lastPickedNumber = null
+        grandSelectedNumbers.clear()
+        applyModesAndMarkers()
+        Log.d(TAG, "所有獎項標記已清除")
+    }
+
+    /**
+     * 獲取當前特獎數字
+     * @return 特獎數字，如果未設定則返回 null
+     */
+    fun getCurrentSpecialPrize(): Int? {
+        return lastPickedNumber
+    }
+
+    /**
+     * 獲取當前大獎數字列表
+     * @return 大獎數字列表
+     */
+    fun getCurrentGrandPrizes(): List<Int> {
+        return grandSelectedNumbers.toList()
+    }
+
+//    /**
+//     * 顯示 Toast 訊息的輔助方法
+//     */
+//    private fun toast(msg: String) {
+//        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+//    }
 }

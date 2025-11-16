@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 顯示輸入的數字 -->
+    <EditText
+        android:id="@+id/dialog_prize_edit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@android:drawable/edit_text"
+        android:gravity="center"
+        android:hint="請使用下方數字鍵盤輸入"
+        android:inputType="none"
+        android:minHeight="48dp"
+        android:padding="12dp"
+        android:textSize="18sp" />
+
+    <!-- 數字鍵盤區域 -->
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:columnCount="3"
+        android:rowCount="5">
+
+        <!-- 第一行：7, 8, 9 -->
+        <Button
+            android:id="@+id/dialog_prize_btn_7"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="7"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_8"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="8"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_9"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="9"
+            android:textSize="20sp" />
+
+        <!-- 第二行：4, 5, 6 -->
+        <Button
+            android:id="@+id/dialog_prize_btn_4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="4"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="5"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="6"
+            android:textSize="20sp" />
+
+        <!-- 第三行：1, 2, 3 -->
+        <Button
+            android:id="@+id/dialog_prize_btn_1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="1"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="2"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="3"
+            android:textSize="20sp" />
+
+        <!-- 第四行：逗號, 0, 清除 -->
+        <Button
+            android:id="@+id/dialog_prize_btn_comma"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text=","
+            android:textSize="20sp"
+            android:backgroundTint="#4CAF50" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_0"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="0"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/dialog_prize_btn_clear"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="清除"
+            android:textSize="16sp"
+            android:backgroundTint="#FF5722" />
+
+        <!-- 第五行：退格按鈕橫跨三列 -->
+        <Button
+            android:id="@+id/dialog_prize_btn_delete"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnSpan="3"
+            android:layout_columnWeight="1"
+            android:layout_margin="4dp"
+            android:minHeight="56dp"
+            android:text="⌫ 退格"
+            android:textSize="18sp"
+            android:backgroundTint="#FFC107" />
+    </GridLayout>
+
+    <!-- 說明文字 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:text="提示：使用「,」分隔多個數字"
+        android:textColor="#757575"
+        android:textSize="12sp" />
+
+</LinearLayout>

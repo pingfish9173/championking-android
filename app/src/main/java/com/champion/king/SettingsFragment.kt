@@ -246,6 +246,22 @@ class SettingsFragment : Fragment() {
                 exitGrandPrizePickMode()
             }
         }
+
+        // ✅ 特獎鉛筆圖標和輸入框點擊事件
+        binding.buttonSpecialPrizeKeyboard.setOnClickListener {
+            handleSpecialPrizeKeyboardClick()
+        }
+        binding.editTextSpecialPrize.setOnClickListener {
+            handleSpecialPrizeKeyboardClick()
+        }
+
+        // ✅ 大獎鉛筆圖標和輸入框點擊事件
+        binding.buttonGrandPrizeKeyboard.setOnClickListener {
+            handleGrandPrizeKeyboardClick()
+        }
+        binding.editTextGrandPrize.setOnClickListener {
+            handleGrandPrizeKeyboardClick()
+        }
     }
 
     private fun setupSpinnerListeners() {
@@ -1400,6 +1416,159 @@ class SettingsFragment : Fragment() {
     // ===========================================
     // 工具方法
     // ===========================================
+
+    // ✅ 新增：處理特獎數字鍵盤點擊
+    private fun handleSpecialPrizeKeyboardClick() {
+        // 獲取當前選擇的刮數
+        val selectedScratchType = getCurrentScratchType()
+        if (selectedScratchType == null) {
+            showToast("請先選擇刮數")
+            return
+        }
+
+        // 獲取當前特獎值
+        val currentValue = binding.editTextSpecialPrize.text.toString()
+
+        // 顯示數字鍵盤
+        uiManager.showSpecialPrizeKeyboard(
+            currentValue = if (currentValue.isEmpty()) null else currentValue,
+            currentScratchType = selectedScratchType,
+            onConfirm = { validatedInput ->
+                // 驗證已經在 UIManager 中完成，這裡直接使用
+                val specialPrizeNumber = validatedInput.toIntOrNull()
+                if (specialPrizeNumber == null) {
+                    showToast("無效的數字")
+                    return@showSpecialPrizeKeyboard
+                }
+
+                // 更新特獎輸入框
+                binding.editTextSpecialPrize.setText(validatedInput)
+
+                currentPreviewFragment?.setSelectedNumber(specialPrizeNumber)
+
+                showToast("特獎已設定：$validatedInput")
+            }
+        )
+    }
+
+    // ✅ 新增：處理大獎數字鍵盤點擊
+    private fun handleGrandPrizeKeyboardClick() {
+        // 取得當前選擇的刮數
+        val selectedScratchType = getCurrentScratchType()
+        if (selectedScratchType == null) {
+            showToast("請先選擇刮數")
+            return
+        }
+
+        // 取得目前的大獎輸入欄位值
+        val currentValue = binding.editTextGrandPrize.text.toString()
+
+        // 顯示數字鍵盤
+        uiManager.showGrandPrizeKeyboard(
+            currentValue = if (currentValue.isEmpty()) null else currentValue,
+            currentScratchType = selectedScratchType,
+            onConfirm = { validatedInput ->
+
+                // === 1️⃣ 將 validatedInput 解析成數字並排序 ===
+                val sortedList = validatedInput.split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .mapNotNull { it.toIntOrNull() }
+                    .sorted()
+
+                if (sortedList.isEmpty()) {
+                    showToast("無效的大獎數字")
+                    return@showGrandPrizeKeyboard
+                }
+
+                // === 2️⃣ 排序後重新組成排好序字串 ===
+                val sortedText = sortedList.joinToString(", ")
+
+                // === 3️⃣ 更新大獎輸入框（顯示由小到大） ===
+                binding.editTextGrandPrize.setText(sortedText)
+
+                // === 4️⃣ 更新預覽區（圈選排序後的大獎數字） ===
+                currentPreviewFragment?.setGrandSelectedNumbers(sortedList)
+
+                // === 5️⃣ 顯示提示訊息 ===
+                showToast("大獎已設定：$sortedText")
+            }
+        )
+    }
+
+    // ✅ 新增：獲取當前選擇的刮數
+    private fun getCurrentScratchType(): Int? {
+        return try {
+            val selectedItem = binding.spinnerScratchesCount.selectedItem
+
+            // 處理 ScratchTypeItem 類型（從你現有的代碼中）
+            when (selectedItem) {
+                is ScratchTypeItem -> selectedItem.getScratchType()
+                is String -> {
+                    // 從字符串中提取刮數（例如 "10刮 (剩5)" -> 10）
+                    val regex = Regex("(\\d+)刮")
+                    val match = regex.find(selectedItem)
+                    match?.groupValues?.get(1)?.toInt()
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Log.e("SettingsFragment", "無法獲取當前刮數", e)
+            null
+        }
+    }
+
+    // ✅ 新增：更新刮板預覽區顯示特獎
+    private fun updateScratchBoardPreviewWithSpecialPrize(specialPrizeNumber: Int) {
+        // 獲取當前預覽片段
+        val previewFragment = uiManager.currentScratchBoardPreviewFragment
+        if (previewFragment == null) {
+            Log.w("SettingsFragment", "預覽片段不存在，無法更新特獎標記")
+            return
+        }
+
+        try {
+            // 調用預覽片段的標記方法
+            previewFragment.markSpecialPrize(specialPrizeNumber)
+            Log.d("SettingsFragment", "特獎標記已更新：$specialPrizeNumber")
+        } catch (e: Exception) {
+            Log.e("SettingsFragment", "更新特獎標記失敗", e)
+            showToast("更新特獎標記失敗：${e.message}")
+        }
+    }
+
+    // ✅ 新增：更新刮板預覽區顯示大獎
+    private fun updateScratchBoardPreviewWithGrandPrizes(grandPrizeNumbers: List<Int>) {
+        // 獲取當前預覽片段
+        val previewFragment = uiManager.currentScratchBoardPreviewFragment
+        if (previewFragment == null) {
+            Log.w("SettingsFragment", "預覽片段不存在，無法更新大獎標記")
+            return
+        }
+
+        try {
+            // 調用預覽片段的標記方法
+            previewFragment.markGrandPrizes(grandPrizeNumbers)
+            Log.d("SettingsFragment", "大獎標記已更新：${grandPrizeNumbers.joinToString(", ")}")
+        } catch (e: Exception) {
+            Log.e("SettingsFragment", "更新大獎標記失敗", e)
+            showToast("更新大獎標記失敗：${e.message}")
+        }
+    }
+
+    // ✅ 可選：添加清除獎項標記的方法（如果需要）
+    private fun clearPrizeMarkers() {
+        val previewFragment = uiManager.currentScratchBoardPreviewFragment
+        previewFragment?.clearAllPrizes()
+    }
+
+    // ✅ 可選：獲取當前獎項設定（用於保存時）
+    private fun getCurrentPrizeSettings(): Pair<Int?, List<Int>> {
+        val previewFragment = uiManager.currentScratchBoardPreviewFragment
+        val specialPrize = previewFragment?.getCurrentSpecialPrize()
+        val grandPrizes = previewFragment?.getCurrentGrandPrizes() ?: emptyList()
+        return Pair(specialPrize, grandPrizes)
+    }
 
     private inline fun <T> safeExecute(
         operation: String,
