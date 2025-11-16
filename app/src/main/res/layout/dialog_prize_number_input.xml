@@ -142,28 +142,28 @@
             android:textSize="20sp" />
 
         <Button
-            android:id="@+id/dialog_prize_btn_clear"
+            android:id="@+id/dialog_prize_btn_delete"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnWeight="1"
             android:layout_margin="4dp"
             android:minHeight="56dp"
-            android:text="清除"
+            android:text="⌫ 退格"
             android:textSize="16sp"
-            android:backgroundTint="#FF5722" />
+            android:backgroundTint="#FFC107" />
 
-        <!-- 第五行：退格按鈕橫跨三列 -->
+        <!-- 第五行：清除按鈕橫跨三列 -->
         <Button
-            android:id="@+id/dialog_prize_btn_delete"
+            android:id="@+id/dialog_prize_btn_clear"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnSpan="3"
             android:layout_columnWeight="1"
             android:layout_margin="4dp"
             android:minHeight="56dp"
-            android:text="⌫ 退格"
+            android:text="清除"
             android:textSize="18sp"
-            android:backgroundTint="#FFC107" />
+            android:backgroundTint="#FF5722" />
     </GridLayout>
 
     <!-- 說明文字 -->

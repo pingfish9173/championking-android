@@ -1419,78 +1419,95 @@ class SettingsFragment : Fragment() {
 
     // ✅ 新增：處理特獎數字鍵盤點擊
     private fun handleSpecialPrizeKeyboardClick() {
-        // 獲取當前選擇的刮數
         val selectedScratchType = getCurrentScratchType()
         if (selectedScratchType == null) {
             showToast("請先選擇刮數")
             return
         }
 
-        // 獲取當前特獎值
         val currentValue = binding.editTextSpecialPrize.text.toString()
 
-        // 顯示數字鍵盤
         uiManager.showSpecialPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
             currentScratchType = selectedScratchType,
             onConfirm = { validatedInput ->
-                // 驗證已經在 UIManager 中完成，這裡直接使用
+
+                // 將特獎輸入去掉前導 0
                 val specialPrizeNumber = validatedInput.toIntOrNull()
                 if (specialPrizeNumber == null) {
-                    showToast("無效的數字")
+                    showToast("無效的特獎數字")
                     return@showSpecialPrizeKeyboard
                 }
 
-                // 更新特獎輸入框
-                binding.editTextSpecialPrize.setText(validatedInput)
+                val cleaned = specialPrizeNumber.toString()  // 移除前導 0
+
+                // === ⭐ 驗證：特獎不可與大獎重複 ===
+                val grandText = binding.editTextGrandPrize.text.toString()
+                if (grandText.isNotEmpty()) {
+                    val grandList = grandText.split(",")
+                        .map { it.trim() }
+                        .mapNotNull { it.toIntOrNull() }
+
+                    if (grandList.contains(specialPrizeNumber)) {
+                        showToast("特獎不能與大獎重複！")
+                        return@showSpecialPrizeKeyboard  // ❗ 重要：視窗不關閉，輸入不清空
+                    }
+                }
+
+                // === 以上驗證全部通過才會執行以下更新 ===
+                binding.editTextSpecialPrize.setText(cleaned)
 
                 currentPreviewFragment?.setSelectedNumber(specialPrizeNumber)
 
-                showToast("特獎已設定：$validatedInput")
+                showToast("特獎已設定：$cleaned")
             }
         )
     }
 
     // ✅ 新增：處理大獎數字鍵盤點擊
     private fun handleGrandPrizeKeyboardClick() {
-        // 取得當前選擇的刮數
         val selectedScratchType = getCurrentScratchType()
         if (selectedScratchType == null) {
             showToast("請先選擇刮數")
             return
         }
 
-        // 取得目前的大獎輸入欄位值
         val currentValue = binding.editTextGrandPrize.text.toString()
 
-        // 顯示數字鍵盤
         uiManager.showGrandPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
             currentScratchType = selectedScratchType,
             onConfirm = { validatedInput ->
 
-                // === 1️⃣ 將 validatedInput 解析成數字並排序 ===
-                val sortedList = validatedInput.split(",")
+                // === 清洗：拆分、去空白、移除前導零 ===
+                val cleanedList = validatedInput.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
-                    .mapNotNull { it.toIntOrNull() }
-                    .sorted()
+                    .mapNotNull { token -> token.toIntOrNull()?.toString() }
 
-                if (sortedList.isEmpty()) {
+                if (cleanedList.isEmpty()) {
                     showToast("無效的大獎數字")
                     return@showGrandPrizeKeyboard
                 }
 
-                // === 2️⃣ 排序後重新組成排好序字串 ===
-                val sortedText = sortedList.joinToString(", ")
+                // 轉成 Int 並排序
+                val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
 
-                // === 3️⃣ 更新大獎輸入框（顯示由小到大） ===
+                // === ⭐ 驗證：大獎不可包含特獎 ===
+                val specialText = binding.editTextSpecialPrize.text.toString()
+                val specialNumber = specialText.toIntOrNull()
+
+                if (specialNumber != null && sortedList.contains(specialNumber)) {
+                    showToast("大獎不能包含特獎數字！")
+                    return@showGrandPrizeKeyboard  // ❗ 重要：視窗不關閉，輸入不清空
+                }
+
+                // === 全驗證通過 → 更新 ===
+                val sortedText = sortedList.joinToString(", ")
                 binding.editTextGrandPrize.setText(sortedText)
 
-                // === 4️⃣ 更新預覽區（圈選排序後的大獎數字） ===
                 currentPreviewFragment?.setGrandSelectedNumbers(sortedList)
 
-                // === 5️⃣ 顯示提示訊息 ===
                 showToast("大獎已設定：$sortedText")
             }
         )

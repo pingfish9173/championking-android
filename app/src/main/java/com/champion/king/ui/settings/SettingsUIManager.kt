@@ -261,15 +261,35 @@ class SettingsUIManager(
             }
         }
 
-        // 數字按鈕點擊事件
+        // 數字按鈕點擊事件：依游標位置插入數字（若有選取則取代選取範圍）
         val numberClickListener = View.OnClickListener { view ->
             val button = view as Button
             val number = button.text.toString()
-            val currentText = dialogEditText.text.toString()
 
-            // 添加數字
-            dialogEditText.setText("$currentText$number")
-            dialogEditText.setSelection(dialogEditText.text.length)
+            val editable = dialogEditText.text
+            if (editable == null) return@OnClickListener
+
+            var start = dialogEditText.selectionStart
+            var end = dialogEditText.selectionEnd
+
+            // 若游標位置不合法，退回到「加在最後面」的行為
+            if (start == -1 || end == -1) {
+                editable.append(number)
+                dialogEditText.setSelection(editable.length)
+                return@OnClickListener
+            }
+
+            if (start != end) {
+                // 有選取範圍：直接用數字取代選取區間
+                editable.replace(start, end, number)
+                val newPos = (start + number.length).coerceAtMost(editable.length)
+                dialogEditText.setSelection(newPos)
+            } else {
+                // 沒選取：在游標位置插入數字
+                editable.insert(start, number)
+                val newPos = (start + number.length).coerceAtMost(editable.length)
+                dialogEditText.setSelection(newPos)
+            }
         }
 
         btn0.setOnClickListener(numberClickListener)
@@ -283,18 +303,52 @@ class SettingsUIManager(
         btn8.setOnClickListener(numberClickListener)
         btn9.setOnClickListener(numberClickListener)
 
-        // 逗號按鈕
+        // 逗號按鈕：依游標位置插入 ","（若有選取則覆蓋選取區）
         btnComma.setOnClickListener {
-            val currentText = dialogEditText.text.toString()
-            // 只有在特獎時禁用逗號,因為特獎只能有一個數字
+
             if (isSpecialPrize) {
                 Toast.makeText(context, "特獎只能輸入一個數字", Toast.LENGTH_SHORT).show()
-            } else {
-                // 防止連續逗號或開頭就是逗號
-                if (currentText.isNotEmpty() && !currentText.endsWith(",")) {
-                    dialogEditText.setText("$currentText,")
-                    dialogEditText.setSelection(dialogEditText.text.length)
+                return@setOnClickListener
+            }
+
+            val editable = dialogEditText.text
+            if (editable == null) return@setOnClickListener
+
+            var start = dialogEditText.selectionStart
+            var end = dialogEditText.selectionEnd
+
+            // 若游標位置錯誤 → 加在最後（安全 fallback）
+            if (start == -1 || end == -1) {
+                if (editable.isNotEmpty() && !editable.endsWith(",")) {
+                    editable.append(",")
+                    dialogEditText.setSelection(editable.length)
                 }
+                return@setOnClickListener
+            }
+
+            // 不允許開頭輸入逗號
+            if (start == 0) {
+                Toast.makeText(context, "逗號不能放在開頭", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // 不允許連續逗號
+            if (start > 0 && editable[start - 1] == ',') {
+                Toast.makeText(context, "不能連續輸入逗號", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (start != end) {
+                // ✔ 覆蓋選取範圍
+                editable.replace(start, end, ",")
+                val newPos = (start + 1).coerceAtMost(editable.length)
+                dialogEditText.setSelection(newPos)
+
+            } else {
+                // ✔ 在游標位置插入逗號
+                editable.insert(start, ",")
+                val newPos = (start + 1).coerceAtMost(editable.length)
+                dialogEditText.setSelection(newPos)
             }
         }
 
@@ -303,13 +357,29 @@ class SettingsUIManager(
             dialogEditText.setText("")
         }
 
-        // 退格按鈕
+        // 退格按鈕：從「游標位置」退格，而不是永遠從最後一個字
         btnDelete.setOnClickListener {
-            val currentText = dialogEditText.text.toString()
-            if (currentText.isNotEmpty()) {
-                val newText = currentText.substring(0, currentText.length - 1)
-                dialogEditText.setText(newText)
-                dialogEditText.setSelection(dialogEditText.text.length)
+            val editable = dialogEditText.text
+            if (editable.isNullOrEmpty()) return@setOnClickListener
+
+            val start = dialogEditText.selectionStart
+            val end = dialogEditText.selectionEnd
+
+            if (start == -1 || end == -1) {
+                // 沒有有效游標位置，就沿用舊行為：從最後一個字刪
+                editable.delete(editable.length - 1, editable.length)
+                dialogEditText.setSelection(editable.length)
+                return@setOnClickListener
+            }
+
+            if (start != end) {
+                // ✂ 若有選取一段範圍，直接刪掉選取區間
+                editable.delete(start, end)
+                dialogEditText.setSelection(start.coerceAtMost(editable.length))
+            } else if (start > 0) {
+                // ✂ 沒有選取，只在中間 -> 刪除「游標前一個字」
+                editable.delete(start - 1, start)
+                dialogEditText.setSelection((start - 1).coerceAtMost(editable.length))
             }
         }
 
@@ -322,55 +392,87 @@ class SettingsUIManager(
     }
 
     // ✅ 新增：驗證獎項輸入
+    /**
+     * 驗證數字鍵盤輸入的特獎/大獎數字是否有效
+     *
+     * @param inputValue 使用者輸入的字串（例如 "03, 15, 7"）
+     * @param maxNumber  目前刮數設定的最大格子數，例如 240
+     * @param isSpecialPrize true=特獎, false=大獎
+     * @return ValidationResult(isValid, errorMessage)
+     */
     private fun validatePrizeInput(
-        input: String,
-        scratchType: Int,
+        inputValue: String,
+        maxNumber: Int,
         isSpecialPrize: Boolean
     ): ValidationResult {
-        if (input.isEmpty()) {
+
+        // 1️⃣ 空值檢查
+        if (inputValue.isBlank()) {
             return ValidationResult(false, "請輸入數字")
         }
 
-        // 解析輸入的數字
-        val numbers = input.split(",")
+        // 2️⃣ 拆分、去空白、過濾空字串
+        val tokens = inputValue.split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .mapNotNull { it.toIntOrNull() }
 
-        if (numbers.isEmpty()) {
+        if (tokens.isEmpty()) {
             return ValidationResult(false, "請輸入有效的數字")
         }
 
-        // 驗證1：特獎只能有一個數字
-        if (isSpecialPrize && numbers.size > 1) {
-            return ValidationResult(false, "特獎只能輸入一個數字")
+        // 3️⃣ 移除前導零（03 → 3）
+        val numbers = mutableListOf<Int>()
+        for (t in tokens) {
+            val n = t.toIntOrNull()
+            if (n == null) {
+                return ValidationResult(false, "含有無效數字：$t")
+            }
+            numbers.add(n)
         }
 
-        // 驗證2：檢查數字是否在有效範圍內 (1 到 scratchType)
-        val invalidNumbers = numbers.filter { it < 1 || it > scratchType }
-        if (invalidNumbers.isNotEmpty()) {
-            return ValidationResult(
-                false,
-                "數字必須在 1 到 $scratchType 之間\n無效的數字：${invalidNumbers.joinToString(", ")}"
-            )
+        // 4️⃣ 特獎只能 1 個
+        if (isSpecialPrize && numbers.size != 1) {
+            return ValidationResult(false, "特獎只能設定 1 個數字")
         }
 
-        // 驗證3：大獎數量不能超過上限
-        if (!isSpecialPrize) {
-            val maxGrandPrizes = GRAND_LIMITS[scratchType] ?: 3
-            if (numbers.size > maxGrandPrizes) {
-                return ValidationResult(
-                    false,
-                    "此刮數的大獎數量上限為 $maxGrandPrizes 個\n您輸入了 ${numbers.size} 個"
-                )
+        // 5️⃣ 數字必須介於 1..maxNumber
+        for (n in numbers) {
+            if (n < 1 || n > maxNumber) {
+                return ValidationResult(false, "數字 $n 超出範圍（1~$maxNumber）")
             }
         }
 
-        // 驗證4：檢查是否有重複數字
-        if (numbers.size != numbers.distinct().size) {
-            return ValidationResult(false, "不能輸入重複的數字")
+        // 6️⃣ 大獎數量上限檢查（如果你有設定的話）
+        if (!isSpecialPrize) {
+            val maxGrand = 20   // 若有其它規則可調整
+            if (numbers.size > maxGrand) {
+                return ValidationResult(false, "大獎數字不可超過 $maxGrand 個")
+            }
         }
 
+        // 7️⃣ ⭐ 特獎 / 大獎 不能重複（跨欄位檢查）
+        if (isSpecialPrize) {
+            // 特獎不能與大獎重複
+            val grandText = binding.editTextGrandPrize.text.toString()
+            if (grandText.isNotEmpty()) {
+                val grandList = grandText.split(",")
+                    .map { it.trim() }
+                    .mapNotNull { it.toIntOrNull() }
+
+                if (grandList.contains(numbers[0])) {
+                    return ValidationResult(false, "特獎不能與大獎重複！")
+                }
+            }
+        } else {
+            // 大獎不能包含特獎
+            val specialText = binding.editTextSpecialPrize.text.toString()
+            val specialNumber = specialText.toIntOrNull()
+            if (specialNumber != null && numbers.contains(specialNumber)) {
+                return ValidationResult(false, "大獎不能包含特獎數字！")
+            }
+        }
+
+        // 8️⃣ 全部驗證通過
         return ValidationResult(true, "")
     }
 
