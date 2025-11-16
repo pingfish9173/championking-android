@@ -13,16 +13,11 @@ import com.champion.king.core.config.AppConfig
 import com.champion.king.core.ui.BaseBindingFragment
 import com.champion.king.data.AuthRepository
 import com.champion.king.databinding.FragmentUserEditBinding
-import com.champion.king.security.PasswordUtils
 import com.champion.king.util.ValidationRules
 import com.champion.king.util.attachPasswordToggle
-import com.champion.king.util.guardOnline
 import com.champion.king.util.setThrottledClick
 import com.champion.king.util.toast
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
 import androidx.lifecycle.lifecycleScope
 import com.champion.king.util.ApkDownloader
 import kotlinx.coroutines.launch
@@ -125,9 +120,17 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             return
         }
 
-        FirebaseDatabase.getInstance(AppConfig.DB_URL).reference.child("users").child(key)
+        FirebaseDatabase.getInstance(AppConfig.DB_URL)
+            .reference.child("users").child(key)
             .get()
             .addOnSuccessListener { snap ->
+
+                // 🔒【絕對安全檢查：view 已被銷毀 → 不更新 UI】
+                if (!isAdded || view == null) {
+                    Log.w("UserEditFragment", "View destroyed — skip UI update")
+                    return@addOnSuccessListener
+                }
+
                 val account = snap.child("account").getValue(String::class.java) ?: ""
                 val email = snap.child("email").getValue(String::class.java) ?: ""
                 val phone = snap.child("phone").getValue(String::class.java) ?: ""
@@ -138,6 +141,9 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 originalAddress = "$city $district".trim()
                 originalAuthCode =
                     snap.child("devicePasswords").getValue(String::class.java) ?: "無"
+
+                // 🔒 再補一道保險
+                if (!isAdded || view == null) return@addOnSuccessListener
 
                 binding.textAccount.text = account
                 binding.textEmail.text = email
@@ -150,6 +156,12 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 updateAuthCodeVisibility()
             }
             .addOnFailureListener { e ->
+
+                if (!isAdded || view == null) {
+                    Log.w("UserEditFragment", "View destroyed — skip error UI update")
+                    return@addOnFailureListener
+                }
+
                 requireContext().toast(AppConfig.Msg.LOAD_FAIL_PREFIX + e.message)
             }
     }
