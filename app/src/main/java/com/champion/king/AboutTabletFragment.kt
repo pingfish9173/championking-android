@@ -31,6 +31,8 @@ class AboutTabletFragment : Fragment() {
     private lateinit var contentTextUpdateLog: TextView
     private lateinit var contentTextAbout: TextView
     private lateinit var contentTextDisclaimer: TextView
+    private lateinit var titleText: TextView
+
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -63,6 +65,7 @@ class AboutTabletFragment : Fragment() {
         contentTextUpdateLog = view.findViewById(R.id.content_text_update_log)
         contentTextAbout = view.findViewById(R.id.content_text_about)
         contentTextDisclaimer = view.findViewById(R.id.content_text_disclaimer)
+        titleText = view.findViewById(R.id.title)
 
         // --- 三種內文 ----
         val contentUpdateLog = """
@@ -173,29 +176,33 @@ class AboutTabletFragment : Fragment() {
      * 選擇頁簽並更新視覺狀態
      */
     private fun selectTab(selectedTab: TabType) {
-        // 先重置所有 tab 為未選中狀態
+
+        // 先重置狀態
         resetTabState(tabUpdateLogText, tabUpdateLogIndicator)
         resetTabState(tabAboutText, tabAboutIndicator)
         resetTabState(tabDisclaimerText, tabDisclaimerIndicator)
 
-        // 隱藏所有內容區域
+        // 隱藏所有內容
         contentScrollUpdateLog.visibility = View.GONE
         contentScrollAbout.visibility = View.GONE
         contentScrollDisclaimer.visibility = View.GONE
 
-        // 設定選中的 tab 為選中狀態並顯示對應內容
+        // 根據選擇的 tab 更新 UI + 標題
         when (selectedTab) {
             TabType.UPDATE_LOG -> {
                 setTabSelected(tabUpdateLogText, tabUpdateLogIndicator)
                 contentScrollUpdateLog.visibility = View.VISIBLE
+                titleText.text = "更新紀錄"
             }
             TabType.ABOUT -> {
                 setTabSelected(tabAboutText, tabAboutIndicator)
                 contentScrollAbout.visibility = View.VISIBLE
+                titleText.text = "遊戲協議"
             }
             TabType.DISCLAIMER -> {
                 setTabSelected(tabDisclaimerText, tabDisclaimerIndicator)
                 contentScrollDisclaimer.visibility = View.VISIBLE
+                titleText.text = "免責聲明"
             }
         }
     }

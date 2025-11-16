@@ -267,7 +267,7 @@
                         android:layout_height="50dp"
                         android:layout_gravity="center"
                         android:clickable="true"
-                        android:contentDescription="關於平板"
+                        android:contentDescription="遊戲協議"
                         android:focusable="true"
                         android:scaleType="centerInside"
                         android:src="@drawable/ic_pad" />

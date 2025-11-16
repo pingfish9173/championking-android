@@ -266,9 +266,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         userButtonMaster.setOnClickListener(protectedClick)
         configButtonMaster.setOnClickListener(protectedClick)
 
-        // 關於平板按鈕
+        // 遊戲協議按鈕
         findViewById<ImageView>(R.id.pad_button_master).setOnClickListener {
-            Log.d(TAG, "Pad button clicked! 載入關於平板頁面")
+            Log.d(TAG, "Pad button clicked! 載入遊戲協議頁面")
             loadFragment(AboutTabletFragment(), containerIdFor(Mode.MASTER))
         }
 

@@ -19,7 +19,7 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="公告"
+            android:text="更新紀錄"
             android:textSize="28sp"
             android:textColor="@android:color/black"
             android:textStyle="bold"
@@ -58,7 +58,7 @@
                     android:visibility="visible" />
             </LinearLayout>
 
-            <!-- 關於平板 Tab -->
+            <!-- 遊戲協議 Tab -->
             <LinearLayout
                 android:id="@+id/tab_about"
                 android:layout_width="wrap_content"
@@ -73,7 +73,7 @@
                     android:id="@+id/tab_about_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="關於平板"
+                    android:text="遊戲協議"
                     android:textSize="18sp"
                     android:textColor="#444444" />
 
@@ -149,7 +149,7 @@
                 android:padding="8dp" />
         </ScrollView>
 
-        <!-- 關於平板的 ScrollView -->
+        <!-- 遊戲協議的 ScrollView -->
         <ScrollView
             android:id="@+id/content_scroll_about"
             android:layout_width="match_parent"
