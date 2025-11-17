@@ -606,11 +606,7 @@ class SettingsFragment : Fragment() {
         uiManager.updateActionButtonsUI(null)
         updateRefreshButtonVisibility()
 
-        // 🔹 新增：未設置狀態下，禁用「特獎」與「大獎」挑選
-        binding.buttonPickSpecialPrize.isEnabled = false
-        binding.buttonPickGrandPrize.isEnabled = false
-        binding.buttonPickSpecialPrize.alpha = 0.5f
-        binding.buttonPickGrandPrize.alpha = 0.5f
+        setPrizeControlsEnabled(false)
     }
 
 
@@ -856,12 +852,30 @@ class SettingsFragment : Fragment() {
         binding.editTextSpecialPrize.text?.clear()
         binding.editTextGrandPrize.text?.clear()
 
-        // ✅ 當預覽產生新數字配置時，恢復特獎與大獎按鈕可用
-        binding.buttonPickSpecialPrize.isEnabled = true
-        binding.buttonPickGrandPrize.isEnabled = true
-        binding.buttonPickSpecialPrize.alpha = 1.0f
-        binding.buttonPickGrandPrize.alpha = 1.0f
+        setPrizeControlsEnabled(true)
     }
+
+    /** 統一設定特獎、大獎按鈕與鍵盤按鈕的啟用 / 透明度 **/
+    private fun setPrizeControlsEnabled(enabled: Boolean) {
+        val alpha = if (enabled) 1.0f else 0.5f
+
+        // 特獎 & 大獎主按鈕
+        binding.buttonPickSpecialPrize.isEnabled = enabled
+        binding.buttonPickGrandPrize.isEnabled = enabled
+        binding.buttonPickSpecialPrize.alpha = alpha
+        binding.buttonPickGrandPrize.alpha = alpha
+
+        // 鉛筆（鍵盤）按鈕
+        binding.buttonSpecialPrizeKeyboard.isEnabled = enabled
+        binding.buttonGrandPrizeKeyboard.isEnabled = enabled
+        binding.buttonSpecialPrizeKeyboard.alpha = alpha
+        binding.buttonGrandPrizeKeyboard.alpha = alpha
+
+        // 編輯框（只有未設置時才 disable，因此跟隨 enabled）
+        binding.editTextSpecialPrize.isEnabled = enabled
+        binding.editTextGrandPrize.isEnabled = enabled
+    }
+
 
     // ===========================================
     // UI 顯示相關方法
@@ -930,10 +944,7 @@ class SettingsFragment : Fragment() {
         grandPrizeContainer?.visibility = View.VISIBLE
 
         // 確保按鈕和編輯框是可用狀態
-        binding.buttonPickSpecialPrize.isEnabled = true
-        binding.buttonPickGrandPrize.isEnabled = true
-        binding.buttonPickSpecialPrize.alpha = 1.0f
-        binding.buttonPickGrandPrize.alpha = 1.0f
+        setPrizeControlsEnabled(true)
         binding.editTextSpecialPrize.visibility = View.VISIBLE
         binding.editTextGrandPrize.visibility = View.VISIBLE
     }
@@ -1146,11 +1157,7 @@ class SettingsFragment : Fragment() {
         if (selectedCard == null) {
             Log.d("SettingsFragment", "更新預覽，刮數類型: ${scratchType}刮")
             displayScratchBoardPreview(scratchType, null)
-            // ✅ 若成功建立預覽板，恢復特獎與大獎可用
-            binding.buttonPickSpecialPrize.isEnabled = true
-            binding.buttonPickGrandPrize.isEnabled = true
-            binding.buttonPickSpecialPrize.alpha = 1.0f
-            binding.buttonPickGrandPrize.alpha = 1.0f
+            setPrizeControlsEnabled(true)
         }
     }
 
