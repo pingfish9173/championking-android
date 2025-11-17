@@ -304,6 +304,7 @@ class SettingsUIManager(
         btn9.setOnClickListener(numberClickListener)
 
         // 逗號按鈕：依游標位置插入 ","（若有選取則覆蓋選取區）
+// ⭐ 已加入：大獎最大數量限制檢查（依目前刮數）
         btnComma.setOnClickListener {
 
             if (isSpecialPrize) {
@@ -313,6 +314,21 @@ class SettingsUIManager(
 
             val editable = dialogEditText.text
             if (editable == null) return@setOnClickListener
+
+            // 取得目前已輸入的大獎（過濾掉空白與非法 token）
+            val currentTokens = editable.toString()
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
+            // ⭐ 大獎數量上限（依目前刮數類型）
+            val grandLimit = GRAND_LIMITS[currentScratchType] ?: 20
+
+            // 若已達上限 → 阻擋逗號輸入
+            if (currentTokens.size >= grandLimit) {
+                Toast.makeText(context, "大獎最多只能設定 $grandLimit 個", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
             var start = dialogEditText.selectionStart
             var end = dialogEditText.selectionEnd
@@ -351,6 +367,7 @@ class SettingsUIManager(
                 dialogEditText.setSelection(newPos)
             }
         }
+
 
         // 清除按鈕
         btnClear.setOnClickListener {
@@ -406,21 +423,20 @@ class SettingsUIManager(
         isSpecialPrize: Boolean
     ): ValidationResult {
 
-        // 1️⃣ 空值檢查
+        // 1️⃣ 空值
         if (inputValue.isBlank()) {
             return ValidationResult(false, "請輸入數字")
         }
 
-        // 2️⃣ 拆分、去空白、過濾空字串
-        val tokens = inputValue.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
-        if (tokens.isEmpty()) {
-            return ValidationResult(false, "請輸入有效的數字")
+        // 2️⃣ 不可有空 token（避免 "5,,5"）
+        val rawTokens = inputValue.split(",")
+        if (rawTokens.any { it.trim().isEmpty() }) {
+            return ValidationResult(false, "格式錯誤：請勿輸入空白或連續逗號")
         }
 
-        // 3️⃣ 移除前導零（03 → 3）
+        val tokens = rawTokens.map { it.trim() }
+
+        // 3️⃣ 轉數字
         val numbers = mutableListOf<Int>()
         for (t in tokens) {
             val n = t.toIntOrNull()
@@ -430,49 +446,50 @@ class SettingsUIManager(
             numbers.add(n)
         }
 
-        // 4️⃣ 特獎只能 1 個
+        // 4️⃣ 特獎必須 1 個
         if (isSpecialPrize && numbers.size != 1) {
             return ValidationResult(false, "特獎只能設定 1 個數字")
         }
 
-        // 5️⃣ 數字必須介於 1..maxNumber
+        // 5️⃣ 範圍檢查
         for (n in numbers) {
             if (n < 1 || n > maxNumber) {
-                return ValidationResult(false, "數字 $n 超出範圍（1~$maxNumber）")
+                return ValidationResult(false, "數字 $n 超出範圍（1 ~ $maxNumber）")
             }
         }
 
-        // 6️⃣ 大獎數量上限檢查（如果你有設定的話）
+        // 6️⃣ ⭐ 大獎數量限制（依刮數）
         if (!isSpecialPrize) {
-            val maxGrand = 20   // 若有其它規則可調整
-            if (numbers.size > maxGrand) {
-                return ValidationResult(false, "大獎數字不可超過 $maxGrand 個")
+            val grandLimit = GRAND_LIMITS[maxNumber] ?: 20
+            if (numbers.size > grandLimit) {
+                return ValidationResult(false, "超過大獎最大數量（最多 $grandLimit 個）")
             }
         }
 
-        // 7️⃣ ⭐ 特獎 / 大獎 不能重複（跨欄位檢查）
+        // 7️⃣ 大獎不可重複
+        if (!isSpecialPrize && numbers.toSet().size != numbers.size) {
+            return ValidationResult(false, "大獎不可重複，請重新輸入")
+        }
+
+        // 8️⃣ 特獎與大獎不能相同
         if (isSpecialPrize) {
-            // 特獎不能與大獎重複
             val grandText = binding.editTextGrandPrize.text.toString()
-            if (grandText.isNotEmpty()) {
-                val grandList = grandText.split(",")
-                    .map { it.trim() }
-                    .mapNotNull { it.toIntOrNull() }
+            val grandList = grandText.split(",")
+                .map { it.trim() }
+                .mapNotNull { it.toIntOrNull() }
 
-                if (grandList.contains(numbers[0])) {
-                    return ValidationResult(false, "特獎不能與大獎重複！")
-                }
+            if (grandList.contains(numbers[0])) {
+                return ValidationResult(false, "特獎不能與大獎相同")
             }
+
         } else {
-            // 大獎不能包含特獎
             val specialText = binding.editTextSpecialPrize.text.toString()
-            val specialNumber = specialText.toIntOrNull()
-            if (specialNumber != null && numbers.contains(specialNumber)) {
-                return ValidationResult(false, "大獎不能包含特獎數字！")
+            val specialValue = specialText.toIntOrNull()
+            if (specialValue != null && numbers.contains(specialValue)) {
+                return ValidationResult(false, "大獎不能與特獎相同")
             }
         }
 
-        // 8️⃣ 全部驗證通過
         return ValidationResult(true, "")
     }
 
