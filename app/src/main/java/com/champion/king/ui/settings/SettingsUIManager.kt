@@ -9,6 +9,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentManager
 import com.champion.king.ScratchBoardPreviewFragment
@@ -223,6 +224,16 @@ class SettingsUIManager(
         // 設置當前值
         dialogEditText.setText(currentValue ?: "")
         dialogEditText.setSelection(dialogEditText.text.length)
+
+        // ⭐ 新增提示文字設定
+        val hintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_prize_hint)
+        val scratchesCount = currentScratchType
+        val grandLimit = GRAND_LIMITS[scratchesCount] ?: 20
+        if (isSpecialPrize) {
+            hintText.text = "${scratchesCount}刮｜特獎只能設定 1 個"
+        } else {
+            hintText.text = "${scratchesCount}刮｜大獎最多可設定 ${grandLimit} 個"
+        }
 
         // 禁用系統鍵盤
         dialogEditText.showSoftInputOnFocus = false

@@ -5,6 +5,15 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <TextView
+        android:id="@+id/dialog_prize_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="提示文字"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="8dp" />
+
     <!-- 顯示輸入的數字 -->
     <EditText
         android:id="@+id/dialog_prize_edit"
