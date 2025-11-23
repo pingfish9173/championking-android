@@ -28,8 +28,9 @@
             android:name=".MainActivity"
             android:theme="@style/SplashTheme"
             android:exported="true"
-            android:screenOrientation="landscape">
-            <intent-filter>
+            android:screenOrientation="landscape"
+            android:launchMode="singleTask">
+        <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
