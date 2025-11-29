@@ -247,18 +247,8 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 if (success) {
                     requireContext().toast(message ?: "裝置綁定已解除")
 
-                    // 可選：詢問用戶是否要登出
-                    AlertDialog.Builder(requireContext())
-                        .setTitle("解除綁定成功")
-                        .setMessage("裝置綁定已解除。建議重新登入以確保帳號安全。是否現在登出?")
-                        .setPositiveButton("立即登出") { _, _ ->
-                            performLogout()
-                        }
-                        .setNegativeButton("稍後") { dialog, _ ->
-                            dialog.dismiss()
-                        }
-                        .create()
-                        .show()
+                    // 🔥🔥 不再跳出任何視窗，直接強制登出
+                    performLogout()
                 } else {
                     requireContext().toast(message ?: "解除綁定失敗")
                 }
@@ -270,19 +260,10 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
      * 執行登出
      */
     private fun performLogout() {
-        // 清除 Firebase Auth
-        FirebaseAuth.getInstance().signOut()
-
-        // 清除 Session
-        userSessionProvider?.setCurrentUserFirebaseKey(null)
-        userSessionProvider?.updateLoginStatus(false)
-        userSessionProvider?.setCurrentlyDisplayedScratchCardOrder(null)
-
-        // 返回登入頁面或關閉當前 Activity
-        requireActivity().finish()
-        // 如果需要導航到特定的登入頁面，可以使用：
-        // startActivity(Intent(requireContext(), LoginActivity::class.java))
+        val activity = requireActivity() as? MainActivity ?: return
+        activity.performLogout()
     }
+
 
     // ==================== 變更密碼功能 ====================
 

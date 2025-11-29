@@ -760,7 +760,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .show()
     }
 
-    private fun performLogout() {
+    fun performLogout() {
         currentUser = null
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
         render(Mode.MASTER)
