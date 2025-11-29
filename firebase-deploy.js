@@ -13,6 +13,12 @@ const CONFIG = {
   rtdbPath: 'deploy_history'
 };
 
+// 顏色
+const GREEN = '\x1b[32m';
+const RED = '\x1b[31m';
+const YELLOW = '\x1b[33m';
+const NC = '\x1b[0m';
+
 // ========================================
 // 解析命令列參數
 // ========================================
@@ -50,7 +56,7 @@ function readUpdateNote(filePath) {
       items: Array.isArray(data.items) ? data.items : []
     };
   } catch (error) {
-    console.error('⚠️ 讀取 update-note.json 失敗:', error.message);
+    console.error(`${YELLOW}⚠️ 讀取 update-note.json 失敗:${NC}`, error.message);
     return { title: '', items: [] };
   }
 }
@@ -68,10 +74,10 @@ function initFirebase() {
       databaseURL: `https://${serviceAccount.project_id}-default-rtdb.asia-southeast1.firebasedatabase.app`
     });
 
-    console.log('✅ Firebase Admin 初始化成功');
+    console.log(`${GREEN}✅ Firebase Admin 初始化成功${NC}`);
     return true;
   } catch (error) {
-    console.error('❌ Firebase Admin 初始化失敗:', error.message);
+    console.error(`${RED}❌ Firebase Admin 初始化失敗:${NC}`, error.message);
     return false;
   }
 }
@@ -94,12 +100,12 @@ async function uploadToStorage(localFilePath, versionName) {
       }
     });
 
-    console.log('✅ APK 上傳成功');
+    console.log(`${GREEN}✅ APK 上傳成功${NC}`);
 
     const file = bucket.file(storageFilePath);
     await file.makePublic();
 
-    console.log('✅ 已設置為公開讀取');
+    console.log(`${GREEN}✅ 已設置為公開讀取${NC}`);
 
     const publicUrl = `https://storage.googleapis.com/${CONFIG.storageBucket}/${storageFilePath}`;
 
@@ -117,7 +123,7 @@ async function uploadToStorage(localFilePath, versionName) {
 
     return downloadUrl;
   } catch (error) {
-    console.error('❌ 上傳失敗:', error.message);
+    console.error(`${RED}❌ 上傳失敗:${NC}`, error.message);
     throw error;
   }
 }
@@ -149,14 +155,14 @@ async function updateFirestore(downloadUrl, versionCode, versionName, updateInfo
             .doc(CONFIG.firestoreDocument)
             .set(updateData, { merge: true });
 
-    console.log('✅ Firestore 更新成功');
+    console.log(`${GREEN}✅ Firestore 更新成功${NC}`);
     console.log('   - versionCode:', versionCode);
     console.log('   - versionName:', versionName);
     console.log('   - updateInfo.title:', updateInfo.title);
 
     return true;
   } catch (error) {
-    console.error('❌ Firestore 更新失敗:', error.message);
+    console.error(`${RED}❌ Firestore 更新失敗:${NC}`, error.message);
     throw error;
   }
 }
@@ -188,12 +194,12 @@ async function saveDeployHistory(params, updateInfo, downloadUrl) {
     // 使用 push() 自動產生 pushId
     const newRef = await ref.push(historyData);
 
-    console.log('✅ 部署紀錄已寫入');
+    console.log(`${GREEN}✅ 部署紀錄已寫入${NC}`);
     console.log('   - Record ID:', newRef.key);
 
     return newRef.key;
   } catch (error) {
-    console.error('❌ 寫入部署紀錄失敗:', error.message);
+    console.error(`${RED}❌ 寫入部署紀錄失敗:${NC}`, error.message);
     throw error;
   }
 }
@@ -219,7 +225,7 @@ async function main() {
 
   // 驗證必要參數
   if (!params.versionCode || !params.versionName || !params.apkPath) {
-    console.error('❌ 缺少必要參數');
+    console.error(`${RED}❌ 缺少必要參數${NC}`);
     console.log('\n使用方式:');
     console.log('  node firebase-deploy.js --versionCode 5 --versionName 1.0.4 --apkPath ./app.apk --apkSize "12MB" --gitCommit abc123 --gitBranch main --updateNotePath ./update-note.json');
     process.exit(1);
@@ -227,7 +233,7 @@ async function main() {
 
   // 檢查 APK 是否存在
   if (!fs.existsSync(params.apkPath)) {
-    console.error(`❌ 找不到 APK: ${params.apkPath}`);
+    console.error(`${RED}❌ 找不到 APK: ${params.apkPath}${NC}`);
     process.exit(1);
   }
 
@@ -255,12 +261,16 @@ async function main() {
     // 寫入部署紀錄到 Realtime Database
     await saveDeployHistory(params, updateInfo, downloadUrl);
 
-    console.log('\n========================================');
-    console.log('🎉 部署完成！');
-    console.log('========================================\n');
+    console.log(`\n${GREEN}========================================${NC}`);
+    console.log(`${GREEN}🎉 部署完成！${NC}`);
+    console.log(`${GREEN}========================================${NC}\n`);
+
+    // 關閉 Firebase 連接並正常退出
+    await admin.app().delete();
+    process.exit(0);
 
   } catch (error) {
-    console.error('\n❌ 部署失敗:', error.message);
+    console.error(`\n${RED}❌ 部署失敗:${NC}`, error.message);
     process.exit(1);
   }
 }
