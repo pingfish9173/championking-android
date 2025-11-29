@@ -7,8 +7,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.champion.king.data.DbListenerHandle
+import com.champion.king.data.DeployHistoryRepository
+import com.champion.king.model.DeployHistory
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class AboutTabletFragment : Fragment() {
 
@@ -33,6 +38,9 @@ class AboutTabletFragment : Fragment() {
     private lateinit var contentTextDisclaimer: TextView
     private lateinit var titleText: TextView
 
+    // Repository 和監聽器
+    private val deployHistoryRepository = DeployHistoryRepository()
+    private var deployHistoryListener: DbListenerHandle? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -67,17 +75,12 @@ class AboutTabletFragment : Fragment() {
         contentTextDisclaimer = view.findViewById(R.id.content_text_disclaimer)
         titleText = view.findViewById(R.id.title)
 
-        // --- 三種內文 ----
-        val contentUpdateLog = """
-2025/12/05　V1.2.1
-冠軍王電子刮板正式上架。
-        """.trimIndent()
-
+        // --- 遊戲協議內文 ----
         val contentAbout = """
 一、購買與使用
 1. 冠軍王電子刮板屬虛擬商品,僅供消費娛樂,不得折換現金或其他財物。
-2. 點數發送至帳號後,恕不退換或轉讓。
-3. 在商城確認購買刮板後,恕不退換或轉讓。
+2. 點數發送至帳號後,概不退換或轉讓。
+3. 在商城確認購買刮板後,概不退換或轉讓。
 
 二、獎項與中獎規則
 1. 獎項為特獎及大獎。
@@ -109,7 +112,7 @@ class AboutTabletFragment : Fragment() {
 （請在用戶資訊頁面勾選自動更新）
         """.trimIndent()
 
-
+        // --- 免責聲明內文 ----
         val contentDisclaimer = """
 為保障使用者權益,並維護「冠軍王電子刮板」平台(以下簡稱「本平台」)之正常運作,請使用者在使用本平台提供之服務前,詳閱以下免責聲明。當使用者開始使用本平台,即視為已閱讀、了解並同意遵守本免責聲明之全部內容。
 
@@ -152,12 +155,17 @@ class AboutTabletFragment : Fragment() {
 本平台得隨時修訂本免責聲明並公告於平台,使用者於公告後繼續使用即視為同意修訂內容。
         """.trimIndent()
 
-        // 為每個 TextView 設置內容
-        contentTextUpdateLog.text = contentUpdateLog
+        // 為 TextView 設置內容
         contentTextAbout.text = contentAbout
         contentTextDisclaimer.text = contentDisclaimer
 
-        // 預設顯示更新紀錄頁簽
+        // 顯示載入中
+        contentTextUpdateLog.text = "載入中..."
+
+        // 從資料庫載入更新紀錄
+        loadDeployHistory()
+
+        // 預設顯示更新紀錄頁籤
         selectTab(TabType.UPDATE_LOG)
 
         // 點擊事件
@@ -175,7 +183,70 @@ class AboutTabletFragment : Fragment() {
     }
 
     /**
-     * 選擇頁簽並更新視覺狀態
+     * 從資料庫載入部署紀錄
+     */
+    private fun loadDeployHistory() {
+        // 使用一次性讀取（不需要即時監聽）
+        deployHistoryRepository.getDeployHistory(
+            onItems = { historyList ->
+                if (isAdded) {
+                    displayUpdateLog(historyList)
+                }
+            },
+            onError = { errorMsg ->
+                if (isAdded) {
+                    contentTextUpdateLog.text = "載入失敗：$errorMsg"
+                }
+            }
+        )
+    }
+
+    /**
+     * 格式化並顯示更新紀錄
+     */
+    private fun displayUpdateLog(historyList: List<DeployHistory>) {
+        if (historyList.isEmpty()) {
+            contentTextUpdateLog.text = "暫無更新紀錄"
+            return
+        }
+
+        val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.TAIWAN)
+        val sb = StringBuilder()
+
+        historyList.forEachIndexed { index, history ->
+            // 日期和版本號
+            val dateStr = dateFormat.format(Date(history.deployedAt))
+            sb.append("$dateStr　V${history.versionName}\n")
+
+            // 標題
+            if (history.updateInfo.title.isNotEmpty()) {
+                sb.append(history.updateInfo.title)
+                sb.append("\n")
+            }
+
+            // 細項
+            history.updateInfo.items.forEach { item ->
+                sb.append("• $item\n")
+            }
+
+            // 分隔（最後一筆不加）
+            if (index < historyList.size - 1) {
+                sb.append("\n")
+            }
+        }
+
+        contentTextUpdateLog.text = sb.toString()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        // 移除監聽器（如果有使用 observe 模式）
+        deployHistoryListener?.remove()
+        deployHistoryListener = null
+    }
+
+    /**
+     * 選擇頁籤並更新視覺狀態
      */
     private fun selectTab(selectedTab: TabType) {
 
@@ -210,7 +281,7 @@ class AboutTabletFragment : Fragment() {
     }
 
     /**
-     * 重置頁簽狀態為未選中
+     * 重置頁籤狀態為未選中
      */
     private fun resetTabState(textView: TextView, indicator: View) {
         textView.setTextColor(0xFF444444.toInt())  // 灰色
@@ -219,7 +290,7 @@ class AboutTabletFragment : Fragment() {
     }
 
     /**
-     * 設定頁簽為選中狀態
+     * 設定頁籤為選中狀態
      */
     private fun setTabSelected(textView: TextView, indicator: View) {
         textView.setTextColor(0xFFFF6B35.toInt())  // 主題橘色
@@ -228,7 +299,7 @@ class AboutTabletFragment : Fragment() {
     }
 
     /**
-     * 頁簽類型枚舉
+     * 頁籤類型枚舉
      */
     private enum class TabType {
         UPDATE_LOG,
