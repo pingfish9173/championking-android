@@ -50,20 +50,6 @@ cleanup_on_failure() {
                 echo -e "${GREEN}✓${NC} 版本號已還原"
             fi
         fi
-
-        # 寫入失敗紀錄到 Firebase
-        echo -e "${YELLOW}⚠ 正在記錄失敗紀錄...${NC}"
-        if [ -f "$PROJECT_DIR/firebase-deploy.js" ]; then
-            node "$PROJECT_DIR/firebase-deploy.js" \
-                --status "failed" \
-                --versionCode "${NEW_VERSION_CODE:-$CURRENT_VERSION_CODE}" \
-                --versionName "${NEW_VERSION_NAME:-$CURRENT_VERSION_NAME}" \
-                --failReason "$FAIL_REASON" \
-                --gitCommit "$GIT_COMMIT" \
-                --gitBranch "$GIT_BRANCH" \
-                --updateNotePath "$UPDATE_NOTE_PATH" \
-                2>/dev/null || echo -e "${YELLOW}⚠ 無法記錄失敗紀錄${NC}"
-        fi
     fi
 }
 
@@ -74,16 +60,34 @@ trap cleanup_on_failure EXIT
 # ========================================
 check_json_valid() {
     local file="$1"
-    if ! node -e "JSON.parse(require('fs').readFileSync('$file', 'utf8'))" 2>/dev/null; then
-        return 1
-    fi
-    return 0
+    # 使用 node 執行，透過 process.argv 傳遞路徑避免引號問題
+    node -e "
+        const fs = require('fs');
+        try {
+            const content = fs.readFileSync(process.argv[1], 'utf8');
+            JSON.parse(content);
+            process.exit(0);
+        } catch (e) {
+            console.error(e.message);
+            process.exit(1);
+        }
+    " "$file" 2>/dev/null
+    return $?
 }
 
 get_json_value() {
     local file="$1"
     local key="$2"
-    node -e "console.log(JSON.parse(require('fs').readFileSync('$file', 'utf8')).$key || '')"
+    node -e "
+        const fs = require('fs');
+        try {
+            const content = fs.readFileSync(process.argv[1], 'utf8');
+            const data = JSON.parse(content);
+            console.log(data[process.argv[2]] || '');
+        } catch (e) {
+            console.log('');
+        }
+    " "$file" "$key"
 }
 
 echo -e "${GREEN}========================================${NC}"
@@ -216,7 +220,6 @@ echo -e "${BLUE}[6/7]${NC} 上傳到 Firebase Storage 並更新資料庫..."
 
 if [ -f "$PROJECT_DIR/firebase-deploy.js" ]; then
     if ! node "$PROJECT_DIR/firebase-deploy.js" \
-        --status "success" \
         --versionCode "$NEW_VERSION_CODE" \
         --versionName "$NEW_VERSION_NAME" \
         --apkPath "$APK_OUTPUT_PATH" \

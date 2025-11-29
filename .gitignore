@@ -106,3 +106,4 @@ node_modules/
 
 # 部署歷史備份（本地備份不需進版控）
 deploy-history/
+update-note.json
