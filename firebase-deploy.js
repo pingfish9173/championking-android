@@ -146,8 +146,6 @@ async function updateFirestore(downloadUrl, versionCode, versionName, updateInfo
         title: updateInfo.title,
         items: updateInfo.items
       },
-      maintenanceMode: false,
-      maintenanceMessage: "",
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
