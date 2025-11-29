@@ -49,7 +49,6 @@ $RECYCLE.BIN/
 # Firebase service account keys
 serviceAccountKey.json
 *.secret.json
-firebase-deploy.js
 
 # Google Services configuration (位於 app 資料夾)
 app/google-services.json
