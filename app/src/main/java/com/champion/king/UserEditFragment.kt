@@ -32,6 +32,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import com.google.firebase.auth.FirebaseAuth
+import android.widget.TextView
+import com.champion.king.util.UpdateHistoryFormatter
 
 class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
@@ -506,10 +508,6 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                         showUpdateDialog(result.versionInfo)
                     }
 
-                    is UpdateResult.Maintenance -> {
-                        requireContext().toast("系統維護中：${result.message}")
-                    }
-
                     is UpdateResult.Error -> {
                         updateLastCheckTime()
                         if (isManual) {
@@ -526,21 +524,35 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
     }
 
     /**
-     * 顯示更新對話框
+     * 顯示更新對話框（包含更新歷史）
      */
     private fun showUpdateDialog(versionInfo: com.champion.king.data.api.dto.VersionInfo) {
-        val message = """
-        發現新版本：${versionInfo.versionName}
-        
-        更新內容：
-        ${versionInfo.updateMessage}
-        
-        是否立即更新？
-    """.trimIndent()
+        // 取得目前版本資訊
+        val currentVersionName = try {
+            requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
+        } catch (e: Exception) {
+            "未知版本"
+        }
 
+        // 建立自訂 Dialog 佈局
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_update, null)
+
+        val tvCurrentVersion = dialogView.findViewById<TextView>(R.id.tv_current_version)
+        val tvLatestVersion = dialogView.findViewById<TextView>(R.id.tv_latest_version)
+        val tvUpdateContent = dialogView.findViewById<TextView>(R.id.tv_update_content)
+
+        // 設定版本資訊
+        tvCurrentVersion.text = "目前版本：$currentVersionName"
+        tvLatestVersion.text = "最新版本：${versionInfo.versionName}"
+
+        // 格式化更新內容（使用共用工具類）
+        val updateContent = UpdateHistoryFormatter.format(versionInfo)
+        tvUpdateContent.text = updateContent
+
+        // 建立 Dialog
         val builder = AlertDialog.Builder(requireContext())
             .setTitle("發現新版本")
-            .setMessage(message)
+            .setView(dialogView)
             .setPositiveButton("立即更新") { dialog, _ ->
                 dialog.dismiss()
                 startDownloadAndInstall(versionInfo.downloadUrl)

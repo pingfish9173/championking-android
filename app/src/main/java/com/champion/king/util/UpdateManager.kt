@@ -36,8 +36,11 @@ class UpdateManager(private val context: Context) {
             // 記錄檢查時間
             saveCheckTime()
 
-            // 呼叫 API
-            val response = apiService.checkVersion()
+            // 取得目前版本號，傳給 API 以取得更新歷史
+            val currentVersionCode = BuildConfig.VERSION_CODE
+
+            // 呼叫 API（帶入目前版本號）
+            val response = apiService.checkVersion(currentVersionCode)
 
             if (!response.isSuccessful || response.body() == null) {
                 return UpdateResult.Error("無法取得版本資訊")
@@ -45,16 +48,9 @@ class UpdateManager(private val context: Context) {
 
             val versionInfo = response.body()!!
 
-            // 檢查維護模式
-            if (versionInfo.maintenanceMode) {
-                return UpdateResult.Maintenance(versionInfo.maintenanceMessage)
-            }
-
             // 比對版本號
-            val currentVersion = BuildConfig.VERSION_CODE
-
             when {
-                versionInfo.versionCode > currentVersion -> {
+                versionInfo.versionCode > currentVersionCode -> {
                     // 有新版本
                     val ignoredVersion = prefs.getInt("ignored_version", 0)
 
@@ -83,6 +79,5 @@ class UpdateManager(private val context: Context) {
 sealed class UpdateResult {
     object NoUpdate : UpdateResult()
     data class HasUpdate(val versionInfo: VersionInfo) : UpdateResult()
-    data class Maintenance(val message: String) : UpdateResult()
     data class Error(val message: String) : UpdateResult()
 }

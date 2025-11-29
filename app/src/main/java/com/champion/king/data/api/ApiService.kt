@@ -13,6 +13,7 @@ import com.champion.king.data.api.dto.UnbindDeviceRequest
 import com.champion.king.data.api.dto.UnbindDeviceResponse
 import com.champion.king.data.api.dto.VersionInfo
 import retrofit2.http.GET
+import retrofit2.http.Query
 
 interface ApiService {
 
@@ -23,8 +24,7 @@ interface ApiService {
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
     @GET("https://checkversion-qmvrvane7q-de.a.run.app/")
-    suspend fun checkVersion(): Response<VersionInfo>
-
+    suspend fun checkVersion(@Query("currentVersionCode") currentVersionCode: Int): Response<VersionInfo>
     @POST("https://binddevice-qmvrvane7q-de.a.run.app")
     suspend fun bindDevice(@Body request: BindDeviceRequest): Response<BindDeviceResponse>
 

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- 目前版本 -->
+    <TextView
+        android:id="@+id/tv_current_version"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="目前版本：1.0.0"
+        android:textSize="16sp"
+        android:textColor="#666666" />
+
+    <!-- 最新版本 -->
+    <TextView
+        android:id="@+id/tv_latest_version"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="最新版本：1.1.0"
+        android:textSize="16sp"
+        android:textColor="#333333"
+        android:textStyle="bold" />
+
+    <!-- 分隔線 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="12dp"
+        android:background="#DDDDDD" />
+
+    <!-- 更新內容標題 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="更新內容："
+        android:textSize="15sp"
+        android:textColor="#333333"
+        android:textStyle="bold" />
+
+    <!-- 可捲動的更新內容區域 -->
+    <ScrollView
+        android:id="@+id/scroll_update_content"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="8dp"
+        android:background="#F5F5F5"
+        android:padding="12dp"
+        android:fadeScrollbars="false"
+        android:scrollbarStyle="outsideOverlay">
+
+        <TextView
+            android:id="@+id/tv_update_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#444444"
+            android:lineSpacingMultiplier="1.4" />
+
+    </ScrollView>
+
+</LinearLayout>

@@ -18,11 +18,9 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import com.champion.king.model.ScratchCard
 import com.champion.king.model.User
-import com.champion.king.security.PasswordUtils
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
-import com.champion.king.auth.FirebaseAuthHelper
 import androidx.lifecycle.lifecycleScope
 import com.champion.king.util.ApkDownloader
 import kotlinx.coroutines.launch
@@ -30,6 +28,7 @@ import com.champion.king.util.UpdateManager
 import com.champion.king.util.UpdateResult
 import com.champion.king.util.toast
 import com.champion.king.data.AuthRepository
+import com.champion.king.util.UpdateHistoryFormatter
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -1123,9 +1122,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     is UpdateResult.HasUpdate -> {
                         showUpdateDialog(result.versionInfo)
                     }
-                    is UpdateResult.Maintenance -> {
-                        showMaintenanceDialog(result.message)
-                    }
+                    // 移除 Maintenance 處理
                     else -> {
                         // NoUpdate 或 Error 時不顯示任何訊息
                     }
@@ -1138,10 +1135,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     /**
-     * 顯示更新對話框
-     */
-    /**
-     * 顯示更新對話框（包含目前版本）
+     * 顯示更新對話框（包含更新歷史）
      */
     private fun showUpdateDialog(versionInfo: com.champion.king.data.api.dto.VersionInfo) {
         // 取得目前版本資訊
@@ -1151,17 +1145,25 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             "未知版本"
         }
 
-        val message = """
-        目前版本：$currentVersionName
-        最新版本：${versionInfo.versionName}
-        
-        更新內容：
-        ${versionInfo.updateMessage}
-    """.trimIndent()
+        // 建立自訂 Dialog 佈局
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_update, null)
 
-        val builder = android.app.AlertDialog.Builder(this)
+        val tvCurrentVersion = dialogView.findViewById<TextView>(R.id.tv_current_version)
+        val tvLatestVersion = dialogView.findViewById<TextView>(R.id.tv_latest_version)
+        val tvUpdateContent = dialogView.findViewById<TextView>(R.id.tv_update_content)
+
+        // 設定版本資訊
+        tvCurrentVersion.text = "目前版本：$currentVersionName"
+        tvLatestVersion.text = "最新版本：${versionInfo.versionName}"
+
+        // 格式化更新內容（使用共用工具類）
+        val updateContent = UpdateHistoryFormatter.format(versionInfo)
+        tvUpdateContent.text = updateContent
+
+        // 建立 Dialog
+        val builder = AlertDialog.Builder(this)
             .setTitle("發現新版本")
-            .setMessage(message)
+            .setView(dialogView)
             .setPositiveButton("立即更新") { dialog, _ ->
                 dialog.dismiss()
                 startDownloadAndInstall(versionInfo.downloadUrl)
@@ -1177,22 +1179,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
 
         builder.create().show()
-    }
-
-    /**
-     * 顯示維護模式對話框
-     */
-    private fun showMaintenanceDialog(message: String) {
-        android.app.AlertDialog.Builder(this)
-            .setTitle("系統維護中")
-            .setMessage(message)
-            .setCancelable(false)
-            .setPositiveButton("確定") { dialog, _ ->
-                dialog.dismiss()
-                finish() // 關閉 APP
-            }
-            .create()
-            .show()
     }
 
     /**
