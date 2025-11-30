@@ -241,6 +241,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         // 呼叫 Repository 執行解除綁定
         repo.unbindDevice(
             uid = uid,
+            requestSource = "USER",
             onResult = { success, message ->
                 loadingDialog.dismiss()
 

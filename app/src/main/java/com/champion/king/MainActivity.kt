@@ -29,6 +29,7 @@ import com.champion.king.util.UpdateResult
 import com.champion.king.util.toast
 import com.champion.king.data.AuthRepository
 import com.champion.king.util.UpdateHistoryFormatter
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -94,6 +95,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private val authRepository by lazy {
         AuthRepository(FirebaseDatabase.getInstance(DB_URL).reference)
     }
+
+    private var logoutListenerRef: ValueEventListener? = null
 
     // 如果你已有 AppConfig 可置換此常數，避免重複字串
     private val DB_URL =
@@ -426,6 +429,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== OnAuthFlowListener ======
     override fun onLoginSuccess(loggedInUser: User) {
         currentUser = loggedInUser
+
+        // ⭐⭐ 啟動強制登出監聽
+        loggedInUser.firebaseKey?.let { startForceLogoutListener(it) }
+
         Log.d(TAG, "登入成功，右上角資訊已更新為: ${loggedInUser.account}")
         render(Mode.MASTER)
 
@@ -761,13 +768,43 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     fun performLogout() {
+
+        // ⭐ Step 1：先記住 userKey，避免後面 currentUser = null 之後取不到
+        val userKey = currentUser?.firebaseKey
+
+        // ⭐ Step 2：重置 forceLogout（避免下次登入又被踢）
+        userKey?.let { key ->
+            FirebaseDatabase.getInstance()
+                .getReference("users/$key/forceLogout")
+                .setValue(false)
+        }
+
+        // ⭐ Step 3：移除監聽器（避免 memory leak）
+        userKey?.let { key ->
+            logoutListenerRef?.let { listener ->
+                database.child("users").child(key).removeEventListener(listener)
+            }
+        }
+        logoutListenerRef = null
+
+        // ⭐ Step 4：登出 Firebase Auth（順序很重要）
+        FirebaseAuth.getInstance().signOut()
+
+        // ⭐ Step 5：清除本地 currentUser 記憶體
         currentUser = null
+
+        // ⭐ Step 6：清除 Fragment backstack
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+
+        // ⭐ Step 7：回到登入畫面
         render(Mode.MASTER)
         loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+
+        // ⭐ Step 8：提示訊息（你原本的）
         Toast.makeText(this, "您已成功登出。", Toast.LENGTH_SHORT).show()
         Log.d(TAG, "用戶已登出。")
     }
+
 
     // ====== Master: 換版密碼 ======
     private fun showPasswordInputDialog() {
@@ -1417,6 +1454,34 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
     }
 
+    private fun startForceLogoutListener(userKey: String) {
+        val userRef = database.child("users").child(userKey)
+
+        // 移除舊的 listener（避免重複）
+        logoutListenerRef?.let { userRef.removeEventListener(it) }
+
+        logoutListenerRef = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+
+                val boundDeviceId = snapshot.child("boundDeviceId").getValue(String::class.java)
+                val status = snapshot.child("deviceBindingStatus").getValue(String::class.java)
+                val forceLogout = snapshot.child("forceLogout").getValue(Boolean::class.java) ?: false
+
+                // 🔥 任一條件達成 → 強制登出
+                if (boundDeviceId.isNullOrEmpty() ||
+                    status == "UNBOUND" ||
+                    forceLogout
+                ) {
+                    Log.d("ForceLogout", "偵測到後端要求登出，執行登出流程")
+                    performLogout()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+        }
+
+        userRef.addValueEventListener(logoutListenerRef as ValueEventListener)
+    }
 
     companion object {
         private const val TAG = "MainActivity"
