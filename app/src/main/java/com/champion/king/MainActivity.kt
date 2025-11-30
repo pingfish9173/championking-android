@@ -92,11 +92,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // 更新管理器
     private val updateManager by lazy { UpdateManager(this) }
 
+    // === Force Logout 相關 ===
+    private var forceLogoutListener: ValueEventListener? = null
+    private var forceLogoutRef: DatabaseReference? = null
+
     private val authRepository by lazy {
         AuthRepository(FirebaseDatabase.getInstance(DB_URL).reference)
     }
-
-    private var logoutListenerRef: ValueEventListener? = null
 
     // 如果你已有 AppConfig 可置換此常數，避免重複字串
     private val DB_URL =
@@ -429,12 +431,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== OnAuthFlowListener ======
     override fun onLoginSuccess(loggedInUser: User) {
         currentUser = loggedInUser
-
-        // ⭐⭐ 啟動強制登出監聽
-        loggedInUser.firebaseKey?.let { startForceLogoutListener(it) }
-
         Log.d(TAG, "登入成功，右上角資訊已更新為: ${loggedInUser.account}")
         render(Mode.MASTER)
+
+        setupForceLogoutWatcher()
 
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
@@ -683,7 +683,16 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    updatePrizeInfoSeparate("載入失敗", "載入失敗", isMaster)
+                    Log.e(TAG, "載入獎項資訊失敗：${error.message}")
+
+                    // ❗❗ 若使用者已登出 → 強制回歸預設 UI「無」
+                    if (currentUser == null) {
+                        updatePrizeInfoSeparate(null, null, isMaster)
+                        return
+                    }
+
+                    // 其它錯誤再顯示載入失敗
+                    updatePrizeInfoSeparate("無", "無", isMaster)
                 }
             })
     }
@@ -768,43 +777,67 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     fun performLogout() {
-
-        // ⭐ Step 1：先記住 userKey，避免後面 currentUser = null 之後取不到
-        val userKey = currentUser?.firebaseKey
-
-        // ⭐ Step 2：重置 forceLogout（避免下次登入又被踢）
-        userKey?.let { key ->
-            FirebaseDatabase.getInstance()
-                .getReference("users/$key/forceLogout")
-                .setValue(false)
-        }
-
-        // ⭐ Step 3：移除監聽器（避免 memory leak）
-        userKey?.let { key ->
-            logoutListenerRef?.let { listener ->
-                database.child("users").child(key).removeEventListener(listener)
-            }
-        }
-        logoutListenerRef = null
-
-        // ⭐ Step 4：登出 Firebase Auth（順序很重要）
-        FirebaseAuth.getInstance().signOut()
-
-        // ⭐ Step 5：清除本地 currentUser 記憶體
+        removeForceLogoutWatcher()
         currentUser = null
-
-        // ⭐ Step 6：清除 Fragment backstack
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
-
-        // ⭐ Step 7：回到登入畫面
         render(Mode.MASTER)
         loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
-
-        // ⭐ Step 8：提示訊息（你原本的）
         Toast.makeText(this, "您已成功登出。", Toast.LENGTH_SHORT).show()
         Log.d(TAG, "用戶已登出。")
     }
 
+    private fun removeForceLogoutWatcher() {
+        try {
+            forceLogoutListener?.let { listener ->
+                forceLogoutRef?.removeEventListener(listener)
+            }
+        } catch (e: Exception) {
+            Log.e("ForceLogout", "移除 forceLogout 監聽器時發生錯誤：${e.message}")
+        }
+        forceLogoutListener = null
+        forceLogoutRef = null
+    }
+
+    private fun setupForceLogoutWatcher() {
+        val userKey = currentUser?.firebaseKey ?: return
+
+        // 建立 Firebase Realtime Database Reference
+        forceLogoutRef = database.child("users").child(userKey).child("forceLogout")
+
+        // 建立監聽器
+        forceLogoutListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val shouldLogout = snapshot.getValue(Boolean::class.java) ?: false
+
+                if (shouldLogout) {
+                    Log.d("ForceLogout", "偵測到後端要求登出，執行登出流程")
+
+                    // 避免重複觸發
+                    forceLogoutRef?.setValue(false)
+
+                    // 移除監聽（必要）
+                    removeForceLogoutWatcher()
+
+                    // Firebase Auth 登出
+                    try {
+                        FirebaseAuth.getInstance().signOut()
+                    } catch (_: Exception) {}
+
+                    // 執行 MainActivity 的登出流程
+                    runOnUiThread {
+                        performLogout()
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("ForceLogout", "後端登出監聽錯誤：${error.message}")
+            }
+        }
+
+        // 將監聽器掛上 Firebase
+        forceLogoutRef?.addValueEventListener(forceLogoutListener!!)
+    }
 
     // ====== Master: 換版密碼 ======
     private fun showPasswordInputDialog() {
@@ -1452,35 +1485,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
-    }
-
-    private fun startForceLogoutListener(userKey: String) {
-        val userRef = database.child("users").child(userKey)
-
-        // 移除舊的 listener（避免重複）
-        logoutListenerRef?.let { userRef.removeEventListener(it) }
-
-        logoutListenerRef = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-
-                val boundDeviceId = snapshot.child("boundDeviceId").getValue(String::class.java)
-                val status = snapshot.child("deviceBindingStatus").getValue(String::class.java)
-                val forceLogout = snapshot.child("forceLogout").getValue(Boolean::class.java) ?: false
-
-                // 🔥 任一條件達成 → 強制登出
-                if (boundDeviceId.isNullOrEmpty() ||
-                    status == "UNBOUND" ||
-                    forceLogout
-                ) {
-                    Log.d("ForceLogout", "偵測到後端要求登出，執行登出流程")
-                    performLogout()
-                }
-            }
-
-            override fun onCancelled(error: DatabaseError) {}
-        }
-
-        userRef.addValueEventListener(logoutListenerRef as ValueEventListener)
     }
 
     companion object {
