@@ -161,18 +161,17 @@ class AuthRepository(
     }
 
     /**
-     * 解除裝置綁定
+     * 🔹 新增：解除裝置綁定
      */
     fun unbindDevice(
         uid: String,
-        requestSource: String = "USER", // ⭐ 新增參數，預設就是 USER
         onResult: (success: Boolean, message: String?) -> Unit
     ) {
         scope.launch {
             try {
                 val request = com.champion.king.data.api.dto.UnbindDeviceRequest(
                     uid = uid,
-                    requestSource = requestSource // ⭐ 確保送到後端
+                    requestSource = "USER"
                 )
 
                 val response = apiService.unbindDevice(request)
