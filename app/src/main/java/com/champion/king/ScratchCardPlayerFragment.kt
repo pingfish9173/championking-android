@@ -659,42 +659,24 @@ class ScratchCardPlayerFragment : Fragment() {
             })
     }
 
-    private fun loadUserDisplaySetting(onLoaded: (Boolean) -> Unit) {
-        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
-
-        val ref = FirebaseDatabase.getInstance()
-            .getReference("users")
-            .child(userKey)
-            .child("isShowRemainingScratches")
-
-        ref.get().addOnSuccessListener { snapshot ->
-            val value = snapshot.getValue(Boolean::class.java) ?: false
-            onLoaded(value)
-        }.addOnFailureListener {
-            onLoaded(false)
-        }
-    }
-
     /**
-     * 更新左側下方顯示的 刮數/剩餘刮數
+     * 更新左側下方顯示的「剩餘刮數 / 總刮數（版型）」- 玩家頁面
      */
     private fun updateRemainingScratchesDisplay() {
         val view = remainingScratchTextView ?: return
-        val card = currentScratchCard ?: return
 
-        loadUserDisplaySetting { shouldShow ->
-
-            if (!shouldShow) {
-                view.visibility = View.GONE
-                return@loadUserDisplaySetting
-            }
-
-            val total = card.scratchesType ?: 0
-            val remaining = card.numberConfigurations?.count { it.scratched == false } ?: 0
-
-            view.text = "$total/$remaining"
-            view.visibility = View.VISIBLE
+        val card = currentScratchCard ?: run {
+            // 沒有正在使用的刮卡就隱藏
+            view.text = ""
+            view.visibility = View.GONE
+            return
         }
+
+        val total = card.scratchesType ?: 0
+        val remaining = card.numberConfigurations?.count { it.scratched == false } ?: 0
+
+        view.text = "$remaining/$total"
+        view.visibility = View.VISIBLE
     }
 
     private fun displayNoScratchCardMessage(message: String) {
@@ -706,6 +688,12 @@ class ScratchCardPlayerFragment : Fragment() {
         cellViews.clear()
         currentScratchCard = null
         scratchingCells.clear()
+
+        // 額外：沒有刮卡時隱藏剩餘刮數顯示
+        remainingScratchTextView?.apply {
+            text = ""
+            visibility = View.GONE
+        }
 
         // 清理所有動畫
         cellAnimators.keys.toList().forEach { cellNumber ->
