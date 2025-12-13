@@ -11,9 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.core.content.ContextCompat
-import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.setFragmentResultListener
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -314,6 +312,9 @@ class SettingsFragment : Fragment() {
                         // 只更新架上列表（這個不會造成閃爍）
                         shelfManager.updateShelfUI(cards)
 
+                        // ✅ 無論是否正在儲存，都先更新「剩餘刮數」顯示
+                        updateRemainingScratchesInfo(cards)
+
                         // ★ 如果正在儲存，跳過詳細資料的更新，避免預覽區重建
                         if (isSavingInProgress) {
                             return@collect
@@ -330,6 +331,44 @@ class SettingsFragment : Fragment() {
                 launch { viewModel.events.collect { /* toast 等由 ActionHandler 處理 */ } }
             }
         }
+    }
+
+    /**
+     * 在「台主頁面」左側面板底部的 TextView 顯示目前使用中刮板的剩餘刮數。
+     * - 有使用中刮板：顯示「剩餘/總數」，例如 15/20
+     * - 沒有任何使用中刮板：清空並隱藏
+     */
+    private fun updateRemainingScratchesInfo(cards: Map<Int, ScratchCard>) {
+        // 只在已附著到 Activity 時處理
+        val activity = activity as? MainActivity ?: return
+        val remainingView = activity.findViewById<TextView>(R.id.remaining_scratches_text_view) ?: return
+
+        // 找到「使用中」的刮板（理論上只會有一張 inUsed = true）
+        val inUseCard = cards.values.firstOrNull { it.inUsed }
+
+        if (inUseCard == null) {
+            // 沒有使用中的刮板 → 清空顯示
+            remainingView.text = ""
+            remainingView.visibility = View.GONE
+            return
+        }
+
+        val configs = inUseCard.numberConfigurations
+        val total = configs?.size ?: inUseCard.scratchesType ?: 0
+
+        if (total <= 0 || configs == null) {
+            // 資料異常就不要硬顯示
+            remainingView.text = ""
+            remainingView.visibility = View.GONE
+            return
+        }
+
+        // 剩餘格數 = 尚未被刮開的格子
+        val remaining = configs.count { !it.scratched }
+
+        // 這裡沿用玩家頁面的風格，只顯示「剩餘/總數」
+        remainingView.text = "$remaining/$total"
+        remainingView.visibility = View.VISIBLE
     }
 
     // ===========================================

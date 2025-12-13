@@ -250,14 +250,17 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             when (v.id) {
                 R.id.bag_button_master -> {
                     Log.d(TAG, "Bag button clicked!")
+                    clearRemainingScratchesDisplayOnMaster()  // 🧹 清空剩餘刮數
                     loadFragment(BackpackFragment(), containerIdFor(Mode.MASTER))
                 }
                 R.id.shop_button_master -> {
                     Log.d(TAG, "Shop button clicked!")
+                    clearRemainingScratchesDisplayOnMaster()  // 🧹 清空剩餘刮數
                     loadFragment(ShopFragment(), containerIdFor(Mode.MASTER))
                 }
                 R.id.user_button_master -> {
                     Log.d(TAG, "User button clicked!")
+                    clearRemainingScratchesDisplayOnMaster()  // 🧹 清空剩餘刮數
                     loadFragment(UserEditFragment(), containerIdFor(Mode.MASTER))
                 }
                 R.id.config_button_master -> {
@@ -273,6 +276,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // 遊戲協議按鈕
         findViewById<ImageView>(R.id.pad_button_master).setOnClickListener {
             Log.d(TAG, "Pad button clicked! 載入遊戲協議頁面")
+            clearRemainingScratchesDisplayOnMaster()  // 🧹 清空剩餘刮數
             loadFragment(AboutTabletFragment(), containerIdFor(Mode.MASTER))
         }
 
@@ -418,6 +422,18 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             watermarkContainer?.addView(tv)
         }
         watermarkContainer?.visibility = View.VISIBLE
+    }
+
+    /**
+     * 進入「商城 / 背包 / 用戶資訊 / 更新紀錄」這 4 個頁面時，
+     * 要清空並隱藏台主左下角的「剩餘刮數 / 刮數版型」顯示。
+     */
+    private fun clearRemainingScratchesDisplayOnMaster() {
+        val tv = findViewById<TextView?>(R.id.remaining_scratches_text_view)
+        tv?.apply {
+            text = ""
+            visibility = View.GONE
+        }
     }
 
     // ====== Fragment nav ======

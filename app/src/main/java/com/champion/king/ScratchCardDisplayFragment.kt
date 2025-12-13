@@ -31,6 +31,8 @@ class ScratchCardDisplayFragment : BaseBindingFragment<FragmentScratchCardBindin
     // 儲存格子視圖的參考，用於更新顯示狀態
     private val cellViews = mutableMapOf<Int, View>()
     private var currentScratchCard: ScratchCard? = null
+    // ✅ 新增：台主頁面的剩餘刮數文字
+    private var remainingScratchTextView: TextView? = null
 
     companion object {
         private const val TAG = "ScratchCardDisplayFragment"
@@ -52,6 +54,10 @@ class ScratchCardDisplayFragment : BaseBindingFragment<FragmentScratchCardBindin
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // 從 MainActivity (台主畫面) 找到左下角的剩餘刮數 TextView
+        remainingScratchTextView = activity?.findViewById(R.id.remaining_scratches_text_view)
+
         startObserve()
     }
 
@@ -93,6 +99,9 @@ class ScratchCardDisplayFragment : BaseBindingFragment<FragmentScratchCardBindin
         if (!isAdded || view == null) return
 
         currentScratchCard = scratchCard
+
+        // ✅ 新增：更新台主頁面的剩餘刮數顯示
+        updateRemainingScratchesDisplay()
 
         val scratchesType = scratchCard.scratchesType ?: 10
 
@@ -294,6 +303,40 @@ class ScratchCardDisplayFragment : BaseBindingFragment<FragmentScratchCardBindin
         binding.noScratchCardText.visibility = View.VISIBLE
         cellViews.clear()
         currentScratchCard = null
+
+        // ✅ 無刮卡時，隱藏剩餘刮數顯示
+        remainingScratchTextView?.apply {
+            text = ""
+            visibility = View.GONE
+        }
+    }
+
+    /**
+     * 計算當前刮刮卡剩餘未刮開的格子數量（台主頁面用）
+     */
+    private fun getRemainingUnscratched(): Int {
+        val card = currentScratchCard ?: return 0
+        return card.numberConfigurations?.count { it.scratched == false } ?: 0
+    }
+
+    /**
+     * 更新左側下方顯示的「剩餘刮數 / 總刮數（版型）」- 台主頁面
+     */
+    private fun updateRemainingScratchesDisplay() {
+        val view = remainingScratchTextView ?: return
+        val card = currentScratchCard ?: run {
+            // 沒有正在使用的刮卡就隱藏
+            view.text = ""
+            view.visibility = View.GONE
+            return
+        }
+
+        val total = card.scratchesType ?: 0
+        val remaining = card.numberConfigurations?.count { it.scratched == false } ?: 0
+
+        // 格式跟玩家頁面一樣：剩餘 / 總刮數（版型）
+        view.text = "$remaining/$total"
+        view.visibility = View.VISIBLE
     }
 
     override fun onDestroyView() {

@@ -308,7 +308,7 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- 時間 + 剩餘刮數（台主頁面） -->
+            <!-- 時間 -->
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -331,19 +331,6 @@
                         android:textAlignment="center"
                         android:textColor="@android:color/black"
                         android:textSize="22sp" />
-
-                    <!-- 台主頁面的剩餘刮數 / 版型顯示 -->
-                    <TextView
-                        android:id="@+id/remaining_scratches_text_view"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="bottom|end"
-                        android:layout_marginEnd="12dp"
-                        android:layout_marginBottom="8dp"
-                        android:text=""
-                        android:textColor="@android:color/black"
-                        android:textSize="14sp"
-                        android:visibility="gone" />
                 </FrameLayout>
             </FrameLayout>
         </LinearLayout>
@@ -362,6 +349,22 @@
             android:textAlignment="textStart"
             android:textColor="@android:color/black"
             android:textSize="10sp" />
+
+        <!-- 剩餘刮數 / 刮數版型，固定在整個左側面板的絕對底部靠右 -->
+        <TextView
+            android:id="@+id/remaining_scratches_text_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginRight="4dp"
+            android:layout_marginBottom="4dp"
+            android:text=""
+            android:textColor="@android:color/black"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
     </RelativeLayout>
 
     <FrameLayout
