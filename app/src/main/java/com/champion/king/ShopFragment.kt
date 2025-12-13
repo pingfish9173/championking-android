@@ -3,14 +3,15 @@ package com.champion.king
 import android.app.AlertDialog
 import android.content.Context
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.champion.king.core.ui.BaseBindingFragment
 import com.champion.king.data.DbListenerHandle
@@ -40,7 +41,11 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         if (context is UserSessionProvider) userSessionProvider = context
         else throw RuntimeException("$context must implement UserSessionProvider")
     }
-    override fun onDetach() { super.onDetach(); userSessionProvider = null }
+
+    override fun onDetach() {
+        super.onDetach()
+        userSessionProvider = null
+    }
 
     override fun createBinding(inflater: LayoutInflater, container: ViewGroup?) =
         FragmentShopBinding.inflate(inflater, container, false)
@@ -142,7 +147,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 val currentQ = (itemQuantities[name] ?: 0).coerceAtLeast(0)
                 quantityEditText.setText(currentQ.toString())
 
-                // 🔹 方案三：禁用直接輸入，改用對話框
+                // 禁用直接輸入，改用對話框
                 quantityEditText.isFocusable = false
                 quantityEditText.isCursorVisible = false
                 quantityEditText.setOnClickListener {
@@ -157,7 +162,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     quantityEditText.setText(newValue.toString())
                     updateTotalAmount()
                     displayPurchaseList()
-                    displayBonusList()
                 }
 
                 increaseButton.setOnClickListener {
@@ -172,7 +176,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     quantityEditText.setText(newValue.toString())
                     updateTotalAmount()
                     displayPurchaseList()
-                    displayBonusList()
                 }
 
                 rowLayout?.addView(itemLayout)
@@ -185,10 +188,9 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
         updateTotalAmount()
         displayPurchaseList()
-        displayBonusList()
     }
 
-    // 🔹 方案三：顯示自定義數字鍵盤對話框
+    // 顯示自定義數字鍵盤對話框
     private fun showQuantityInputDialog(productName: String, editText: EditText) {
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.dialog_quantity_input, null)
@@ -228,7 +230,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 editText.setText(itemQuantities[productName].toString())
                 updateTotalAmount()
                 displayPurchaseList()
-                displayBonusList()
                 d.dismiss()
             }
             .setNegativeButton("取消", null)
@@ -331,47 +332,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
     }
 
-    private fun displayBonusList() {
-        val list = binding.bonusListContainer
-        list.removeAllViews()
-
-        val hasBonusTitle = TextView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            text = "🎁 贈送"
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setPadding(4.toPx(), 4.toPx(), 4.toPx(), 2.toPx())
-        }
-
-        var hasBonus = false
-        itemQuantities.forEach { (name, quantity) ->
-            if (quantity >= 10) {
-                val bonusQuantity = (quantity / 10) * 10
-                if (bonusQuantity > 0) {
-                    if (!hasBonus) {
-                        list.addView(hasBonusTitle)
-                        hasBonus = true
-                    }
-                    val tv = TextView(requireContext()).apply {
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        )
-                        text = "$name ${bonusQuantity}張"
-                        textSize = 14f
-                        setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
-                        setPadding(4.toPx(), 2.toPx(), 4.toPx(), 2.toPx())
-                    }
-                    list.addView(tv)
-                }
-            }
-        }
-    }
-
     private fun updateTotalAmount() {
         val total = calculateTotalAmount()
         binding.totalAmountTextview.text = "總計：${total}點"
@@ -400,7 +360,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             return@guardOnline
         }
 
-        // 建構確認訊息，包含贈送資訊
+        // 建構確認訊息（只包含購物車內容與總計）
         val confirmMessage = buildConfirmationMessage(total)
 
         AlertDialog.Builder(requireContext())
@@ -411,7 +371,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             .show()
     }
 
-    // 新增：建構確認訊息，包含購物車詳細資訊和贈送資訊
+    // 建構確認訊息（不含任何贈送資訊）
     private fun buildConfirmationMessage(total: Int): String {
         val sb = StringBuilder()
 
@@ -427,25 +387,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
 
         sb.append("\n總計：$total 點數\n")
-
-        // 檢查是否有贈送項目
-        val bonusItems = mutableListOf<String>()
-        itemQuantities.forEach { (name, quantity) ->
-            if (quantity >= 10) {
-                val bonusQuantity = (quantity / 10) * 10
-                if (bonusQuantity > 0) {
-                    bonusItems.add("$name ${bonusQuantity}張")
-                }
-            }
-        }
-
-        if (bonusItems.isNotEmpty()) {
-            sb.append("\n同時您將獲得以下贈品：\n")
-            bonusItems.forEach { item ->
-                sb.append("• $item\n")
-            }
-        }
-
         sb.append("\n您確定要進行購買嗎？")
 
         return sb.toString().trim()
@@ -462,14 +403,14 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             return@guardOnline
         }
 
-        // 準備購買資料，包含贈送項目
+        // 準備購買資料（不含任何贈送數量）
         val purchaseData = preparePurchaseData()
 
-        // ✨ 新增：準備購買紀錄資料
+        // 準備購買紀錄資料
         val purchaseDetails = preparePurchaseDetailsForRecord()
         val itemPrices = prepareItemPrices()
 
-        // ✨ 修改：先獲取用戶帳號
+        // 先獲取用戶帳號
         repo.getUserAccount(userKey) { success, account ->
             if (!isAdded || this@ShopFragment.view == null) return@getUserAccount
 
@@ -479,10 +420,10 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             repo.purchase(userKey, totalAmount, purchaseData) { ok, msg ->
                 if (!isAdded || this@ShopFragment.view == null) return@purchase
                 if (ok) {
-                    // ✨ 新增：購買成功後保存購買紀錄
+                    // 購買成功後保存購買紀錄
                     repo.savePurchaseRecord(
                         userKey = userKey,
-                        username = username,  // 使用從 Firebase 獲取的帳號
+                        username = username,
                         totalPoints = totalAmount,
                         purchaseDetails = purchaseDetails,
                         itemPrices = itemPrices
@@ -492,12 +433,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                         }
                     }
 
-                    val bonusMessage = getBonusMessage()
-                    val successMessage = if (bonusMessage.isNotEmpty()) {
-                        "購買成功！總計扣除 ${totalAmount}點。$bonusMessage"
-                    } else {
-                        "購買成功！總計扣除 ${totalAmount}點。"
-                    }
+                    val successMessage = "購買成功！總計扣除 ${totalAmount}點。"
                     requireContext().toast(successMessage)
                     itemQuantities.clear()
                     displayShopItems()
@@ -512,25 +448,20 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
     }
 
-    // ✨ 新增：準備購買詳細資料用於紀錄（分離購買數量和贈送數量）
+    // 準備購買詳細資料用於紀錄（bonusQuantity 固定 0）
     private fun preparePurchaseDetailsForRecord(): Map<String, Pair<Int, Int>> {
         val details = mutableMapOf<String, Pair<Int, Int>>()
 
         itemQuantities.forEach { (name, quantity) ->
             if (quantity > 0) {
-                val bonusQuantity = if (quantity >= 10) {
-                    (quantity / 10) * 10
-                } else {
-                    0
-                }
-                details[name] = Pair(quantity, bonusQuantity)
+                details[name] = Pair(quantity, 0)
             }
         }
 
         return details
     }
 
-    // ✨ 新增：準備商品單價資料
+    // 準備商品單價資料
     private fun prepareItemPrices(): Map<String, Int> {
         val prices = mutableMapOf<String, Int>()
 
@@ -544,45 +475,17 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         return prices
     }
 
-    // 新增：準備購買資料，包含原購買數量和贈送數量
+    // 準備購買資料（不再包含贈送數量）
     private fun preparePurchaseData(): Map<String, Int> {
         val purchaseData = mutableMapOf<String, Int>()
 
         itemQuantities.forEach { (name, quantity) ->
             if (quantity > 0) {
-                // 原本購買的數量
-                var totalQuantity = quantity
-
-                // 加上贈送數量（買10送10）
-                if (quantity >= 10) {
-                    val bonusQuantity = (quantity / 10) * 10
-                    totalQuantity += bonusQuantity
-                }
-
-                purchaseData[name] = totalQuantity
+                purchaseData[name] = quantity
             }
         }
 
         return purchaseData
-    }
-
-    // 新增：取得贈送訊息
-    private fun getBonusMessage(): String {
-        val bonusItems = mutableListOf<String>()
-        itemQuantities.forEach { (name, quantity) ->
-            if (quantity >= 10) {
-                val bonusQuantity = (quantity / 10) * 10
-                if (bonusQuantity > 0) {
-                    bonusItems.add("$name ${bonusQuantity}張")
-                }
-            }
-        }
-
-        return if (bonusItems.isNotEmpty()) {
-            "\n並獲得贈品：${bonusItems.joinToString("、")}"
-        } else {
-            ""
-        }
     }
 
     private fun Int.toPx(): Int = TypedValue.applyDimension(
