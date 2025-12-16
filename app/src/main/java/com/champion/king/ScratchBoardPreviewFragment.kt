@@ -533,6 +533,26 @@ class ScratchBoardPreviewFragment : Fragment() {
         generatedNumberConfigurations
     fun getScratchesType(): String? = scratchesType
 
+    /**
+     * ✅ 由 SettingsFragment 呼叫：指定一些 number 直接設為 scratched=true，並刷新預覽
+     */
+    fun scratchNumbers(numbers: Collection<Int>) {
+        if (numbers.isEmpty()) return
+        val set = numbers.toSet()
+
+        val list = generatedNumberConfigurations ?: return
+        var changed = false
+        list.forEach { cfg ->
+            if (!cfg.scratched && set.contains(cfg.number)) {
+                cfg.scratched = true
+                changed = true
+            }
+        }
+        if (changed) {
+            applyModesAndMarkers()
+        }
+    }
+
     // ====== 輔助方法 ======
 
     // 專職刷新格子狀態，不再動提示文字

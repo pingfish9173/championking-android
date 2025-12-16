@@ -1,5 +1,6 @@
 package com.champion.king
 
+import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -227,6 +228,7 @@ class SettingsFragment : Fragment() {
         binding.buttonReturnSelected.setOnClickListener { handleReturnClick() }
         binding.buttonDeleteSelected.setOnClickListener { handleDeleteClick() }
         binding.buttonRefreshScratch.setOnClickListener { handleRefreshScratchClick() }
+        binding.buttonAutoScratch.setOnClickListener { handleAutoScratchClick() }
 
         // 新增：「特獎」按鈕 → 進入/退出 單選挑選模式
         binding.buttonPickSpecialPrize.setOnClickListener {
@@ -639,7 +641,7 @@ class SettingsFragment : Fragment() {
 
         showScratchTypeSpinner()
         clearSpinnerSelection()
-        setButtonsEnabled(save = true, toggleInUse = false, returnBtn = false, delete = false)
+        setButtonsEnabled(save = true, toggleInUse = false, autoScratch = false, returnBtn = false, delete = false)
         uiManager.updateInUseButtonUI(null)
         uiManager.updateActionButtonsUI(null)
         updateRefreshButtonVisibility()
@@ -683,15 +685,15 @@ class SettingsFragment : Fragment() {
             displayScratchCardDetailsReadonly(selectedCard)
             // 根據不同狀態設置按鈕權限
             if (selectedCard.inUsed) {
-                // 使用中：不允許保存、返回、刪除，但可以切換使用狀態
-                setButtonsEnabled(save = false, toggleInUse = true, returnBtn = false, delete = false)
+                // 使用中：不允許保存、返回、刪除，但可以切換使用狀態、自動刮開
+                setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
             } else {
-                // 已被刮過但非使用中：不允許保存、返回，刪除需要額外檢查
-                setButtonsEnabled(save = false, toggleInUse = true, returnBtn = false, delete = true)
+                // 已被刮過但非使用中：不允許保存、返回，刪除需要額外檢查，可以自動刮開
+                setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = true)
             }
         } else {
             displayScratchCardDetails(selectedCard)
-            setButtonsEnabled(save = true, toggleInUse = true, returnBtn = true, delete = true)
+            setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
         }
 
         showScratchTypeLabel(selectedCard.scratchesType)
@@ -1558,6 +1560,260 @@ class SettingsFragment : Fragment() {
         )
     }
 
+    // ===========================================
+    // ✅ 自動刮開
+    // ===========================================
+
+    private fun handleAutoScratchClick() {
+        val order = shelfManager.selectedShelfOrder
+        val selectedCard = viewModel.cards.value[order]
+        if (selectedCard == null) {
+            showToast("此板位尚未設置刮板")
+            return
+        }
+
+        val configs = selectedCard.numberConfigurations
+        if (configs.isNullOrEmpty()) {
+            showToast("此刮板沒有數字配置，無法自動刮開")
+            return
+        }
+
+        // 計算可刮的最大數量（扣掉：已刮 + 特獎 + 大獎 的聯集）
+        val maxX = calcAutoScratchMaxX(selectedCard)
+        if (maxX <= 0) {
+            showToast("沒有可刮開的格子（已刮/特獎/大獎皆已占滿）")
+            return
+        }
+
+        showAutoScratchInputDialog(maxX = maxX) { x ->
+            showAutoScratchConfirmDialog(x) {
+                performAutoScratch(selectedCard, x)
+            }
+        }
+    }
+
+    /**
+     * ✅ X 上限規則：
+     * maxX = 可刮格子數量（排除：已刮 + 特獎 + 大獎 的聯集）
+     */
+    private fun calcAutoScratchMaxX(card: ScratchCard): Int {
+        val configs = card.numberConfigurations ?: return 0
+
+        val special = card.specialPrize?.toIntOrNull()
+        val grandSet = (card.grandPrize ?: "")
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toSet()
+
+        // 不可刮集合（聯集）：已刮 + 特獎 + 大獎
+        val unavailableNumbers = mutableSetOf<Int>()
+        configs.filter { it.scratched }.forEach { unavailableNumbers.add(it.number) }
+        if (special != null) unavailableNumbers.add(special)
+        unavailableNumbers.addAll(grandSet)
+
+        // ✅ 真正可刮的格子：尚未 scratched 且 number 不在 unavailableNumbers
+        val eligible = configs.filter { !it.scratched && !unavailableNumbers.contains(it.number) }
+        return eligible.size
+    }
+
+    /**
+     * ✅ 參考商城的自訂數字鍵盤（dialog_quantity_input）
+     * - 輸入時允許 0 / 空字串（方便刪掉重打）
+     * - 按確定才檢查：必須在 1..maxX，否則 Toast 告警且不關閉 dialog
+     */
+    private fun showAutoScratchInputDialog(
+        maxX: Int,
+        onConfirm: (Int) -> Unit
+    ) {
+        val dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_quantity_input, null)
+
+        val edit = dialogView.findViewById<EditText>(R.id.dialog_quantity_edit)
+
+        val btnMinus = dialogView.findViewById<Button>(R.id.dialog_btn_minus)
+        val btnPlus = dialogView.findViewById<Button>(R.id.dialog_btn_plus)
+        val btnClear = dialogView.findViewById<Button>(R.id.dialog_btn_clear)
+        val btnDelete = dialogView.findViewById<Button>(R.id.dialog_btn_delete)
+
+        val btn0 = dialogView.findViewById<Button>(R.id.dialog_btn_0)
+        val btn1 = dialogView.findViewById<Button>(R.id.dialog_btn_1)
+        val btn2 = dialogView.findViewById<Button>(R.id.dialog_btn_2)
+        val btn3 = dialogView.findViewById<Button>(R.id.dialog_btn_3)
+        val btn4 = dialogView.findViewById<Button>(R.id.dialog_btn_4)
+        val btn5 = dialogView.findViewById<Button>(R.id.dialog_btn_5)
+        val btn6 = dialogView.findViewById<Button>(R.id.dialog_btn_6)
+        val btn7 = dialogView.findViewById<Button>(R.id.dialog_btn_7)
+        val btn8 = dialogView.findViewById<Button>(R.id.dialog_btn_8)
+        val btn9 = dialogView.findViewById<Button>(R.id.dialog_btn_9)
+
+        // ✅ 預設空白（你也可改成 "0"）
+        edit.setText("")
+        edit.setSelection(edit.text.length)
+
+        // ✅ 禁用系統鍵盤
+        edit.showSoftInputOnFocus = false
+
+        fun getText(): String = edit.text?.toString() ?: ""
+        fun setText(t: String) {
+            edit.setText(t)
+            edit.setSelection(edit.text.length)
+        }
+
+        fun currentValue(): Int = getText().toIntOrNull() ?: 0
+
+        // ✅ 允許 0..maxX（編輯中不強迫最小=1）
+        fun setValue(v: Int) {
+            val value = v.coerceIn(0, maxX)
+            setText(value.toString())
+        }
+
+        // +/-：允許到 0
+        btnMinus.setOnClickListener { setValue(currentValue() - 1) }
+        btnPlus.setOnClickListener { setValue(currentValue() + 1) }
+
+        // 清除：清成空字串（完全可重打）
+        btnClear.setOnClickListener {
+            setText("")
+        }
+
+        // 退格：允許刪到空
+        btnDelete.setOnClickListener {
+            val t = getText()
+            val newText = if (t.isNotEmpty()) t.dropLast(1) else ""
+            setText(newText)
+        }
+
+        // 0~9：採「在尾端追加」模式（因為你禁用了系統鍵盤）
+        val numberClickListener = View.OnClickListener { v ->
+            val digit = (v as Button).text.toString()
+            val current = getText()
+
+            // 讓輸入更順手：避免前導 0 一直堆疊（例如 0005 → 5）
+            val merged = (current + digit)
+            val normalized = merged.trimStart('0')
+            val finalText = if (normalized.isEmpty()) "0" else normalized
+
+            val value = finalText.toIntOrNull() ?: 0
+            if (value > maxX) {
+                setValue(maxX)
+            } else {
+                setText(finalText)
+            }
+        }
+
+        listOf(btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9)
+            .forEach { it.setOnClickListener(numberClickListener) }
+
+        val dlg = AlertDialog.Builder(requireContext())
+            .setTitle("自動刮開設定（0～$maxX）")
+            .setView(dialogView)
+            .setPositiveButton("確定", null) // ✅ 攔截：不要自動關閉
+            .setNegativeButton("取消", null)
+            .create()
+
+        dlg.setOnShowListener {
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val x = currentValue()
+
+                // ✅ 按確定才防呆
+                if (x <= 0) {
+                    showToast("請輸入 1～$maxX")
+                    return@setOnClickListener
+                }
+                if (x > maxX) {
+                    showToast("最大可刮開數量為 $maxX")
+                    return@setOnClickListener
+                }
+
+                onConfirm(x)
+                dlg.dismiss()
+            }
+        }
+
+        dlg.show()
+    }
+
+    /**
+     * ✅ 二次確認視窗
+     */
+    private fun showAutoScratchConfirmDialog(x: Int, onConfirm: () -> Unit) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("確認刮開")
+            .setMessage("系統將隨機刮開 $x 刮（不會刮開特獎及大獎），是否確定刮開？")
+            .setPositiveButton("確定") { d, _ ->
+                onConfirm()
+                d.dismiss()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * ✅ 真正執行自動刮開：
+     * 1) 隨機挑 eligible 的 X 格 → 設 scratched=true
+     * 2) 預覽區立即刷新
+     * 3) 寫回 Firebase（透過 viewModel.upsertCard）
+     */
+    private fun performAutoScratch(card: ScratchCard, x: Int) {
+        val order = shelfManager.selectedShelfOrder
+        val configs = card.numberConfigurations?.map { it.copy() }?.toMutableList() ?: run {
+            showToast("數字配置讀取失敗")
+            return
+        }
+
+        val special = card.specialPrize?.toIntOrNull()
+        val grandSet = (card.grandPrize ?: "")
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toSet()
+
+        val unavailableNumbers = mutableSetOf<Int>()
+        configs.filter { it.scratched }.forEach { unavailableNumbers.add(it.number) }
+        if (special != null) unavailableNumbers.add(special)
+        unavailableNumbers.addAll(grandSet)
+
+        val eligibleIdx = configs
+            .mapIndexedNotNull { idx, cfg ->
+                if (!cfg.scratched && !unavailableNumbers.contains(cfg.number)) idx else null
+            }
+            .shuffled()
+            .take(x)
+
+        if (eligibleIdx.isEmpty()) {
+            showToast("沒有可刮開的格子")
+            return
+        }
+
+        val scratchedNumbers = mutableSetOf<Int>()
+        eligibleIdx.forEach { idx ->
+            configs[idx].scratched = true
+            scratchedNumbers.add(configs[idx].number)
+        }
+
+        // ✅ 讓預覽區立刻顯示刮開
+        currentPreviewFragment?.scratchNumbers(scratchedNumbers)
+
+        // ✅ 寫回資料（保留原本欄位）
+        viewModel.upsertCard(
+            order = order,
+            scratchesType = card.scratchesType ?: getCurrentScratchType() ?: 0,
+            specialPrize = card.specialPrize,
+            grandPrize = card.grandPrize,
+            clawsCount = card.clawsCount,
+            giveawayCount = card.giveawayCount,
+            numberConfigurations = configs,
+            existingSerial = card.serialNumber,
+            keepInUsed = card.inUsed
+        )
+
+        // ✅ 立即更新「剩餘刮數」顯示（不等 viewModel 回推）
+        val tempCards = viewModel.cards.value.toMutableMap()
+        tempCards[order] = card.copy(numberConfigurations = configs)
+        updateRemainingScratchesInfo(tempCards)
+
+        showToast("已自動刮開 ${eligibleIdx.size} 格")
+    }
+
     // ✅ 新增：獲取當前選擇的刮數
     private fun getCurrentScratchType(): Int? {
         return try {
@@ -1580,58 +1836,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // ✅ 新增：更新刮板預覽區顯示特獎
-    private fun updateScratchBoardPreviewWithSpecialPrize(specialPrizeNumber: Int) {
-        // 獲取當前預覽片段
-        val previewFragment = uiManager.currentScratchBoardPreviewFragment
-        if (previewFragment == null) {
-            Log.w("SettingsFragment", "預覽片段不存在，無法更新特獎標記")
-            return
-        }
-
-        try {
-            // 調用預覽片段的標記方法
-            previewFragment.markSpecialPrize(specialPrizeNumber)
-            Log.d("SettingsFragment", "特獎標記已更新：$specialPrizeNumber")
-        } catch (e: Exception) {
-            Log.e("SettingsFragment", "更新特獎標記失敗", e)
-            showToast("更新特獎標記失敗：${e.message}")
-        }
-    }
-
-    // ✅ 新增：更新刮板預覽區顯示大獎
-    private fun updateScratchBoardPreviewWithGrandPrizes(grandPrizeNumbers: List<Int>) {
-        // 獲取當前預覽片段
-        val previewFragment = uiManager.currentScratchBoardPreviewFragment
-        if (previewFragment == null) {
-            Log.w("SettingsFragment", "預覽片段不存在，無法更新大獎標記")
-            return
-        }
-
-        try {
-            // 調用預覽片段的標記方法
-            previewFragment.markGrandPrizes(grandPrizeNumbers)
-            Log.d("SettingsFragment", "大獎標記已更新：${grandPrizeNumbers.joinToString(", ")}")
-        } catch (e: Exception) {
-            Log.e("SettingsFragment", "更新大獎標記失敗", e)
-            showToast("更新大獎標記失敗：${e.message}")
-        }
-    }
-
-    // ✅ 可選：添加清除獎項標記的方法（如果需要）
-    private fun clearPrizeMarkers() {
-        val previewFragment = uiManager.currentScratchBoardPreviewFragment
-        previewFragment?.clearAllPrizes()
-    }
-
-    // ✅ 可選：獲取當前獎項設定（用於保存時）
-    private fun getCurrentPrizeSettings(): Pair<Int?, List<Int>> {
-        val previewFragment = uiManager.currentScratchBoardPreviewFragment
-        val specialPrize = previewFragment?.getCurrentSpecialPrize()
-        val grandPrizes = previewFragment?.getCurrentGrandPrizes() ?: emptyList()
-        return Pair(specialPrize, grandPrizes)
-    }
-
     private inline fun <T> safeExecute(
         operation: String,
         defaultValue: T? = null,
@@ -1648,11 +1852,13 @@ class SettingsFragment : Fragment() {
     private fun setButtonsEnabled(
         save: Boolean = true,
         toggleInUse: Boolean = true,
+        autoScratch: Boolean = true,
         returnBtn: Boolean = true,
         delete: Boolean = true
     ) {
         binding.buttonSaveSettings.isEnabled = save
         binding.buttonToggleInuse.isEnabled = toggleInUse
+        binding.buttonAutoScratch.isEnabled = autoScratch
         binding.buttonReturnSelected.isEnabled = returnBtn
         binding.buttonDeleteSelected.isEnabled = delete
     }

@@ -337,6 +337,14 @@
                 android:text="設為使用中（★）"
                 android:textSize="14sp" />
 
+            <Button
+                android:id="@+id/button_auto_scratch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="自動刮開"
+                android:enabled="false"/>
+
             <!-- 返回／刪除 -->
             <LinearLayout
                 android:id="@+id/row_actions_return_delete"
