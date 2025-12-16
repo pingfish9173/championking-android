@@ -217,6 +217,7 @@ class SettingsFragment : Fragment() {
             } else {
                 showSetShelfState(selectedCard)
             }
+            updateRemainingScratchesInfo(viewModel.cards.value)
         }
     }
 
@@ -334,39 +335,37 @@ class SettingsFragment : Fragment() {
     }
 
     /**
-     * 在「台主頁面」左側面板底部的 TextView 顯示目前使用中刮板的剩餘刮數。
-     * - 有使用中刮板：顯示「剩餘/總數」，例如 15/20
-     * - 沒有任何使用中刮板：清空並隱藏
+     * 在「設置介面」左側面板底部的 TextView 顯示：
+     * - 依目前選取的版位（selectedShelfOrder）顯示該版位的「剩餘/總數」
+     * - 若該版位未設置或資料異常 → 清空並隱藏
+     *
+     * 注意：玩家頁面/台主首頁要顯示「使用中版位」的剩餘刮數，請由各自首頁的邏輯處理；
+     *       此函式只負責「設置介面」的顯示規則。
      */
     private fun updateRemainingScratchesInfo(cards: Map<Int, ScratchCard>) {
-        // 只在已附著到 Activity 時處理
         val activity = activity as? MainActivity ?: return
         val remainingView = activity.findViewById<TextView>(R.id.remaining_scratches_text_view) ?: return
 
-        // 找到「使用中」的刮板（理論上只會有一張 inUsed = true）
-        val inUseCard = cards.values.firstOrNull { it.inUsed }
+        // ✅ 設置頁：以「目前選取的版位」為準
+        val selectedOrder = shelfManager.selectedShelfOrder
+        val card = cards[selectedOrder]
 
-        if (inUseCard == null) {
-            // 沒有使用中的刮板 → 清空顯示
+        if (card == null) {
             remainingView.text = ""
             remainingView.visibility = View.GONE
             return
         }
 
-        val configs = inUseCard.numberConfigurations
-        val total = configs?.size ?: inUseCard.scratchesType ?: 0
+        val configs = card.numberConfigurations
+        val total = configs?.size ?: card.scratchesType ?: 0
 
-        if (total <= 0 || configs == null) {
-            // 資料異常就不要硬顯示
+        if (total <= 0 || configs.isNullOrEmpty()) {
             remainingView.text = ""
             remainingView.visibility = View.GONE
             return
         }
 
-        // 剩餘格數 = 尚未被刮開的格子
         val remaining = configs.count { !it.scratched }
-
-        // 這裡沿用玩家頁面的風格，只顯示「剩餘/總數」
         remainingView.text = "$remaining/$total"
         remainingView.visibility = View.VISIBLE
     }
