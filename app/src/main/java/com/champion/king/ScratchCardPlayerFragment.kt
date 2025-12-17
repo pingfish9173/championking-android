@@ -52,6 +52,9 @@ class ScratchCardPlayerFragment : Fragment() {
     private val swirlViews = mutableMapOf<Int, SwirlView>()
     private val cellAnimators = mutableMapOf<Int, List<ObjectAnimator>>()
     private var remainingScratchTextView: TextView? = null
+    private var relockTapCount = 0
+    private var relockLastTapAt = 0L
+
 
 
     companion object {
@@ -87,6 +90,21 @@ class ScratchCardPlayerFragment : Fragment() {
         scratchCardContainer = view.findViewById(R.id.scratch_card_container)
         noScratchCardText = view.findViewById(R.id.no_scratch_card_text)
         remainingScratchTextView = activity?.findViewById(R.id.remaining_scratches_text_view)
+        remainingScratchTextView?.setOnClickListener {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - relockLastTapAt > 1200) {
+                // 超過 1.2 秒就重算一次連點
+                relockTapCount = 0
+            }
+            relockLastTapAt = now
+            relockTapCount++
+
+            if (relockTapCount >= 7) {
+                relockTapCount = 0
+                (activity as? MainActivity)?.relockFromPlayerGesture()
+                Toast.makeText(requireContext(), "已重新啟用鎖定模式", Toast.LENGTH_SHORT).show()
+            }
+        }
         loadUserScratchCards()
     }
 

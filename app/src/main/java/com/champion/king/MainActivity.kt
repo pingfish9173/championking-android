@@ -1497,6 +1497,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
     }
 
+    fun relockFromPlayerGesture() {
+        if (mode != Mode.PLAYER) return
+        enableImmersiveMode()
+        lockAppToScreen()
+    }
+
     private fun unlockAppFromScreen() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
