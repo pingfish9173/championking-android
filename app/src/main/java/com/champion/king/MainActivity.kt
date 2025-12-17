@@ -92,6 +92,35 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // 更新管理器
     private val updateManager by lazy { UpdateManager(this) }
 
+    // ====== Update Auto Check Trigger/Throttle ======
+    // 避免「更新對話框」在短時間內重複彈出造成卡住體驗
+    private var isUpdateDialogShowing: Boolean = false
+
+    // 你希望取消 5 分鐘節流；但完全不節流很容易在「多個觸發點連續命中」時重複彈窗。
+    // 這裡改成 1 分鐘（60_000ms）。如果你真的想完全取消，可改為 0L。
+    private val updateCheckThrottleMs: Long = 60_000L
+
+    private fun triggerAutoUpdateCheck(reason: String, force: Boolean = false) {
+        if (!updateManager.isAutoCheckEnabled()) return
+        if (isUpdateDialogShowing) {
+            Log.d(TAG, "Update check skipped: dialog already showing. reason=$reason")
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val last = updateManager.getLastCheckTime()
+        val diff = now - last
+
+        if (!force && updateCheckThrottleMs > 0 && diff < updateCheckThrottleMs) {
+            Log.d(TAG, "Update check throttled (${diff}ms < ${updateCheckThrottleMs}ms). reason=$reason")
+            return
+        }
+
+        Log.d(TAG, "Trigger update check. reason=$reason")
+        checkUpdateInBackground()
+    }
+
+
     // === Force Logout 相關 ===
     private var forceLogoutListener: ValueEventListener? = null
     private var forceLogoutRef: DatabaseReference? = null
@@ -142,17 +171,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun onResume() {
         super.onResume()
         handler.post(updateTimeRunnable)
-
-        // 回到主頁時檢查更新（需已登入且開啟自動檢查）
-        if (isUserLoggedIn() && updateManager.isAutoCheckEnabled()) {
-            val lastCheckTime = updateManager.getLastCheckTime()
-            val timeDiff = System.currentTimeMillis() - lastCheckTime
-
-            // 距離上次檢查超過 5 分鐘才檢查
-            if (timeDiff > 5 * 60 * 1000) {
-                checkUpdateInBackground()
-            }
-        }
+        // ✅ 不再在 onResume 做更新檢查，改由 3 個明確事件觸發（開啟未登入 / 登入成功 / 玩家切回台主成功）
     }
 
     override fun onPause() {
@@ -458,6 +477,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // 現在會載入和玩家頁面一致但無互動的刮卡顯示
         loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+
+        // 觸發條件 2：登入成功後檢查更新
+        triggerAutoUpdateCheck(reason = "login_success")
         Toast.makeText(this, "歡迎回來，${loggedInUser.account}！", Toast.LENGTH_SHORT).show()
     }
 
@@ -1075,6 +1097,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     performScratchTempSync()
                     loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
                     Toast.makeText(this@MainActivity, "已切換至台主頁面！", Toast.LENGTH_SHORT).show()
+
+                    // 觸發條件 3：玩家頁面輸入帳密成功切回台主首頁時檢查更新
+                    triggerAutoUpdateCheck(reason = "player_to_master_login_success")
                     onResult(true, null)
                 } else {
                     val errorMsg = message ?: "登入失敗，請確認帳號密碼"
@@ -1193,8 +1218,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
      * 啟動時檢查更新
      */
     private fun checkUpdateOnStart() {
-        if (updateManager.isAutoCheckEnabled()) {
-            checkUpdateInBackground()
+        // 觸發條件 1：開啟 APP 還沒登入時，立刻檢查更新
+        if (!isUserLoggedIn()) {
+            triggerAutoUpdateCheck(reason = "app_start_not_logged_in")
         }
     }
 
@@ -1264,7 +1290,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             builder.setCancelable(false)
         }
 
-        builder.create().show()
+        isUpdateDialogShowing = true
+        val dialog = builder.create()
+        dialog.setOnDismissListener {
+            isUpdateDialogShowing = false
+        }
+        dialog.show()
     }
 
     /**
