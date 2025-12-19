@@ -79,17 +79,45 @@ fun EditText.attachPasswordToggle(
     }
 }
 
-/* ---- Toast 擴充：三種接收者都支援 ---- */
+/* ---- Toast 擴充：三種接收者都支援（統一導向 ToastManager） ---- */
+private fun toastLengthToDurationMs(length: Int): Long {
+    // Android 的 Toast 長度只有 SHORT/LONG，我們映射到自家可控毫秒
+    return when (length) {
+        Toast.LENGTH_LONG -> 3500L
+        else -> 2000L
+    }
+}
+
 fun Context.toast(message: String, length: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(this, message, length).show()
+    ToastManager.show(
+        context = this,
+        message = message,
+        durationMs = toastLengthToDurationMs(length)
+    )
 }
 
 fun Fragment.toast(message: String, length: Int = Toast.LENGTH_SHORT) {
-    requireContext().toast(message, length)
+    // 用 Fragment 的 Activity 更穩（ToastManager 需要 Activity 來掛浮層）
+    val act = activity
+    if (act != null) {
+        ToastManager.show(
+            context = act,
+            message = message,
+            durationMs = toastLengthToDurationMs(length)
+        )
+    } else {
+        // 保底：若 fragment 尚未 attach，避免炸掉
+        requireContext().toast(message, length)
+    }
 }
 
 fun View.toast(message: String, length: Int = Toast.LENGTH_SHORT) {
-    context.toast(message, length)
+    // View.context 通常是 Activity（或 ContextThemeWrapper）
+    ToastManager.show(
+        context = context,
+        message = message,
+        durationMs = toastLengthToDurationMs(length)
+    )
 }
 
 /* ---- View 類常用 ---- */

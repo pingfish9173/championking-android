@@ -26,7 +26,7 @@ object ToastManager {
     fun show(
         context: Context,
         message: String,
-        durationMs: Long = 4000L,
+        durationMs: Long = 3000L,
         yOffsetDp: Int = 64,       // 你要更高：64/72/80
         textSizeSp: Float = 16f
     ) {

@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 // 切玩家頁面即載入顯示頁
                 loadFragment(ScratchCardPlayerFragment(), containerIdFor(Mode.PLAYER))
                 //Toast.makeText(this, "已切換至玩家頁面", Toast.LENGTH_SHORT).show()
-                ToastManager.show(this, "已切換至玩家頁面", durationMs = 5000L)
+                ToastManager.show(this, "已切換至玩家頁面")
                 Log.d(TAG, "已切換至玩家頁面。")
                 lockAppToScreen()
             }
@@ -482,7 +482,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // 觸發條件 2：登入成功後檢查更新
         triggerAutoUpdateCheck(reason = "login_success")
-        Toast.makeText(this, "歡迎回來，${loggedInUser.account}！", Toast.LENGTH_SHORT).show()
+        ToastManager.show(this, "歡迎回來，${loggedInUser.account}！")
     }
 
     /**
@@ -822,7 +822,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
         render(Mode.MASTER)
         loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
-        Toast.makeText(this, "您已成功登出。", Toast.LENGTH_SHORT).show()
+        ToastManager.show(this, "您已成功登出。")
         Log.d(TAG, "用戶已登出。")
     }
 
@@ -893,7 +893,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .setPositiveButton("確定") { dialog, _ ->
                 val pwd = input.text.toString().trim()
                 if (pwd.isNotEmpty()) updateSwitchScratchCardPassword(pwd)
-                else Toast.makeText(this, "密碼不能為空！", Toast.LENGTH_SHORT).show()
+                else ToastManager.show(this, "密碼不能為空！")
                 dialog.dismiss()
             }
             .setNegativeButton("取消") { d, _ -> d.dismiss() }
@@ -902,18 +902,18 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun updateSwitchScratchCardPassword(newPassword: String) {
         val key = currentUser?.firebaseKey ?: run {
-            Toast.makeText(this, "更新失敗：未找到用戶。", Toast.LENGTH_SHORT).show()
+            ToastManager.show(this, "更新失敗：未找到用戶。")
             Log.e(TAG, "更新換版密碼失敗：currentUserFirebaseKey 為空。")
             return
         }
         database.child("users").child(key).child("switchScratchCardPassword")
             .setValue(newPassword)
             .addOnSuccessListener {
-                Toast.makeText(this, "換版密碼已更新！", Toast.LENGTH_SHORT).show()
+                ToastManager.show(this, "換版密碼已更新！")
                 Log.d(TAG, "用戶 $key 的換版密碼已更新為: $newPassword")
             }
             .addOnFailureListener { e ->
-                Toast.makeText(this, "更新換版密碼失敗: ${e.message}", Toast.LENGTH_LONG).show()
+                ToastManager.show(this, "更新換版密碼失敗: ${e.message}")
                 Log.e(TAG, "更新用戶 $key 換版密碼失敗: ${e.message}", e)
             }
     }
@@ -921,7 +921,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== Player: 下一版密碼、切回台主 ======
     private fun showNextVersionPasswordInputDialog() {
         val key = currentUser?.firebaseKey ?: run {
-            Toast.makeText(this, "驗證失敗：未找到用戶。", Toast.LENGTH_SHORT).show()
+            ToastManager.show(this, "驗證失敗：未找到用戶。")
             Log.e(TAG, "驗證換版密碼失敗：currentUserFirebaseKey 為空。")
             return
         }
@@ -945,7 +945,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     .setPositiveButton("確定") { dialog, _ ->
                         val pwd = input.text.toString().trim()
                         if (pwd.isNotEmpty()) verifySwitchVersionPassword(pwd)
-                        else Toast.makeText(this, "密碼不能為空！", Toast.LENGTH_SHORT).show()
+                        else ToastManager.show(this, "密碼不能為空！")
                         dialog.dismiss()
                     }
                     .setNegativeButton("取消") { d, _ -> d.dismiss() }
@@ -960,7 +960,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun verifySwitchVersionPassword(enteredPassword: String) {
         val key = currentUser?.firebaseKey ?: run {
-            Toast.makeText(this, "驗證失敗：未找到用戶。", Toast.LENGTH_SHORT).show()
+            ToastManager.show(this, "驗證失敗：未找到用戶。")
             Log.e(TAG, "驗證換版密碼失敗：currentUserFirebaseKey 為空。")
             return
         }
@@ -973,21 +973,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         // 密碼正確，切換到下一版
                         switchToNextVersion(key)
                     } else {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "換版密碼錯誤，請重新輸入！",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        ToastManager.show(this@MainActivity, "換版密碼錯誤，請重新輸入！")
                         Log.d(TAG, "換版密碼驗證失敗，輸入:$enteredPassword, 儲存:$stored")
                     }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "驗證失敗：${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ToastManager.show(this@MainActivity, "驗證失敗：${error.message}")
                     Log.e(TAG, "讀取換版密碼失敗: ${error.message}", error.toException())
                 }
             })
@@ -1008,11 +1000,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     }
 
                     if (allCards.isEmpty()) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "沒有可用的刮刮卡版位",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        ToastManager.show(this@MainActivity,"沒有可用的刮刮卡版位")
                         return
                     }
 
@@ -1038,17 +1026,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     // 執行切換：將所有卡片設為未使用，然後將目標卡片設為使用中
                     setCurrentlyInUseScratchCard(userFirebaseKey, nextSerialNumber)
 
-                    Toast.makeText(this@MainActivity, "已切換至版位 $nextOrder", Toast.LENGTH_SHORT)
-                        .show()
+                    ToastManager.show(this@MainActivity,"已切換至版位 $nextOrder")
                     Log.d(TAG, "成功切換至下一版：版位 $nextOrder (序號: $nextSerialNumber)")
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "切換版位失敗：${error.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    ToastManager.show(this@MainActivity, "切換版位失敗：${error.message}")
                     Log.e(TAG, "讀取刮刮卡以切換版位失敗: ${error.message}", error.toException())
                 }
             })
@@ -1071,13 +1054,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 val account = accountEt.text.toString().trim()
                 val pwd = passwordEt.text.toString().trim()
                 if (account.isEmpty() || pwd.isEmpty()) {
-                    Toast.makeText(this, "帳號和密碼都必須填寫！", Toast.LENGTH_SHORT).show()
+                    ToastManager.show(this, "帳號和密碼都必須填寫！")
                     return@setOnClickListener
                 }
                 verifyMasterCredentials(account, pwd) { ok, msg ->
                     if (ok) dialog.dismiss()
-                    else if (!msg.isNullOrBlank()) Toast.makeText(this, msg, Toast.LENGTH_SHORT)
-                        .show()
+                    else if (!msg.isNullOrBlank()) ToastManager.show(this, msg)
                 }
             }
         }
@@ -1098,14 +1080,14 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     render(Mode.MASTER)
                     performScratchTempSync()
                     loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
-                    Toast.makeText(this@MainActivity, "已切換至台主頁面！", Toast.LENGTH_SHORT).show()
+                    ToastManager.show(this@MainActivity,"已切換至台主頁面！")
 
                     // 觸發條件 3：玩家頁面輸入帳密成功切回台主首頁時檢查更新
                     triggerAutoUpdateCheck(reason = "player_to_master_login_success")
                     onResult(true, null)
                 } else {
                     val errorMsg = message ?: "登入失敗，請確認帳號密碼"
-                    Toast.makeText(this@MainActivity, errorMsg, Toast.LENGTH_SHORT).show()
+                    ToastManager.show(this@MainActivity, errorMsg)
                     onResult(false, errorMsg)
                 }
             }
@@ -1115,7 +1097,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== Helpers ======
     private fun ensureLoggedIn(): Boolean {
         val ok = currentUser != null
-        if (!ok) Toast.makeText(this, "請先登入後再操作！", Toast.LENGTH_SHORT).show()
+        if (!ok) ToastManager.show(this, "請先登入後再操作！")
         return ok
     }
 
@@ -1328,9 +1310,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     progressDialog.dismiss()
 
                     if (success) {
-                        toast("下載完成，準備安裝")
+                        ToastManager.show(this,"下載完成，準備安裝")
                     } else {
-                        toast(message)
+                        ToastManager.show(this,message)
                     }
                 }
             }
@@ -1525,7 +1507,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             if (activityManager.lockTaskModeState == android.app.ActivityManager.LOCK_TASK_MODE_NONE) {
                 startLockTask()
-                toast("已啟用鎖定模式，無法跳出遊戲")
+                ToastManager.show(this,"已啟用鎖定模式，無法跳出遊戲")
             }
         }
     }
