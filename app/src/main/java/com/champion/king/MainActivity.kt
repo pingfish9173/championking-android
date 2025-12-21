@@ -30,6 +30,7 @@ import com.champion.king.data.AuthRepository
 import com.champion.king.util.ToastManager
 import com.champion.king.util.UpdateHistoryFormatter
 import com.google.firebase.auth.FirebaseAuth
+import androidx.activity.OnBackPressedCallback
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -136,6 +137,14 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== Lifecycle ======
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ⛔ 全面禁用返回鍵（相容舊版 androidx）
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                Log.d("MainActivity", "Back key disabled")
+                // 什麼都不做，直接吃掉 Back 鍵
+            }
+        })
 
         // 🎨 立即切換回正常主題（移除啟動海報背景）
         setTheme(R.style.Theme_A3)
@@ -1496,14 +1505,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
 
         handler.postDelayed(runnable, 500)
-    }
-
-    override fun onBackPressed() {
-        if (mode == Mode.PLAYER) {
-            // 玩家模式下不允許返回
-            return
-        }
-        super.onBackPressed()
     }
 
     private fun lockAppToScreen() {
