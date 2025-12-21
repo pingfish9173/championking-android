@@ -825,6 +825,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     fun performLogout() {
         removeForceLogoutWatcher()
+        SettingsViewModel.clearAllDrafts()
         currentUser = null
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
         render(Mode.MASTER)

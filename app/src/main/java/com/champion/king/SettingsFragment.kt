@@ -13,7 +13,7 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -65,8 +65,8 @@ class SettingsFragment : Fragment() {
     private lateinit var uiManager: SettingsUIManager
     private lateinit var actionHandler: SettingsActionHandler
 
-    // ViewModel
-    private val viewModel: SettingsViewModel by viewModels {
+    // ViewModel（✅ 改成 activity scope：避免按 HOME/多工回來後草稿消失）
+    private val viewModel: SettingsViewModel by activityViewModels {
         val database = FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
         val repo = FirebaseRepository(database)
         val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()
@@ -110,6 +110,12 @@ class SettingsFragment : Fragment() {
 
     // 新增：標記是否正在進行儲存操作
     private var isSavingInProgress = false
+
+    // ✅ 用來記住「切換前」的板位，避免 ShelfManager 點擊後 selectedShelfOrder 已變成新板位
+    private var lastSelectedShelfOrder: Int? = null
+
+    // ✅ 避免「程式碼 setSelection」後，Spinner 延遲觸發 onItemSelected 又把預覽 random 掉
+    private var suppressNextScratchTypeSelectionEvent: Boolean = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -224,13 +230,29 @@ class SettingsFragment : Fragment() {
 
     private fun setupUI() {
         shelfManager.initShelfViews()
+
+        // 初始化：記住目前板位（避免第一次切換存不到）
+        if (lastSelectedShelfOrder == null) {
+            lastSelectedShelfOrder = shelfManager.selectedShelfOrder
+        }
+
         shelfManager.setOnShelfClickListener { order ->
+            // ✅ 先把「切換前」板位的草稿存起來（用 lastSelectedShelfOrder，不會存到新板位）
+            lastSelectedShelfOrder?.let { prevOrder ->
+                saveDraftIfNeeded(prevOrder)
+            }
+
+            // ✅ 更新為新板位
+            lastSelectedShelfOrder = order
+
+            // ✅ 切換顯示
             val selectedCard = viewModel.cards.value[order]
             if (selectedCard == null) {
-                showUnsetShelfState()
+                showUnsetShelfState() // 這裡會自動優先還原草稿（下面 2-6 會改）
             } else {
                 showSetShelfState(selectedCard)
             }
+
             updateRemainingScratchesInfo(viewModel.cards.value)
         }
     }
@@ -287,6 +309,12 @@ class SettingsFragment : Fragment() {
                     position: Int,
                     id: Long
                 ) {
+                    // ★ 如果這次是「程式還原草稿」造成的 onItemSelected，就忽略（避免預覽被重建 random）
+                    if (suppressNextScratchTypeSelectionEvent) {
+                        suppressNextScratchTypeSelectionEvent = false
+                        return
+                    }
+
                     // ★ 如果正在更新 Spinner 或正在儲存，直接返回
                     if (isUpdatingSpinner || isSavingInProgress) return
 
@@ -327,6 +355,11 @@ class SettingsFragment : Fragment() {
                     viewModel.cards.collect { cards ->
                         // 只更新架上列表（這個不會造成閃爍）
                         shelfManager.updateShelfUI(cards)
+
+                        // ✅ 初始版位尚未選完前，避免 observeViewModel 把畫面先套到預設 1號版造成閃一下錯狀態
+                        if (!isInitialSelectionComplete) {
+                            return@collect
+                        }
 
                         // ✅ 無論是否正在儲存，都先更新「剩餘刮數」顯示
                         updateRemainingScratchesInfo(cards)
@@ -644,33 +677,58 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     /** 顯示未設置狀態的預覽與按鈕狀態 **/
+    /** 顯示未設置狀態的預覽與按鈕狀態 **/
     private fun showUnsetShelfState() {
+        val order = shelfManager.selectedShelfOrder
+        val draft = viewModel.getDraft(order)
+
+        // ✅ 未設置就是未設置：不要因為有草稿就改成 false
         isShowingUnsetState = true
-        showPreviewUnset()
 
-        // 確保顯示可編輯的欄位（修復從使用中版位切換過來的問題）
         showEditableFields()
-        clearTextFieldsOnly()
-
         showScratchTypeSpinner()
-        clearSpinnerSelection()
+
+        if (draft != null && draft.scratchType != null) {
+            // ✅ 有草稿：直接還原草稿（不要先清掉預覽）
+            setScratchTypeSpinnerSelection(draft.scratchType)
+
+            // 先建預覽（草稿有 configs 就帶入）
+            displayScratchBoardPreview(draft.scratchType, draft.numberConfigurations)
+            setPrizeControlsEnabled(true)
+
+            // 還原文字/選項
+            binding.editTextSpecialPrize.setText(draft.specialPrize.orEmpty())
+            binding.editTextGrandPrize.setText(draft.grandPrize.orEmpty())
+            setSpinnerSelection(binding.spinnerClawsCount, draft.claws)
+            setSpinnerSelection(binding.spinnerGiveawayCount, draft.giveaway)
+
+            // 預覽同步顯示選取（特獎/大獎）
+            currentPreviewFragment?.setSelectedNumber(draft.specialPrize?.toIntOrNull())
+            val gp = draft.grandPrize
+                ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+            currentPreviewFragment?.setGrandSelectedNumbers(gp)
+
+        } else {
+            // ✅ 沒草稿：才真的顯示「未設置」畫面並清空欄位
+            showPreviewUnset()
+            clearTextFieldsOnly()
+            clearSpinnerSelection()
+            setPrizeControlsEnabled(false)
+        }
+
         setButtonsEnabled(save = true, toggleInUse = false, autoScratch = false, returnBtn = false, delete = false)
         uiManager.updateInUseButtonUI(null)
         uiManager.updateActionButtonsUI(null)
         updateRefreshButtonVisibility()
-
-        setPrizeControlsEnabled(false)
     }
-
 
     /** 🔘 根據目前狀態顯示／隱藏重新整理圖示 **/
     private fun updateRefreshButtonVisibility() {
-        // 當「未設置」狀態時顯示刷新按鈕，否則隱藏
-        if (isShowingUnsetState) {
-            binding.buttonRefreshScratch.visibility = View.VISIBLE
-        } else {
-            binding.buttonRefreshScratch.visibility = View.GONE
-        }
+        val order = shelfManager.selectedShelfOrder
+        val hasCard = viewModel.cards.value[order] != null
+
+        // ✅ 沒設置卡片（未設置狀態）就顯示刷新按鈕；有卡片就隱藏
+        binding.buttonRefreshScratch.visibility = if (hasCard) View.GONE else View.VISIBLE
     }
 
     // 檢查刮板是否已被刮過（1刮含以上）
@@ -906,6 +964,8 @@ class SettingsFragment : Fragment() {
         binding.editTextGrandPrize.text?.clear()
 
         setPrizeControlsEnabled(true)
+        // ✅ 刷新後立刻把新配置寫進草稿，避免回來又用舊的
+        saveDraftIfNeeded(shelfManager.selectedShelfOrder)
     }
 
     /** 統一設定特獎、大獎按鈕與鍵盤按鈕的啟用 / 透明度 **/
@@ -1201,17 +1261,19 @@ class SettingsFragment : Fragment() {
     }
 
     private fun updatePreviewForScratchType(scratchType: Int) {
-        if (isShowingUnsetState) {
-            Log.d("SettingsFragment", "未設置狀態中，拒絕更新預覽為 ${scratchType}刮")
-            return
-        }
-
         val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
-        if (selectedCard == null) {
-            Log.d("SettingsFragment", "更新預覽，刮數類型: ${scratchType}刮")
-            displayScratchBoardPreview(scratchType, null)
-            setPrizeControlsEnabled(true)
-        }
+
+        // ✅ 只有「未設置卡片」時才會改預覽（已設置卡片一律不動）
+        if (selectedCard != null) return
+
+        Log.d("SettingsFragment", "未設置板位：立即更新預覽為 ${scratchType}刮")
+
+        // ✅ 這裡傳 null 代表「新生成」（符合你調刮數就要立刻看到的需求）
+        displayScratchBoardPreview(scratchType, null)
+        setPrizeControlsEnabled(true)
+
+        // ✅ 立刻把新生成的 numberConfigurations 存進草稿，避免切換板位後被重置
+        saveDraftIfNeeded(shelfManager.selectedShelfOrder)
     }
 
     // ② 顯示/重建預覽時，確保挑選模式狀態馬上套用
@@ -1968,5 +2030,64 @@ class SettingsFragment : Fragment() {
             _binding = null
         }
         super.onDestroyView()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // ✅ 按 HOME / 多工鍵離開時：把目前板位草稿存起來
+        saveDraftIfNeeded(shelfManager.selectedShelfOrder)
+    }
+
+    // ✅ 只在「未設置狀態 / 尚未儲存」時保存草稿（避免覆蓋已設置卡片的正式資料）
+    private fun saveDraftIfNeeded(order: Int) {
+        val hasCard = viewModel.cards.value[order] != null
+        if (hasCard) return
+
+        // ✅ 對應該板位的預覽：若剛好沒有 preview（例如尚未選刮數），configs 就留 null
+        val configs = currentPreviewFragment?.getGeneratedNumberConfigurations()
+
+        val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
+        val scratchType = selectedItem?.getScratchType()
+
+        val draft = SettingsViewModel.SettingsDraft(
+            scratchType = scratchType,
+            specialPrize = binding.editTextSpecialPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
+            grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
+            claws = binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull(),
+            giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
+            numberConfigurations = configs
+        )
+
+        viewModel.saveDraft(order, draft)
+    }
+
+    // ✅ 依 scratchType（Int）把 spinner 指到對應項目（adapter 是 ScratchTypeItem）
+    private fun setScratchTypeSpinnerSelection(scratchType: Int) {
+        isUpdatingSpinner = true
+        try {
+            val adapter = binding.spinnerScratchesCount.adapter ?: return
+            val currentPos = binding.spinnerScratchesCount.selectedItemPosition
+
+            var targetPos: Int? = null
+            for (i in 0 until adapter.count) {
+                val item = adapter.getItem(i) as? ScratchTypeItem ?: continue
+                if (item.getScratchType() == scratchType) {
+                    targetPos = i
+                    break
+                }
+            }
+            if (targetPos == null) return
+
+            // ✅ 只有「真的會變更選擇」才 suppress 下一次事件
+            if (targetPos != currentPos) {
+                suppressNextScratchTypeSelectionEvent = true
+                binding.spinnerScratchesCount.setSelection(targetPos)
+            } else {
+                // 同一個 selection，不要 suppress，避免卡住下一次使用者操作
+                suppressNextScratchTypeSelectionEvent = false
+            }
+        } finally {
+            isUpdatingSpinner = false
+        }
     }
 }

@@ -33,6 +33,48 @@ class SettingsViewModel(
         data class Toast(val message: String) : UiEvent()
     }
 
+    // ==============================
+    // ✅ 設置頁「草稿」：每個板位各自保存
+    // ==============================
+    // ==============================
+// ✅ 設置頁「草稿」：每個板位各自保存（全域 DraftStore，登出可直接清除）
+// ==============================
+    data class SettingsDraft(
+        val scratchType: Int? = null,
+        val specialPrize: String? = null,
+        val grandPrize: String? = null,
+        val claws: Int? = null,
+        val giveaway: Int? = null,
+        val numberConfigurations: List<NumberConfiguration>? = null
+    )
+
+    companion object DraftStore {
+        private val _draftMap = MutableStateFlow<Map<Int, SettingsDraft>>(emptyMap())
+        val draftMap: StateFlow<Map<Int, SettingsDraft>> = _draftMap
+
+        fun saveDraft(order: Int, draft: SettingsDraft) {
+            _draftMap.value = _draftMap.value.toMutableMap().apply { put(order, draft) }
+        }
+
+        fun getDraft(order: Int): SettingsDraft? = _draftMap.value[order]
+
+        fun clearDraft(order: Int) {
+            _draftMap.value = _draftMap.value.toMutableMap().apply { remove(order) }
+        }
+
+        /** ✅ 登出用：清空所有板位草稿 */
+        fun clearAllDrafts() {
+            _draftMap.value = emptyMap()
+        }
+    }
+
+    // --- 下面這些是「instance wrapper」：讓你 Fragment 原本 viewModel.saveDraft(...) 不用改 ---
+    val draftMap: StateFlow<Map<Int, SettingsDraft>> get() = DraftStore.draftMap
+    fun saveDraft(order: Int, draft: SettingsDraft) = DraftStore.saveDraft(order, draft)
+    fun getDraft(order: Int): SettingsDraft? = DraftStore.getDraft(order)
+    fun clearDraft(order: Int) = DraftStore.clearDraft(order)
+    fun clearAllDrafts() = DraftStore.clearAllDrafts()
+
     fun setInUseExclusive(target: ScratchCard, current: Map<Int, ScratchCard>, newState: Boolean) {
         viewModelScope.launch {
             try {
