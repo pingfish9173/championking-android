@@ -2,6 +2,10 @@ package com.champion.king
 
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -201,9 +205,6 @@ class AboutTabletFragment : Fragment() {
         )
     }
 
-    /**
-     * 格式化並顯示更新紀錄
-     */
     private fun displayUpdateLog(historyList: List<DeployHistory>) {
         if (historyList.isEmpty()) {
             contentTextUpdateLog.text = "暫無更新紀錄"
@@ -211,20 +212,42 @@ class AboutTabletFragment : Fragment() {
         }
 
         val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.TAIWAN)
-        val sb = StringBuilder()
+        val sb = SpannableStringBuilder()
+
+        fun appendStyledTitle(titleLine: String) {
+            val start = sb.length
+            sb.append(titleLine)
+            val end = sb.length
+
+            // 粗體
+            sb.setSpan(
+                StyleSpan(Typeface.BOLD),
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            // 字體加大（可自行微調 1.10f ~ 1.30f）
+            sb.setSpan(
+                RelativeSizeSpan(1.18f),
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
 
         historyList.forEachIndexed { index, history ->
-            // 日期和版本號
+            // 日期和版本號（保持原樣）
             val dateStr = dateFormat.format(Date(history.deployedAt))
             sb.append("$dateStr　V${history.versionName}\n")
 
-            // 標題
-            if (history.updateInfo.title.isNotEmpty()) {
-                sb.append(history.updateInfo.title)
+            // 標題（只改這行：粗體 + 加大）
+            val title = history.updateInfo.title
+            if (title.isNotEmpty()) {
+                appendStyledTitle(title)
                 sb.append("\n")
             }
 
-            // 細項
+            // 細項（保持原樣）
             history.updateInfo.items.forEach { item ->
                 sb.append("• $item\n")
             }
@@ -235,7 +258,7 @@ class AboutTabletFragment : Fragment() {
             }
         }
 
-        contentTextUpdateLog.text = sb.toString()
+        contentTextUpdateLog.text = sb
     }
 
     override fun onDestroyView() {
