@@ -10,18 +10,19 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.FragmentManager
 import com.champion.king.ScratchBoardPreviewFragment
 import com.champion.king.constants.ScratchCardConstants
 import com.champion.king.databinding.FragmentSettingsBinding
 import com.champion.king.model.NumberConfiguration
 import com.champion.king.model.ScratchCard
+import com.champion.king.util.ToastManager
 
 class SettingsUIManager(
     private val binding: FragmentSettingsBinding,
     private val context: Context,
-    private val childFragmentManager: FragmentManager
+    private val childFragmentManager: FragmentManager,
+    private val showToast: (String) -> Unit
 ) {
     var currentScratchBoardPreviewFragment: ScratchBoardPreviewFragment? = null
         private set
@@ -248,6 +249,7 @@ class SettingsUIManager(
         // ✅ 關鍵：在對話框顯示後手動設置「確定」按鈕的點擊事件
         // 這樣可以控制是否關閉對話框
         dialog.setOnShowListener {
+            ToastManager.setHostWindow(dialog.window)
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positiveButton.setOnClickListener {
                 val inputValue = dialogEditText.text.toString().trim()
@@ -265,11 +267,15 @@ class SettingsUIManager(
                     dialog.dismiss()
                 } else {
                     // ✅ 驗證失敗：顯示錯誤訊息但不關閉對話框
-                    Toast.makeText(context, validationResult.errorMessage, Toast.LENGTH_LONG).show()
+                    showToast(validationResult.errorMessage)
                     // 不調用 dialog.dismiss()，對話框保持開啟
                     // 輸入內容也不會被清空，用戶可以繼續修改
                 }
             }
+        }
+
+        dialog.setOnDismissListener {
+            ToastManager.clearHostWindow()
         }
 
         // 數字按鈕點擊事件：依游標位置插入數字（若有選取則取代選取範圍）
@@ -319,7 +325,7 @@ class SettingsUIManager(
         btnComma.setOnClickListener {
 
             if (isSpecialPrize) {
-                Toast.makeText(context, "特獎只能輸入一個數字", Toast.LENGTH_SHORT).show()
+                showToast("特獎只能輸入一個數字")
                 return@setOnClickListener
             }
 
@@ -337,7 +343,7 @@ class SettingsUIManager(
 
             // 若已達上限 → 阻擋逗號輸入
             if (currentTokens.size >= grandLimit) {
-                Toast.makeText(context, "大獎最多只能設定 $grandLimit 個", Toast.LENGTH_SHORT).show()
+                showToast("大獎最多只能設定 $grandLimit 個")
                 return@setOnClickListener
             }
 
@@ -355,13 +361,13 @@ class SettingsUIManager(
 
             // 不允許開頭輸入逗號
             if (start == 0) {
-                Toast.makeText(context, "逗號不能放在開頭", Toast.LENGTH_SHORT).show()
+                showToast("逗號不能放在開頭")
                 return@setOnClickListener
             }
 
             // 不允許連續逗號
             if (start > 0 && editable[start - 1] == ',') {
-                Toast.makeText(context, "不能連續輸入逗號", Toast.LENGTH_SHORT).show()
+                showToast("不能連續輸入逗號")
                 return@setOnClickListener
             }
 

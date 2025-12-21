@@ -8,7 +8,10 @@ import com.champion.king.core.config.AppConfig
 import com.champion.king.core.ui.BaseBindingFragment
 import com.champion.king.data.AuthRepository
 import com.champion.king.databinding.FragmentRegisterBinding
-import com.champion.king.util.*
+import com.champion.king.util.ToastManager
+import com.champion.king.util.guardOnline
+import com.champion.king.util.setThrottledClick
+import com.champion.king.util.ValidationRules
 import com.google.firebase.database.FirebaseDatabase
 
 class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
@@ -189,8 +192,14 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
         val city = binding.spinnerCity.selectedItem?.toString()?.trim().orEmpty()
         val district = binding.spinnerDistrict.selectedItem?.toString()?.trim().orEmpty()
 
-        if (city.isEmpty()) { toast("請選擇縣市"); return@guardOnline }
-        if (district.isEmpty()) { toast("請選擇行政區"); return@guardOnline }
+        if (city.isEmpty()) {
+            activity?.let { ToastManager.show(it, "請選擇縣市") }
+            return@guardOnline
+        }
+        if (district.isEmpty()) {
+            activity?.let { ToastManager.show(it, "請選擇行政區") }
+            return@guardOnline
+        }
 
         val account = binding.editTextAccount.text.toString().trim()
         val password = binding.editTextPassword.text.toString().trim()
@@ -246,9 +255,11 @@ class RegisterFragment : BaseBindingFragment<FragmentRegisterBinding>() {
 
         repo.registerUser(account, password, email, phone, city, district, deviceNum, referralCode) { ok, msg ->
             if (ok) {
-                toast("註冊成功！")
+                activity?.let { ToastManager.show(it, "註冊成功！") }
                 parentFragmentManager.popBackStack()
-            } else toast("註冊失敗：${msg ?: "未知錯誤"}")
+            } else activity?.let {
+                ToastManager.show(it, "註冊失敗：${msg ?: "未知錯誤"}")
+            }
         }
     }
 }

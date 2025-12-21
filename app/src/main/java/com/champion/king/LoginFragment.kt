@@ -21,7 +21,7 @@ import com.champion.king.util.DeviceInfoUtil
 import com.champion.king.util.attachPasswordToggle
 import com.champion.king.util.guardOnline
 import com.champion.king.util.setThrottledClick
-import com.champion.king.util.toast
+import com.champion.king.util.ToastManager
 import kotlinx.coroutines.launch
 
 class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
@@ -143,7 +143,9 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
                     }
 
                     is LoginResult.Error -> {
-                        requireContext().toast(result.message)
+                        activity?.let {
+                            ToastManager.show(it, result.message)
+                        }
                         viewModel.clearResults()
                     }
                     null -> { /* 忽略 */ }
@@ -156,12 +158,16 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
             viewModel.resetPasswordResult.collect { result ->
                 when (result) {
                     is ResetPasswordResult.Success -> {
-                        requireContext().toast(AppConfig.Msg.RESET_SUCCESS)
+                        activity?.let {
+                            ToastManager.show(it, AppConfig.Msg.RESET_SUCCESS)
+                        }
                         dismissForgotPasswordDialog()
                         viewModel.clearResults()
                     }
                     is ResetPasswordResult.Error -> {
-                        requireContext().toast("${AppConfig.Msg.RESET_FAIL_PREFIX}${result.message}")
+                        activity?.let {
+                            ToastManager.show(it, "${AppConfig.Msg.RESET_FAIL_PREFIX}${result.message}")
+                        }
                         viewModel.clearResults()
                     }
                     is ResetPasswordResult.ValidationError -> {
@@ -348,6 +354,7 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
         }
 
         dialog.setOnShowListener {
+            ToastManager.setHostWindow(dialog.window)
             val positiveButton = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
             val negativeButton = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
 
@@ -371,6 +378,10 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
                 dialog.dismiss()
                 // 你如果想加額外動作（例如回到登入畫面）也可以在這裡加入
             }
+        }
+
+        dialog.setOnDismissListener {
+            ToastManager.clearHostWindow()
         }
 
         dialog.show()
@@ -398,8 +409,9 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
             loadingDialog.dismiss()
 
             if (success) {
-                requireContext().toast(message ?: "裝置綁定成功")
-                // 綁定成功，完成登入
+                activity?.let {
+                    ToastManager.show(it, message ?: "裝置綁定成功")
+                }
                 authFlowListener?.onLoginSuccess(user)
             } else {
                 // 綁定失敗，詢問是否繼續登入

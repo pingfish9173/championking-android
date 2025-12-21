@@ -10,12 +10,11 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ImageView
-import androidx.core.content.ContextCompat
 import com.champion.king.core.ui.BaseBindingFragment
 import com.champion.king.data.BackpackRepository
 import com.champion.king.data.DbListenerHandle
 import com.champion.king.databinding.FragmentBackpackBinding
-import com.champion.king.util.toast
+import com.champion.king.util.ToastManager
 
 /** UI 要用的資料模型（維持原樣顯示） */
 data class BackpackItem(
@@ -53,7 +52,7 @@ class BackpackFragment : BaseBindingFragment<FragmentBackpackBinding>() {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
         if (userKey.isNullOrEmpty()) {
             binding.userPointsBackpackTextview.text = "我的點數: N/A"
-            context?.toast("無法載入背包：用戶未登入")
+            activity?.let { ToastManager.show(it, "無法載入背包：用戶未登入") }
             return
         }
 
@@ -69,7 +68,7 @@ class BackpackFragment : BaseBindingFragment<FragmentBackpackBinding>() {
             onError = { msg ->
                 if (!isAdded || this@BackpackFragment.view == null) return@observeUserPoints
                 Log.e("BackpackFragment", "Failed to load user points: $msg")
-                context?.toast("載入點數失敗：$msg")
+                activity?.let { ToastManager.show(it, "載入點數失敗：$msg") }
             }
         )
 
@@ -88,7 +87,7 @@ class BackpackFragment : BaseBindingFragment<FragmentBackpackBinding>() {
             onError = { msg ->
                 if (!isAdded || this@BackpackFragment.view == null) return@observeBackpack
                 Log.e("BackpackFragment", "Failed to load backpack items: $msg")
-                context?.toast("載入背包物品失敗：$msg")
+                activity?.let { ToastManager.show(it, "載入背包物品失敗：$msg") }
             }
         )
     }

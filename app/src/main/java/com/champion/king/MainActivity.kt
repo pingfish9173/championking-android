@@ -26,7 +26,6 @@ import com.champion.king.util.ApkDownloader
 import kotlinx.coroutines.launch
 import com.champion.king.util.UpdateManager
 import com.champion.king.util.UpdateResult
-import com.champion.king.util.toast
 import com.champion.king.data.AuthRepository
 import com.champion.king.util.ToastManager
 import com.champion.king.util.UpdateHistoryFormatter
@@ -222,7 +221,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
                 // 切玩家頁面即載入顯示頁
                 loadFragment(ScratchCardPlayerFragment(), containerIdFor(Mode.PLAYER))
-                //Toast.makeText(this, "已切換至玩家頁面", Toast.LENGTH_SHORT).show()
                 ToastManager.show(this, "已切換至玩家頁面")
                 Log.d(TAG, "已切換至玩家頁面。")
                 lockAppToScreen()
@@ -1050,6 +1048,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .create()
 
         dialog.setOnShowListener {
+            ToastManager.setHostWindow(dialog.window)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val account = accountEt.text.toString().trim()
                 val pwd = passwordEt.text.toString().trim()
@@ -1063,6 +1062,11 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
             }
         }
+
+        dialog.setOnDismissListener {
+            ToastManager.clearHostWindow()
+        }
+
         dialog.show()
     }
 

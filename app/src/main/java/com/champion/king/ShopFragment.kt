@@ -18,9 +18,9 @@ import com.champion.king.data.DbListenerHandle
 import com.champion.king.data.ShopRepository
 import com.champion.king.databinding.FragmentShopBinding
 import com.champion.king.model.ShopItem
+import com.champion.king.util.ToastManager
 import com.champion.king.util.guardOnline
 import com.champion.king.util.setThrottledClick
-import com.champion.king.util.toast
 
 class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
@@ -63,7 +63,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             onError = { msg ->
                 if (!isAdded || this@ShopFragment.view == null) return@observeShopItems
                 Log.e("ShopFragment", "Failed to load shop items: $msg")
-                requireContext().toast("載入商品失敗：$msg")
+                showToast("載入商品失敗：$msg")
             }
         )
 
@@ -71,7 +71,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
         if (userKey.isNullOrEmpty()) {
             binding.userPointsTextview.text = "我的點數: N/A"
-            requireContext().toast("無法載入點數：用戶未登入")
+            showToast("無法載入點數：用戶未登入")
         } else {
             userPointsHandle = repo.observeUserPoints(
                 userKey,
@@ -83,7 +83,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 onError = { msg ->
                     if (!isAdded || this@ShopFragment.view == null) return@observeUserPoints
                     Log.e("ShopFragment", "Failed to load user points: $msg")
-                    requireContext().toast("載入點數失敗：$msg")
+                    showToast("載入點數失敗：$msg")
                 }
             )
         }
@@ -167,7 +167,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 increaseButton.setOnClickListener {
                     val q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
                     val newValue = if (q >= 9999) {
-                        requireContext().toast("單一商品數量上限為 9999")
+                        showToast("單一商品數量上限為 9999")
                         9999
                     } else {
                         q + 1
@@ -249,7 +249,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     dialogEditText.setText(newText)
                     dialogEditText.setSelection(dialogEditText.text.length)
                 } else {
-                    requireContext().toast("單一商品數量上限為 9999")
+                    showToast("單一商品數量上限為 9999")
                 }
             }
         }
@@ -278,7 +278,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             val current = dialogEditText.text.toString().toIntOrNull() ?: 0
             val newValue = (current + 1).coerceAtMost(9999)
             if (newValue >= 9999) {
-                requireContext().toast("單一商品數量上限為 9999")
+                showToast("單一商品數量上限為 9999")
             }
             dialogEditText.setText(newValue.toString())
             dialogEditText.setSelection(dialogEditText.text.length)
@@ -350,13 +350,13 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     private fun clearCart() {
         itemQuantities.clear()
         displayShopItems()
-        requireContext().toast("購物車已清空！")
+        showToast("購物車已清空！")
     }
 
     private fun showPurchaseConfirmationDialog() = requireContext().guardOnline {
         val total = calculateTotalAmount()
         if (total <= 0) {
-            requireContext().toast("您的購物車是空的，請先選擇商品！")
+            showToast("您的購物車是空的，請先選擇商品！")
             return@guardOnline
         }
 
@@ -395,11 +395,11 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     private fun confirmPurchase(totalAmount: Int) = requireContext().guardOnline {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
         if (userKey.isNullOrEmpty()) {
-            requireContext().toast("無法完成購買：用戶未登入！")
+            showToast("無法完成購買：用戶未登入！")
             return@guardOnline
         }
         if (currentUserPoints < totalAmount) {
-            requireContext().toast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
+            showToast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
             return@guardOnline
         }
 
@@ -434,14 +434,14 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     }
 
                     val successMessage = "購買成功！總計扣除 ${totalAmount}點。"
-                    requireContext().toast(successMessage)
+                    showToast(successMessage)
                     itemQuantities.clear()
                     displayShopItems()
                 } else {
                     when (msg) {
-                        "購物車為空" -> requireContext().toast("您的購物車是空的，請先選擇商品！")
-                        "點數不足"   -> requireContext().toast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
-                        else          -> requireContext().toast("購買失敗：${msg ?: "請稍後再試"}")
+                        "購物車為空" -> showToast("您的購物車是空的，請先選擇商品！")
+                        "點數不足"   -> showToast("您的點數不足，請先聯繫小編進行儲值，再進行購買。")
+                        else          -> showToast("購買失敗：${msg ?: "請稍後再試"}")
                     }
                 }
             }
@@ -491,4 +491,10 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     private fun Int.toPx(): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, this.toFloat(), resources.displayMetrics
     ).toInt()
+
+    private fun showToast(message: String) {
+        activity?.let {
+            ToastManager.show(it, message)
+        }
+    }
 }

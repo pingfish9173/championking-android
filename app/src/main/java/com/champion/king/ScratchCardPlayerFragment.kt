@@ -3,17 +3,13 @@ package com.champion.king
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.drawable.AnimationDrawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.Animation
 import android.widget.FrameLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
@@ -24,12 +20,7 @@ import android.app.AlertDialog
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import com.champion.king.util.ToastManager
 
 class ScratchCardPlayerFragment : Fragment() {
 
@@ -102,7 +93,9 @@ class ScratchCardPlayerFragment : Fragment() {
             if (relockTapCount >= 7) {
                 relockTapCount = 0
                 (activity as? MainActivity)?.relockFromPlayerGesture()
-                Toast.makeText(requireContext(), "已重新啟用鎖定模式", Toast.LENGTH_SHORT).show()
+                activity?.let {
+                    ToastManager.show(it, "已重新啟用鎖定模式")
+                }
             }
         }
         loadUserScratchCards()
@@ -200,7 +193,9 @@ class ScratchCardPlayerFragment : Fragment() {
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "載入刮刮卡資料失敗: ${error.message}", error.toException())
                     if (canSafelyUpdateUi()) {
-                        Toast.makeText(requireContext(), "載入刮刮卡資料失敗。", Toast.LENGTH_SHORT).show()
+                        activity?.let {
+                            ToastManager.show(it, "載入刮刮卡資料失敗。")
+                        }
                         displayNoScratchCardMessage("載入刮刮卡失敗，請稍後再試。")
                     }
                 }
@@ -253,7 +248,9 @@ class ScratchCardPlayerFragment : Fragment() {
 
         } catch (e: Exception) {
             Log.e(TAG, "載入版型失敗: ${e.message}", e)
-            Toast.makeText(requireContext(), "載入刮刮卡版型失敗。", Toast.LENGTH_SHORT).show()
+            activity?.let {
+                ToastManager.show(it, "載入刮刮卡版型失敗。")
+            }
             displayNoScratchCardMessage("載入刮刮卡版型時發生錯誤：${e.message}")
         }
     }
@@ -657,7 +654,9 @@ class ScratchCardPlayerFragment : Fragment() {
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "刮開格子 $cellNumber 失敗: ${e.message}", e)
-                                    Toast.makeText(requireContext(), "刮卡操作失敗", Toast.LENGTH_SHORT).show()
+                                    activity?.let {
+                                        ToastManager.show(it, "刮卡操作失敗")
+                                    }
                                     // 失敗時也要移除正在刮的標記
                                     scratchingCells.remove(cellNumber)
                                     updateCellDisplay(cellView, cellNumber, false, null)
@@ -669,7 +668,9 @@ class ScratchCardPlayerFragment : Fragment() {
 
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "讀取格子配置失敗: ${error.message}", error.toException())
-                    Toast.makeText(requireContext(), "刮卡操作失敗", Toast.LENGTH_SHORT).show()
+                    activity?.let {
+                        ToastManager.show(it, "刮卡操作失敗")
+                    }
                     // 失敗時也要移除正在刮的標記
                     scratchingCells.remove(cellNumber)
                     cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }

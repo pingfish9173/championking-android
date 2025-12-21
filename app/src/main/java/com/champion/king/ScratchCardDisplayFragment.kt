@@ -11,10 +11,10 @@ import com.champion.king.data.DbListenerHandle
 import com.champion.king.data.ScratchCardRepository
 import com.champion.king.databinding.FragmentScratchCardBinding
 import com.champion.king.model.ScratchCard
-import com.champion.king.util.toast
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.GridLayout
+import com.champion.king.util.ToastManager
 
 /**
  * 台主專用的刮刮卡顯示Fragment
@@ -89,7 +89,9 @@ class ScratchCardDisplayFragment : BaseBindingFragment<FragmentScratchCardBindin
             },
             onError = { msg ->
                 if (!isAdded || view == null) return@observeUserScratchCards
-                requireContext().toast("載入刮刮卡失敗：$msg")
+                activity?.let {
+                    ToastManager.show(it, "載入刮刮卡失敗：$msg")
+                }
                 displayMessage("載入失敗: $msg")
             }
         )

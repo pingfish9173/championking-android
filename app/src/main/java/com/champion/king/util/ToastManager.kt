@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -23,6 +24,8 @@ object ToastManager {
     // 不要強持有 Activity
     private var activityRef: WeakReference<Activity>? = null
 
+    private var hostWindowRef: WeakReference<Window>? = null
+
     fun show(
         context: Context,
         message: String,
@@ -36,7 +39,10 @@ object ToastManager {
         val myToken = ++token
 
         activity.runOnUiThread {
-            val decor = activity.window.decorView as ViewGroup
+            val decor = (
+                    hostWindowRef?.get()?.decorView
+                        ?: activity.window.decorView
+                    ) as ViewGroup
             val container = ensureContainer(decor)
             val tv = ensureTextView(container)
 
@@ -61,7 +67,10 @@ object ToastManager {
                 if (token != myToken) return@postDelayed
 
                 act.runOnUiThread {
-                    val d = act.window.decorView as? ViewGroup ?: return@runOnUiThread
+                    val d = (
+                            hostWindowRef?.get()?.decorView
+                                ?: act.window.decorView
+                            ) as? ViewGroup ?: return@runOnUiThread
                     val c = d.findViewWithTag<FrameLayout>(CONTAINER_TAG) ?: return@runOnUiThread
                     val t = c.findViewWithTag<TextView>(TEXT_TAG) ?: return@runOnUiThread
 
@@ -121,4 +130,12 @@ object ToastManager {
 
     private fun dp(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
+
+    fun setHostWindow(window: Window?) {
+        hostWindowRef = window?.let { WeakReference(it) }
+    }
+
+    fun clearHostWindow() {
+        hostWindowRef = null
+    }
 }

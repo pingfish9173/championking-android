@@ -16,7 +16,6 @@ import com.champion.king.databinding.FragmentUserEditBinding
 import com.champion.king.util.ValidationRules
 import com.champion.king.util.attachPasswordToggle
 import com.champion.king.util.setThrottledClick
-import com.champion.king.util.toast
 import com.google.firebase.database.FirebaseDatabase
 import androidx.lifecycle.lifecycleScope
 import com.champion.king.util.ApkDownloader
@@ -33,6 +32,7 @@ import org.json.JSONObject
 import java.io.IOException
 import com.google.firebase.auth.FirebaseAuth
 import android.widget.TextView
+import com.champion.king.util.ToastManager
 import com.champion.king.util.UpdateHistoryFormatter
 
 class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
@@ -118,7 +118,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
     private fun loadUserProfile() {
         val key = userSessionProvider?.getCurrentUserFirebaseKey()
         if (key.isNullOrEmpty()) {
-            requireContext().toast(AppConfig.Msg.REQUIRE_LOGIN_LOAD)
+            showToast(AppConfig.Msg.REQUIRE_LOGIN_LOAD)
             return
         }
 
@@ -164,7 +164,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                     return@addOnFailureListener
                 }
 
-                requireContext().toast(AppConfig.Msg.LOAD_FAIL_PREFIX + e.message)
+                showToast(AppConfig.Msg.LOAD_FAIL_PREFIX + e.message)
             }
     }
 
@@ -226,7 +226,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
     private fun performUnbindDevice() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid.isNullOrEmpty()) {
-            requireContext().toast("無法取得用戶資訊")
+            showToast("無法取得用戶資訊")
             return
         }
 
@@ -245,12 +245,12 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 loadingDialog.dismiss()
 
                 if (success) {
-                    requireContext().toast(message ?: "裝置綁定已解除")
+                    showToast(message ?: "裝置綁定已解除")
 
                     // 🔥🔥 不再跳出任何視窗，直接強制登出
                     performLogout()
                 } else {
-                    requireContext().toast(message ?: "解除綁定失敗")
+                    showToast(message ?: "解除綁定失敗")
                 }
             }
         )
@@ -260,9 +260,9 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
      * 執行登出
      */
     private fun performLogout() {
-        val activity = requireActivity() as? MainActivity ?: return
-        activity.performLogout()
+        (activity as? MainActivity)?.performLogout()
     }
+
 
 
     // ==================== 變更密碼功能 ====================
@@ -310,6 +310,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             .create()
 
         dialog.setOnShowListener {
+            ToastManager.setHostWindow(dialog.window)
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positiveButton.setOnClickListener {
                 val currentPassword = currentPasswordInput.text.toString().trim()
@@ -319,16 +320,16 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 // 驗證輸入
                 when {
                     currentPassword.isEmpty() -> {
-                        requireContext().toast("請輸入當前密碼")
+                        showToast("請輸入當前密碼")
                     }
                     newPassword.isEmpty() -> {
-                        requireContext().toast("請輸入新密碼")
+                        showToast("請輸入新密碼")
                     }
                     !ValidationRules.isValidPasswordLen(newPassword) -> {
-                        requireContext().toast(AppConfig.Msg.ERR_PASSWORD_LEN)
+                        showToast(AppConfig.Msg.ERR_PASSWORD_LEN)
                     }
                     newPassword != confirmPassword -> {
-                        requireContext().toast("新密碼與確認密碼不一致")
+                        showToast("新密碼與確認密碼不一致")
                     }
                     else -> {
                         // 驗證通過，執行密碼變更
@@ -342,6 +343,10 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             }
         }
 
+        dialog.setOnDismissListener {
+            ToastManager.clearHostWindow()
+        }
+
         dialog.show()
     }
 
@@ -353,7 +358,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         val account = binding.textAccount.text.toString()
 
         if (account.isEmpty()) {
-            requireContext().toast("無法取得帳號資訊")
+            showToast("無法取得帳號資訊")
             return
         }
 
@@ -362,11 +367,11 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             currentPassword = currentPassword.trim(),
             newPassword = newPassword.trim(),
             onSuccess = {
-                requireContext().toast("密碼變更成功")
+                showToast("密碼變更成功")
                 dialog.dismiss()
             },
             onError = { errorMsg ->
-                requireContext().toast(errorMsg)
+                showToast(errorMsg)
             }
         )
     }
@@ -400,7 +405,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
                 httpClient.newCall(request).enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
-                        requireActivity().runOnUiThread {
+                        activity?.runOnUiThread {
                             onError("網路錯誤：${e.message}")
                         }
                     }
@@ -408,7 +413,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                     override fun onResponse(call: Call, response: Response) {
                         response.use {
                             val responseBody = it.body?.string()
-                            requireActivity().runOnUiThread {
+                            activity?.runOnUiThread {
                                 if (it.isSuccessful) {
                                     onSuccess()
                                 } else {
@@ -425,7 +430,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                     }
                 })
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     onError("發生錯誤：${e.message}")
                 }
             }
@@ -473,14 +478,14 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         lifecycleScope.launch {
             try {
                 if (isManual) {
-                    requireContext().toast("正在檢查更新...")
+                    showToast("正在檢查更新...")
                 }
 
                 when (val result = updateManager.checkUpdate(isManual)) {
                     is UpdateResult.NoUpdate -> {
                         updateLastCheckTime()
                         if (isManual) {
-                            requireContext().toast("已是最新版本")
+                            showToast("已是最新版本")
                         }
                     }
 
@@ -492,13 +497,13 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                     is UpdateResult.Error -> {
                         updateLastCheckTime()
                         if (isManual) {
-                            requireContext().toast("檢查失敗：${result.message}")
+                            showToast("檢查失敗：${result.message}")
                         }
                     }
                 }
             } catch (e: Exception) {
                 if (isManual) {
-                    requireContext().toast("檢查更新時發生錯誤")
+                    showToast("檢查更新時發生錯誤")
                 }
             }
         }
@@ -546,7 +551,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             }
             builder.setNeutralButton("跳過此版本") { _, _ ->
                 updateManager.ignoreVersion(versionInfo.versionCode)
-                requireContext().toast("已跳過此版本")
+                showToast("已跳過此版本")
             }
             builder.setCancelable(true)
         } else {
@@ -575,22 +580,28 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         downloader.downloadApk(
             downloadUrl = downloadUrl,
             onProgress = { progress ->
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     progressDialog.progress = progress
                     progressDialog.setMessage("下載進度：$progress%")
                 }
             },
             onComplete = { success, message ->
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     progressDialog.dismiss()
 
                     if (success) {
-                        requireContext().toast("下載完成，準備安裝")
+                        showToast("下載完成，準備安裝")
                     } else {
-                        requireContext().toast(message)
+                        showToast(message)
                     }
                 }
             }
         )
+    }
+
+    private fun showToast(message: String) {
+        activity?.let {
+            ToastManager.show(it, message)
+        }
     }
 }

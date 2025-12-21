@@ -3,7 +3,6 @@ package com.champion.king.ui.settings
 import android.app.AlertDialog
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import com.champion.king.SettingsViewModel
 import com.champion.king.model.NumberConfiguration
 import com.champion.king.model.ScratchCard
@@ -11,7 +10,8 @@ import com.champion.king.model.ScratchCard
 class SettingsActionHandler(
     private val viewModel: SettingsViewModel,
     private val context: Context,
-    private val switchThreshold: Double = DEFAULT_SWITCH_THRESHOLD
+    private val switchThreshold: Double = DEFAULT_SWITCH_THRESHOLD,
+    private val showToast: (String) -> Unit
 ) {
 
     companion object {
@@ -445,9 +445,7 @@ class SettingsActionHandler(
             .show()
     }
 
-    private fun showToast(message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-    }
+    private fun showToast(message: String) = showToast.invoke(message)
 
     // 內部數據類別
     private enum class SwitchResult {

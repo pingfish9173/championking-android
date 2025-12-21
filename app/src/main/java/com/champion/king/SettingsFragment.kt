@@ -31,6 +31,7 @@ import com.google.firebase.database.*
 import kotlinx.coroutines.launch
 import android.text.SpannableStringBuilder
 import android.text.method.ScrollingMovementMethod
+import com.champion.king.util.ToastManager
 
 class SettingsFragment : Fragment() {
 
@@ -183,14 +184,26 @@ class SettingsFragment : Fragment() {
 
     private fun initializeComponents() {
         shelfManager = ShelfManager(binding, viewModel)
-        uiManager = SettingsUIManager(binding, requireContext(), childFragmentManager)
+        uiManager =  SettingsUIManager(
+            binding = binding,
+            context = requireContext(),
+            childFragmentManager = childFragmentManager
+        ) { message ->
+            activity?.let {
+                ToastManager.show(it, message)
+            }
+        }
 
         // 使用配置的閾值創建 ActionHandler
         actionHandler = SettingsActionHandler(
             viewModel,
             requireContext(),
             SCRATCH_SWITCH_THRESHOLD
-        )
+        ) { message ->
+            activity?.let {
+                ToastManager.show(it, message)
+            }
+        }
     }
 
     private fun setupListenersAndObservers() {
@@ -1918,7 +1931,9 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showToast(message: String) {
-        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+        activity?.let {
+            ToastManager.show(it, message)
+        }
     }
 
     private fun getScratchDimensions(scratchType: Int): String {
