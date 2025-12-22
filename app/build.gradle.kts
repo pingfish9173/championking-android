@@ -104,10 +104,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
 
     // App Check：Play Integrity（正式使用）
-    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    //implementation("com.google.firebase:firebase-appcheck-playintegrity")
 
     // App Check：Debug Provider（僅 debug 版用；用於模擬器/開發機）
-    debugImplementation("com.google.firebase:firebase-appcheck-debug")
+    //debugImplementation("com.google.firebase:firebase-appcheck-debug")
 
     // ========== 新增：網路相關套件 ==========
     // Retrofit - HTTP Client
