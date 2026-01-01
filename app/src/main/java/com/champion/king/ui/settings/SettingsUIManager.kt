@@ -266,6 +266,18 @@ class SettingsUIManager(
         val hintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_prize_hint)
         hintText.text = hint
 
+        // ✅ 沒有逗點鍵時，避免顯示「, 分隔」的提示造成誤導
+        if (!allowComma) {
+            val h = hintText.text?.toString().orEmpty()
+            if (h.contains(",") || h.contains("分隔")) {
+                hintText.visibility = View.GONE
+            } else {
+                hintText.visibility = View.VISIBLE
+            }
+        } else {
+            hintText.visibility = View.VISIBLE
+        }
+
         // 禁用系統鍵盤
         dialogEditText.showSoftInputOnFocus = false
 

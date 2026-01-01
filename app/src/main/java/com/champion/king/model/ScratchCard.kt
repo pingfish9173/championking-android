@@ -10,5 +10,6 @@ data class ScratchCard(
     var grandPrize: String? = null, // 大獎
     var inUsed: Boolean = false, // 刮刮卡是否為玩家頁面正在刮的板
     var clawsCount: Int? = null, // 新增：夾出數量
-    var giveawayCount: Int? = null // 新增：贈送刮數
+    var giveawayCount: Int? = null, // 新增：贈送刮數
+    var pitchType: String = "scratch", // 新增：規則類型（scratch=夾出贈送, shopping=消費贈送）
 )

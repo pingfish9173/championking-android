@@ -57,6 +57,10 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
         clawsCount: Int?,
         giveawayCount: Int?,
         numberConfigurations: List<NumberConfiguration>,
+
+        // ✅ 新增（放最後、給預設值，降低其他呼叫點風險）
+        pitchType: String = "scratch",
+
         existingSerial: String? = null,
         keepInUsed: Boolean = false
     ) {
@@ -69,6 +73,7 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
             specialPrize = specialPrize,
             grandPrize = grandPrize,
             inUsed = keepInUsed,
+            pitchType = pitchType,          // ✅ 存進 Firebase
             clawsCount = clawsCount,
             giveawayCount = giveawayCount
         )

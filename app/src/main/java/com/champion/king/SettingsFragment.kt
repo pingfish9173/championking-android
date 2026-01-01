@@ -695,7 +695,6 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     /** 顯示未設置狀態的預覽與按鈕狀態 **/
-    /** 顯示未設置狀態的預覽與按鈕狀態 **/
     private fun showUnsetShelfState() {
         val order = shelfManager.selectedShelfOrder
         val draft = viewModel.getDraft(order)
@@ -714,11 +713,31 @@ class SettingsFragment : Fragment() {
             displayScratchBoardPreview(draft.scratchType, draft.numberConfigurations)
             setPrizeControlsEnabled(true)
 
-            // 還原文字/選項
+            // 還原文字
             binding.editTextSpecialPrize.setText(draft.specialPrize.orEmpty())
             binding.editTextGrandPrize.setText(draft.grandPrize.orEmpty())
-            setSpinnerSelection(binding.spinnerClawsCount, draft.claws)
-            setSpinnerSelection(binding.spinnerGiveawayCount, draft.giveaway)
+
+            // ✅ 還原規則 UI（scratch / shopping）
+            val isShopping = (draft.pitchType == "shopping")
+            if (isShopping) {
+                binding.radioPitchShopping.isChecked = true
+                applyPitchTypeUi(isShopping = true, syncValues = false)
+
+                // shopping：claws 當「消費門檻（元）」
+                val spend = draft.claws ?: 0
+                binding.editClawsCount.setText(spend.toString())
+            } else {
+                binding.radioPitchScratch.isChecked = true
+                applyPitchTypeUi(isShopping = false, syncValues = false)
+
+                // scratch：claws 當「夾出門檻（1~5）」
+                val catchCount = (draft.claws ?: 1).coerceIn(1, 5)
+                setSpinnerSelection(binding.spinnerClawsCount, catchCount)
+            }
+
+            // ✅ giveaway 永遠是 spinner（1~5）
+            val give = (draft.giveaway ?: 1).coerceIn(1, 5)
+            setSpinnerSelection(binding.spinnerGiveawayCount, give)
 
             // 預覽同步顯示選取（特獎/大獎）
             currentPreviewFragment?.setSelectedNumber(draft.specialPrize?.toIntOrNull())
@@ -732,6 +751,10 @@ class SettingsFragment : Fragment() {
             clearTextFieldsOnly()
             clearSpinnerSelection()
             setPrizeControlsEnabled(false)
+
+            // ✅ 同時把規則 UI 回到預設（避免上一個板位的 shopping 狀態殘留）
+            binding.radioPitchScratch.isChecked = true
+            applyPitchTypeUi(isShopping = false, syncValues = false)
         }
 
         setButtonsEnabled(save = true, toggleInUse = false, autoScratch = false, returnBtn = false, delete = false)
@@ -821,6 +844,19 @@ class SettingsFragment : Fragment() {
     }
 
     private fun extractSaveData(scratchType: Int): SaveData {
+        val isShopping = binding.radioPitchShopping.isChecked
+        val pitchType = if (isShopping) "shopping" else "scratch"
+
+        // ✅ claws 的來源依模式決定：
+        // - scratch：spinner 1~5
+        // - shopping：editClawsCount（0以上整數，空視為0）
+        val clawsValue: Int? = if (isShopping) {
+            val t = binding.editClawsCount.text?.toString()?.trim().orEmpty()
+            if (t.isEmpty()) 0 else t.toIntOrNull()  // 若不是數字，先回 null，後面存檔前可再擋
+        } else {
+            binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull()
+        }
+
         return SaveData(
             order = shelfManager.selectedShelfOrder,
             scratchType = scratchType,
@@ -828,7 +864,10 @@ class SettingsFragment : Fragment() {
                 ?.takeIf { it.isNotEmpty() },
             grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()
                 ?.takeIf { it.isNotEmpty() },
-            claws = binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull(),
+
+            pitchType = pitchType,
+            claws = clawsValue,
+
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
             numberConfigurations = currentPreviewFragment?.getGeneratedNumberConfigurations(),
             currentCards = viewModel.cards.value
@@ -840,6 +879,9 @@ class SettingsFragment : Fragment() {
         val scratchType: Int,
         val specialPrize: String?,
         val grandPrize: String?,
+
+        val pitchType: String,   // ✅ 新增
+
         val claws: Int?,
         val giveaway: Int?,
         val numberConfigurations: List<NumberConfiguration>?,
@@ -933,7 +975,8 @@ class SettingsFragment : Fragment() {
             giveawayCount = data.giveaway,
             numberConfigurations = data.numberConfigurations!!,
             existingSerial = existingCard?.serialNumber,
-            keepInUsed = existingCard?.inUsed ?: false
+            keepInUsed = existingCard?.inUsed ?: false,
+            pitchType = data.pitchType // ✅ 新增
         )
     }
 
@@ -1021,8 +1064,9 @@ class SettingsFragment : Fragment() {
             binding.editTextSpecialPrize.setText(card.specialPrize ?: "")
             binding.editTextGrandPrize.setText(card.grandPrize ?: "")
 
-            setSpinnerSelection(binding.spinnerClawsCount, card.clawsCount)
-            setSpinnerSelection(binding.spinnerGiveawayCount, card.giveawayCount)
+            // ✅ 關鍵：由 pitchType 決定 claws 門檻要套到 spinner 還是 editText
+            // ✅ giveaway 永遠套到 spinner
+            applySavedPitchRule(card)
 
             displayScratchBoardPreview(card.scratchesType, card.numberConfigurations)
 
@@ -2067,13 +2111,28 @@ class SettingsFragment : Fragment() {
         val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
         val scratchType = selectedItem?.getScratchType()
 
+        // ✅ 草稿也要記住目前規則
+        val isShopping = binding.radioPitchShopping.isChecked
+        val pitchType = if (isShopping) "shopping" else "scratch"
+
+        // ✅ claws 的來源依模式決定：
+        // - scratch：spinner 1~5
+        // - shopping：editClawsCount（0以上整數，空視為0）
+        val clawsValue: Int? = if (isShopping) {
+            val t = binding.editClawsCount.text?.toString()?.trim().orEmpty()
+            if (t.isEmpty()) 0 else t.toIntOrNull()
+        } else {
+            binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull()
+        }
+
         val draft = SettingsViewModel.SettingsDraft(
             scratchType = scratchType,
             specialPrize = binding.editTextSpecialPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
             grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
-            claws = binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull(),
+            claws = clawsValue,
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
-            numberConfigurations = configs
+            numberConfigurations = configs,
+            pitchType = pitchType
         )
 
         viewModel.saveDraft(order, draft)
@@ -2137,6 +2196,36 @@ class SettingsFragment : Fragment() {
                 setSpinnerSelection(binding.spinnerClawsCount, claws.coerceIn(1, 5))
             }
         }
+    }
+
+    private fun applySavedPitchRule(card: ScratchCard?) {
+        // 沒卡片/沒資料：維持預設（夾出贈送 + spinner）
+        if (card == null) {
+            binding.radioPitchScratch.isChecked = true
+            applyPitchTypeUi(isShopping = false, syncValues = false)
+            return
+        }
+
+        val isShopping = (card.pitchType == "shopping")
+        if (isShopping) {
+            binding.radioPitchShopping.isChecked = true
+            applyPitchTypeUi(isShopping = true, syncValues = false)
+
+            // clawsCount 在 shopping 模式代表「消費門檻（元）」
+            val v = card.clawsCount ?: 0
+            binding.editClawsCount.setText(v.toString())
+        } else {
+            binding.radioPitchScratch.isChecked = true
+            applyPitchTypeUi(isShopping = false, syncValues = false)
+
+            // clawsCount 在 scratch 模式代表「夾出門檻（1-5）」
+            val v = (card.clawsCount ?: 1).coerceIn(1, 5)
+            setSpinnerSelection(binding.spinnerClawsCount, v)
+        }
+
+        // giveaway 永遠是 spinner（1-5）
+        val give = (card.giveawayCount ?: 1).coerceIn(1, 5)
+        setSpinnerSelection(binding.spinnerGiveawayCount, give)
     }
 
 }

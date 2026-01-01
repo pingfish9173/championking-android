@@ -34,18 +34,18 @@ class SettingsViewModel(
     }
 
     // ==============================
-    // ✅ 設置頁「草稿」：每個板位各自保存
+    // ✅ 設置頁「草稿」：每個板位各自保存（全域 DraftStore，登出可直接清除）
     // ==============================
-    // ==============================
-// ✅ 設置頁「草稿」：每個板位各自保存（全域 DraftStore，登出可直接清除）
-// ==============================
     data class SettingsDraft(
-        val scratchType: Int? = null,
-        val specialPrize: String? = null,
-        val grandPrize: String? = null,
-        val claws: Int? = null,
-        val giveaway: Int? = null,
-        val numberConfigurations: List<NumberConfiguration>? = null
+        val scratchType: Int?,
+        val specialPrize: String?,
+        val grandPrize: String?,
+        val claws: Int?,
+        val giveaway: Int?,
+        val numberConfigurations: List<NumberConfiguration>?,
+
+        // ✅ 新增：草稿記住規則類型（scratch / shopping）
+        val pitchType: String = "scratch"
     )
 
     companion object DraftStore {
@@ -117,13 +117,17 @@ class SettingsViewModel(
         giveawayCount: Int?,
         numberConfigurations: List<NumberConfiguration>,
         existingSerial: String?,
-        keepInUsed: Boolean
+        keepInUsed: Boolean,
+
+        // ✅ 新增（放最後、給預設值）
+        pitchType: String = "scratch"
     ) {
         viewModelScope.launch {
             try {
                 repo.upsertScratchCard(
                     userKey, order, scratchesType, specialPrize, grandPrize,
                     clawsCount, giveawayCount, numberConfigurations,
+                    pitchType,                    // ✅ 這個位置要對上 repo 的 pitchType 參數
                     existingSerial, keepInUsed
                 )
                 _events.emit(UiEvent.Toast(if (existingSerial == null) "刮刮卡設定已新增！" else "${order}號板設定已更新！"))
