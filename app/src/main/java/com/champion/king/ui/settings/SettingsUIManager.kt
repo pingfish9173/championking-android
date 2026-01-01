@@ -262,21 +262,14 @@ class SettingsUIManager(
         dialogEditText.setText(currentValue ?: "")
         dialogEditText.setSelection(dialogEditText.text.length)
 
-        // ⭐ 提示文字
-        val hintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_prize_hint)
-        hintText.text = hint
+        // ⭐ 上方提示文字
+        val topHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_top_hint)
+        topHintText.text = hint
 
-        // ✅ 沒有逗點鍵時，避免顯示「, 分隔」的提示造成誤導
-        if (!allowComma) {
-            val h = hintText.text?.toString().orEmpty()
-            if (h.contains(",") || h.contains("分隔")) {
-                hintText.visibility = View.GONE
-            } else {
-                hintText.visibility = View.VISIBLE
-            }
-        } else {
-            hintText.visibility = View.VISIBLE
-        }
+        // ✅ 有逗點鍵 -> 才顯示提示（例如大獎可用逗點分隔）
+        // ⭐ 下方提示文字
+        var bottomHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_bottom_hint)
+        bottomHintText.visibility = if (allowComma) View.VISIBLE else View.GONE
 
         // 禁用系統鍵盤
         dialogEditText.showSoftInputOnFocus = false

@@ -6,7 +6,7 @@
     android:padding="16dp">
 
     <TextView
-        android:id="@+id/dialog_prize_hint"
+        android:id="@+id/dialog_number_top_hint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="提示文字"
@@ -177,6 +177,7 @@
 
     <!-- 說明文字 -->
     <TextView
+        android:id="@+id/dialog_number_bottom_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
