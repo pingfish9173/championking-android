@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     specialPrizeTextViewPlayer?.let {
                         updatePrizeInfo(it, grandPrizeTextViewPlayer ?: it, null, null)
                     }
-                    updateClawsGiveawayInfo(0, 0, giveawayCountTextViewPlayer)
+                    updateClawsGiveawayInfo("scratch",0, 0, giveawayCountTextViewPlayer)
                 }
                 // 切玩家頁面即載入顯示頁
                 loadFragment(ScratchCardPlayerFragment(), containerIdFor(Mode.PLAYER))
@@ -753,29 +753,38 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 override fun onDataChange(snapshot: DataSnapshot) {
                     var totalClaws = 0
                     var totalGiveaway = 0
+                    var pitchType = "scratch"
                     for (child in snapshot.children) {
                         val card = child.getValue(ScratchCard::class.java)
                         if (card != null && card.inUsed) {
                             totalClaws += card.clawsCount ?: 0
                             totalGiveaway += card.giveawayCount ?: 0
+                            pitchType = card.pitchType ?: "scratch"
                         }
                     }
-                    updateClawsGiveawayInfo(totalClaws, totalGiveaway, targetTextView)
+                    updateClawsGiveawayInfo(pitchType,totalClaws, totalGiveaway, targetTextView)
                 }
 
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "載入夾出/贈送刮數失敗: ${error.message}", error.toException())
-                    updateClawsGiveawayInfo(0, 0, targetTextView)
+                    updateClawsGiveawayInfo("scratch",0, 0, targetTextView)
                 }
             })
     }
 
     private fun updateClawsGiveawayInfo(
+        pitchType: String?,
         clawsCount: Int,
         giveawayCount: Int,
         targetTextView: TextView?
     ) {
-        targetTextView?.text = "夾出${clawsCount}樣\n贈送${giveawayCount}刮"
+        val isShopping = (pitchType == "shopping")
+
+        targetTextView?.text = if (isShopping) {
+            "消費${clawsCount}元\n贈送${giveawayCount}刮"
+        } else {
+            "夾出${clawsCount}樣\n贈送${giveawayCount}刮"
+        }
     }
 
     override fun setCurrentlyInUseScratchCard(
