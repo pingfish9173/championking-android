@@ -931,6 +931,9 @@ class SettingsFragment : Fragment() {
                         // ★ 手動觸發 UI 更新
                         val updatedCard = viewModel.cards.value[data.order]
                         if (updatedCard != null) {
+                            // ✅ 儲存成功（已經變成正式資料）→ 清掉該板位草稿
+                            viewModel.clearDraft(data.order)
+
                             Log.d("SettingsFragment", "儲存完成，手動更新 UI")
                             showSetShelfState(updatedCard)
                         } else {
@@ -955,6 +958,9 @@ class SettingsFragment : Fragment() {
                 // ★ 手動觸發 UI 更新
                 val updatedCard = viewModel.cards.value[data.order]
                 if (updatedCard != null) {
+                    // ✅ 儲存成功（正式資料已存在）→ 也清掉草稿（保險）
+                    viewModel.clearDraft(data.order)
+
                     Log.d("SettingsFragment", "儲存完成，手動更新 UI")
                     showSetShelfState(updatedCard)
                 } else {
@@ -989,7 +995,12 @@ class SettingsFragment : Fragment() {
     }
 
     private fun handleDeleteClick() {
-        actionHandler.handleDelete(shelfManager.selectedShelfOrder, viewModel.cards.value)
+        val order = shelfManager.selectedShelfOrder
+
+        // ✅ 刪除前先清掉草稿（保險：避免 UI 還原草稿造成誤判）
+        viewModel.clearDraft(order)
+
+        actionHandler.handleDelete(order, viewModel.cards.value)
     }
 
     /** 🔄 刮數重新整理按鈕邏輯 **/
@@ -2169,6 +2180,11 @@ class SettingsFragment : Fragment() {
     }
 
     private fun applyPitchTypeUi(isShopping: Boolean, syncValues: Boolean = true) {
+
+        // ✅ 文字切換：夾出/樣 ↔ 消費/元
+        binding.textClawsPrefix.text = if (isShopping) "消費" else "夾出"
+        binding.textClawsUnit.text = if (isShopping) "元" else "樣"
+
         if (isShopping) {
             // shopping：只切換「觸發門檻」(claws)
             binding.spinnerClawsCount.visibility = View.GONE
