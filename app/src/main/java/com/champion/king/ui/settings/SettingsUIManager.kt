@@ -164,7 +164,7 @@ class SettingsUIManager(
         binding.buttonDeleteSelected.isEnabled = hasData && notInUse
     }
 
-    // ✅ 新增：顯示特獎數字鍵盤對話框
+    // ✅ 顯示特獎數字鍵盤對話框（單一數字，不允許逗號）
     fun showSpecialPrizeKeyboard(
         currentValue: String?,
         currentScratchType: Int,
@@ -173,33 +173,69 @@ class SettingsUIManager(
         showPrizeKeyboard(
             title = "輸入特獎數字",
             currentValue = currentValue,
-            currentScratchType = currentScratchType,
-            isSpecialPrize = true,
+            hint = "${currentScratchType}刮｜特獎只能設定 1 個",
+            allowComma = false,
+            validator = { input ->
+                validatePrizeInput(input, currentScratchType, isSpecialPrize = true)
+            },
             onConfirm = onConfirm
         )
     }
 
-    // ✅ 新增：顯示大獎數字鍵盤對話框
+
+    // ✅ 顯示大獎數字鍵盤對話框（可多個，允許逗號）
     fun showGrandPrizeKeyboard(
         currentValue: String?,
         currentScratchType: Int,
         onConfirm: (String) -> Unit
     ) {
+        val grandLimit = GRAND_LIMITS[currentScratchType] ?: 20
         showPrizeKeyboard(
             title = "輸入大獎數字",
             currentValue = currentValue,
-            currentScratchType = currentScratchType,
-            isSpecialPrize = false,
+            hint = "${currentScratchType}刮｜大獎最多可設定 ${grandLimit} 個",
+            allowComma = true,
+            validator = { input ->
+                validatePrizeInput(input, currentScratchType, isSpecialPrize = false)
+            },
             onConfirm = onConfirm
         )
     }
 
-    // ✅ 新增：通用的獎項數字鍵盤對話框
+    // ✅ 新增：消費門檻（元）鍵盤：只允許 0 或正整數；不允許逗號
+    fun showShoppingThresholdKeyboard(
+        currentValue: String?,
+        onConfirm: (Int) -> Unit
+    ) {
+        showPrizeKeyboard(
+            title = "輸入消費金額（元）",
+            currentValue = currentValue,
+            hint = "請輸入整數元（0以上）",
+            allowComma = false,
+            validator = { input ->
+                val t = input.trim()
+                val v = if (t.isEmpty()) 0 else t.toIntOrNull()
+                if (v == null || v < 0) {
+                    ValidationResult(false, "請輸入 0 或正整數")
+                } else {
+                    ValidationResult(true, "")
+                }
+            },
+            onConfirm = { raw ->
+                val t = raw.trim()
+                val v = if (t.isEmpty()) 0 else t.toIntOrNull() ?: 0
+                onConfirm(v)
+            }
+        )
+    }
+
+    // ✅ 通用的數字鍵盤對話框（可注入 hint / validator / 是否允許逗號）
     private fun showPrizeKeyboard(
         title: String,
         currentValue: String?,
-        currentScratchType: Int,
-        isSpecialPrize: Boolean,
+        hint: String,
+        allowComma: Boolean,
+        validator: (String) -> ValidationResult,
         onConfirm: (String) -> Unit
     ) {
         val dialogView = LayoutInflater.from(context)
@@ -226,50 +262,40 @@ class SettingsUIManager(
         dialogEditText.setText(currentValue ?: "")
         dialogEditText.setSelection(dialogEditText.text.length)
 
-        // ⭐ 新增提示文字設定
+        // ⭐ 提示文字
         val hintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_prize_hint)
-        val scratchesCount = currentScratchType
-        val grandLimit = GRAND_LIMITS[scratchesCount] ?: 20
-        if (isSpecialPrize) {
-            hintText.text = "${scratchesCount}刮｜特獎只能設定 1 個"
-        } else {
-            hintText.text = "${scratchesCount}刮｜大獎最多可設定 ${grandLimit} 個"
-        }
+        hintText.text = hint
 
         // 禁用系統鍵盤
         dialogEditText.showSoftInputOnFocus = false
 
+        // ✅ 交換：逗點鍵的位置改成「清除」；清除鍵的位置改成「逗點」
+        btnComma.text = "清除"
+        btnClear.text = ","
+
+        // 逗點是否允許：不允許時就把「清除原位置(現在是逗點鍵)」隱藏，避免怪空格出現在逗點鍵位置
+        btnClear.visibility = if (allowComma) View.VISIBLE else View.GONE
+
         val dialog = AlertDialog.Builder(context)
             .setTitle(title)
             .setView(dialogView)
-            .setPositiveButton("確定", null)  // ✅ 先設為 null，稍後手動設置
+            .setPositiveButton("確定", null) // 先設 null，onShow 再綁 click（才能控制不關閉）
             .setNegativeButton("取消", null)
             .create()
 
-        // ✅ 關鍵：在對話框顯示後手動設置「確定」按鈕的點擊事件
-        // 這樣可以控制是否關閉對話框
         dialog.setOnShowListener {
             ToastManager.setHostWindow(dialog.window)
+
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positiveButton.setOnClickListener {
                 val inputValue = dialogEditText.text.toString().trim()
+                val result = validator(inputValue)
 
-                // 驗證輸入
-                val validationResult = validatePrizeInput(
-                    inputValue,
-                    currentScratchType,
-                    isSpecialPrize
-                )
-
-                if (validationResult.isValid) {
-                    // ✅ 驗證通過：執行回調並關閉對話框
+                if (result.isValid) {
                     onConfirm(inputValue)
                     dialog.dismiss()
                 } else {
-                    // ✅ 驗證失敗：顯示錯誤訊息但不關閉對話框
-                    showToast(validationResult.errorMessage)
-                    // 不調用 dialog.dismiss()，對話框保持開啟
-                    // 輸入內容也不會被清空，用戶可以繼續修改
+                    showToast(result.errorMessage)
                 }
             }
         }
@@ -278,18 +304,16 @@ class SettingsUIManager(
             ToastManager.clearHostWindow()
         }
 
-        // 數字按鈕點擊事件：依游標位置插入數字（若有選取則取代選取範圍）
+        // --- 下面「數字按鈕插入」的邏輯：保留你原本那套（不要動） ---
         val numberClickListener = View.OnClickListener { view ->
             val button = view as Button
             val number = button.text.toString()
 
-            val editable = dialogEditText.text
-            if (editable == null) return@OnClickListener
+            val editable = dialogEditText.text ?: return@OnClickListener
 
             var start = dialogEditText.selectionStart
             var end = dialogEditText.selectionEnd
 
-            // 若游標位置不合法，退回到「加在最後面」的行為
             if (start == -1 || end == -1) {
                 editable.append(number)
                 dialogEditText.setSelection(editable.length)
@@ -297,132 +321,58 @@ class SettingsUIManager(
             }
 
             if (start != end) {
-                // 有選取範圍：直接用數字取代選取區間
                 editable.replace(start, end, number)
-                val newPos = (start + number.length).coerceAtMost(editable.length)
-                dialogEditText.setSelection(newPos)
+                start += number.length
             } else {
-                // 沒選取：在游標位置插入數字
                 editable.insert(start, number)
-                val newPos = (start + number.length).coerceAtMost(editable.length)
-                dialogEditText.setSelection(newPos)
+                start += number.length
             }
+            dialogEditText.setSelection(start)
         }
 
-        btn0.setOnClickListener(numberClickListener)
-        btn1.setOnClickListener(numberClickListener)
-        btn2.setOnClickListener(numberClickListener)
-        btn3.setOnClickListener(numberClickListener)
-        btn4.setOnClickListener(numberClickListener)
-        btn5.setOnClickListener(numberClickListener)
-        btn6.setOnClickListener(numberClickListener)
-        btn7.setOnClickListener(numberClickListener)
-        btn8.setOnClickListener(numberClickListener)
-        btn9.setOnClickListener(numberClickListener)
+        listOf(btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9).forEach {
+            it.setOnClickListener(numberClickListener)
+        }
 
-        // 逗號按鈕：依游標位置插入 ","（若有選取則覆蓋選取區）
-// ⭐ 已加入：大獎最大數量限制檢查（依目前刮數）
+        // ✅ 清除按鈕（放到逗點鍵的位置）
         btnComma.setOnClickListener {
-
-            if (isSpecialPrize) {
-                showToast("特獎只能輸入一個數字")
-                return@setOnClickListener
-            }
-
-            val editable = dialogEditText.text
-            if (editable == null) return@setOnClickListener
-
-            // 取得目前已輸入的大獎（過濾掉空白與非法 token）
-            val currentTokens = editable.toString()
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-
-            // ⭐ 大獎數量上限（依目前刮數類型）
-            val grandLimit = GRAND_LIMITS[currentScratchType] ?: 20
-
-            // 若已達上限 → 阻擋逗號輸入
-            if (currentTokens.size >= grandLimit) {
-                showToast("大獎最多只能設定 $grandLimit 個")
-                return@setOnClickListener
-            }
-
-            var start = dialogEditText.selectionStart
-            var end = dialogEditText.selectionEnd
-
-            // 若游標位置錯誤 → 加在最後（安全 fallback）
-            if (start == -1 || end == -1) {
-                if (editable.isNotEmpty() && !editable.endsWith(",")) {
-                    editable.append(",")
-                    dialogEditText.setSelection(editable.length)
-                }
-                return@setOnClickListener
-            }
-
-            // 不允許開頭輸入逗號
-            if (start == 0) {
-                showToast("逗號不能放在開頭")
-                return@setOnClickListener
-            }
-
-            // 不允許連續逗號
-            if (start > 0 && editable[start - 1] == ',') {
-                showToast("不能連續輸入逗號")
-                return@setOnClickListener
-            }
-
-            if (start != end) {
-                // ✔ 覆蓋選取範圍
-                editable.replace(start, end, ",")
-                val newPos = (start + 1).coerceAtMost(editable.length)
-                dialogEditText.setSelection(newPos)
-
-            } else {
-                // ✔ 在游標位置插入逗號
-                editable.insert(start, ",")
-                val newPos = (start + 1).coerceAtMost(editable.length)
-                dialogEditText.setSelection(newPos)
-            }
-        }
-
-
-        // 清除按鈕
-        btnClear.setOnClickListener {
             dialogEditText.setText("")
+            dialogEditText.setSelection(0)
         }
 
-        // 退格按鈕：從「游標位置」退格，而不是永遠從最後一個字
         btnDelete.setOnClickListener {
-            val editable = dialogEditText.text
-            if (editable.isNullOrEmpty()) return@setOnClickListener
-
+            val editable = dialogEditText.text ?: return@setOnClickListener
             val start = dialogEditText.selectionStart
             val end = dialogEditText.selectionEnd
-
-            if (start == -1 || end == -1) {
-                // 沒有有效游標位置，就沿用舊行為：從最後一個字刪
-                editable.delete(editable.length - 1, editable.length)
-                dialogEditText.setSelection(editable.length)
-                return@setOnClickListener
-            }
+            if (start == -1 || end == -1) return@setOnClickListener
 
             if (start != end) {
-                // ✂ 若有選取一段範圍，直接刪掉選取區間
                 editable.delete(start, end)
-                dialogEditText.setSelection(start.coerceAtMost(editable.length))
+                dialogEditText.setSelection(start)
             } else if (start > 0) {
-                // ✂ 沒有選取，只在中間 -> 刪除「游標前一個字」
                 editable.delete(start - 1, start)
-                dialogEditText.setSelection((start - 1).coerceAtMost(editable.length))
+                dialogEditText.setSelection(start - 1)
+            }
+        }
+
+        btnClear.setOnClickListener {
+            if (!allowComma) return@setOnClickListener
+            val editable = dialogEditText.text ?: return@setOnClickListener
+            val start = dialogEditText.selectionStart
+            val end = dialogEditText.selectionEnd
+            if (start == -1 || end == -1) return@setOnClickListener
+
+            val insert = ","
+            if (start != end) {
+                editable.replace(start, end, insert)
+                dialogEditText.setSelection(start + insert.length)
+            } else {
+                editable.insert(start, insert)
+                dialogEditText.setSelection(start + insert.length)
             }
         }
 
         dialog.show()
-
-        // 點擊 EditText 時也禁用系統鍵盤
-        dialogEditText.setOnClickListener {
-            // 不做任何事,阻止系統鍵盤彈出
-        }
     }
 
     // ✅ 新增：驗證獎項輸入

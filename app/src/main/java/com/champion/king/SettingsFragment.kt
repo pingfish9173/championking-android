@@ -135,6 +135,12 @@ class SettingsFragment : Fragment() {
 
         // 設置初始選中的版位
         setupInitialShelfSelection()
+
+        binding.radioGroupPitchType.setOnCheckedChangeListener { _, checkedId ->
+            applyPitchTypeUi(isShopping = (checkedId == R.id.radioPitchShopping), syncValues = true)
+        }
+        applyPitchTypeUi(isShopping = binding.radioPitchShopping.isChecked, syncValues = false)
+
     }
 
     // 新增：追蹤是否已完成初始化
@@ -264,6 +270,18 @@ class SettingsFragment : Fragment() {
         binding.buttonDeleteSelected.setOnClickListener { handleDeleteClick() }
         binding.buttonRefreshScratch.setOnClickListener { handleRefreshScratchClick() }
         binding.buttonAutoScratch.setOnClickListener { handleAutoScratchClick() }
+
+        // ✅ 新增：消費贈送模式下，點「消費X元」input → 跳客製化數字鍵盤
+        binding.editClawsCount.setOnClickListener {
+            // 保險：只在 shopping 模式響應
+            if (!binding.radioPitchShopping.isChecked) return@setOnClickListener
+
+            uiManager.showShoppingThresholdKeyboard(
+                currentValue = binding.editClawsCount.text?.toString()
+            ) { value ->
+                binding.editClawsCount.setText(value.toString())
+            }
+        }
 
         // 新增：「特獎」按鈕 → 進入/退出 單選挑選模式
         binding.buttonPickSpecialPrize.setOnClickListener {
@@ -2090,4 +2108,35 @@ class SettingsFragment : Fragment() {
             isUpdatingSpinner = false
         }
     }
+
+    private fun applyPitchTypeUi(isShopping: Boolean, syncValues: Boolean = true) {
+        if (isShopping) {
+            // shopping：只切換「觸發門檻」(claws)
+            binding.spinnerClawsCount.visibility = View.GONE
+            binding.editClawsCount.visibility = View.VISIBLE
+
+            // 贈送永遠用 spinner（不切換）
+            binding.spinnerGiveawayCount.visibility = View.VISIBLE
+
+            if (syncValues) {
+                // spinner -> input（只同步 claws）
+                val claws = binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull() ?: 1
+                binding.editClawsCount.setText(claws.toString())
+            }
+        } else {
+            // scratch：只切換「觸發門檻」(claws)
+            binding.spinnerClawsCount.visibility = View.VISIBLE
+            binding.editClawsCount.visibility = View.GONE
+
+            // 贈送永遠用 spinner（不切換）
+            binding.spinnerGiveawayCount.visibility = View.VISIBLE
+
+            if (syncValues) {
+                // input -> spinner（spinner 只有 1-5，所以壓回 1..5）
+                val claws = binding.editClawsCount.text?.toString()?.toIntOrNull() ?: 1
+                setSpinnerSelection(binding.spinnerClawsCount, claws.coerceIn(1, 5))
+            }
+        }
+    }
+
 }

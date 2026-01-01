@@ -92,7 +92,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
+                android:layout_marginBottom="2dp"
                 android:text="刮刮卡參數設定"
                 android:textColor="#333333"
                 android:textSize="16sp"
@@ -253,6 +253,42 @@
                 android:layout_marginBottom="6dp"
                 android:orientation="vertical">
 
+                <!-- Phase 1.1：贈送規則切換（版面微調） -->
+                <RadioGroup
+                    android:id="@+id/radioGroupPitchType"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginBottom="2dp"
+                    android:padding="0dp">
+
+                    <RadioButton
+                        android:id="@+id/radioPitchScratch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:layout_margin="0dp"
+                        android:padding="0dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:gravity="center_vertical"
+                        android:text="夾出贈送" />
+
+                    <RadioButton
+                        android:id="@+id/radioPitchShopping"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_margin="0dp"
+                        android:padding="0dp"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:gravity="center_vertical"
+                        android:text="消費贈送" />
+                </RadioGroup>
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -268,12 +304,34 @@
                         android:textColor="#333333"
                         android:textSize="14sp" />
 
-                    <Spinner
-                        android:id="@+id/spinner_claws_count"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:entries="@array/number_options" />
+                    <FrameLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content">
+
+                        <!-- 原本的 Spinner：夾出（1-5） -->
+                        <Spinner
+                            android:id="@+id/spinnerClawsCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/number_options" />
+
+                        <!-- 新增：消費贈送用 Input（Phase 3 先做 UI，Phase 4 再接鍵盤） -->
+                        <EditText
+                            android:id="@+id/editClawsCount"
+                            android:layout_width="120dp"
+                            android:layout_height="wrap_content"
+                            android:hint="0"
+                            android:inputType="number"
+                            android:focusable="false"
+                            android:clickable="true"
+                            android:includeFontPadding="false"
+                            android:minHeight="0dp"
+                            android:paddingTop="2dp"
+                            android:paddingBottom="2dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:visibility="gone" />
+                    </FrameLayout>
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -298,12 +356,16 @@
                         android:textColor="#333333"
                         android:textSize="14sp" />
 
-                    <Spinner
-                        android:id="@+id/spinner_giveaway_count"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:entries="@array/number_options" />
+                    <FrameLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content">
+
+                        <Spinner
+                            android:id="@+id/spinnerGiveawayCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/number_options" />
+                    </FrameLayout>
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -320,7 +382,7 @@
                 android:id="@+id/button_save_settings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="2dp"
                 android:backgroundTint="#2196F3"
                 android:paddingVertical="6dp"
                 android:text="儲存"
@@ -341,7 +403,7 @@
                 android:id="@+id/button_auto_scratch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="2dp"
                 android:text="自動刮開"
                 android:enabled="false"/>
 
