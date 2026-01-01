@@ -108,6 +108,9 @@ class SettingsFragment : Fragment() {
     private var specialPrizeLabel: TextView? = null
     private var grandPrizeLabel: TextView? = null
 
+    // ✅ 新增：readonly 狀態下「夾出/消費贈送」純文字顯示容器
+    private var pitchRuleReadonlyContainer: LinearLayout? = null
+
     // 新增：標記是否正在進行儲存操作
     private var isSavingInProgress = false
 
@@ -1093,31 +1096,33 @@ class SettingsFragment : Fragment() {
     // 新增：使用中版位的只讀顯示方法
     private fun displayScratchCardDetailsReadonly(card: ScratchCard) {
         safeExecute("顯示只讀卡片詳情") {
-            // 顯示只讀的標籤
+            // ✅ 顯示只讀的標籤（特獎/大獎）
             showReadonlyFields(card)
 
-            // Spinner 設定（這些保持可編輯，因為不影響遊戲核心）
-            setSpinnerSelection(binding.spinnerClawsCount, card.clawsCount)
-            setSpinnerSelection(binding.spinnerGiveawayCount, card.giveawayCount)
-
+            // 預覽區保持顯示
             displayScratchBoardPreview(card.scratchesType, card.numberConfigurations)
 
             // 預覽建立後，顯示當前的特獎和大獎標記
             currentPreviewFragment?.setSelectedNumber(card.specialPrize?.toIntOrNull())
-
-            val grandList = card.grandPrize?.split(",")
-                ?.mapNotNull { it.trim().toIntOrNull() }
+            val grandList = card.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() }
             currentPreviewFragment?.setGrandSelectedNumbers(grandList)
         }
     }
 
     // 顯示可編輯欄位
     private fun showEditableFields() {
-        // 移除只讀標籤
+        // 移除只讀標籤（特獎/大獎那塊）
         removeReadonlyLabels()
+
+        // ✅ 回到可編輯時，把 pitch readonly 文案隱藏
+        hidePitchRuleReadonly()
 
         // 顯示原有的編輯容器
         showEditableContainers()
+
+        // ✅ 保持你目前 radio 切換的 UI 狀態（spinner / edit）
+        val isShopping = binding.radioPitchShopping.isChecked
+        applyPitchTypeUi(isShopping = isShopping, syncValues = false)
     }
 
     // 顯示可編輯的容器
@@ -1137,11 +1142,14 @@ class SettingsFragment : Fragment() {
 
     // 顯示只讀欄位
     private fun showReadonlyFields(card: ScratchCard) {
-        // 完全隱藏按鈕和編輯框的整個容器
+        // 完全隱藏特獎/大獎的可編輯容器
         hideEditableContainers()
 
-        // 創建並顯示只讀標籤
+        // 創建並顯示只讀標籤（特獎/大獎那塊）
         createReadonlyLabels(card)
+
+        // ✅ 顯示 pitch 規則 readonly（這就是你現在跑位的那段，改用 XML 佔位顯示）
+        showPitchRuleReadonly(card)
     }
 
     // 隱藏可編輯的容器
@@ -1307,6 +1315,13 @@ class SettingsFragment : Fragment() {
         grandPrizeLabel = null
     }
 
+    private fun removePitchRuleReadonlyContainer() {
+        pitchRuleReadonlyContainer?.let { container ->
+            (container.parent as? ViewGroup)?.removeView(container)
+        }
+        pitchRuleReadonlyContainer = null
+    }
+
     private fun showScratchTypeSpinner() {
         binding.spinnerScratchesCount.visibility = View.VISIBLE
         scratchTypeLabel?.visibility = View.GONE
@@ -1419,6 +1434,50 @@ class SettingsFragment : Fragment() {
             binding.scratchBoardArea.addView(tv)
             Log.d("SettingsFragment", "預覽區已設置為「未設置」狀態")
         }
+    }
+
+    private fun showPitchRuleReadonly(card: ScratchCard) {
+        val isShopping = (card.pitchType == "shopping")
+        val threshold = card.clawsCount ?: 0
+        val giveaway = card.giveawayCount ?: 0
+
+        // ✅ 顯示 readonly 文字（固定顯示在 XML 的正確位置）
+        binding.textPitchRuleReadonly.text = if (isShopping) {
+            "消費 $threshold 刮 $giveaway"
+        } else {
+            "夾 $threshold 刮 $giveaway"
+        }
+        binding.textPitchRuleReadonly.visibility = View.VISIBLE
+
+        // ✅ readonly 規則：隱藏 radio 區塊
+        binding.radioGroupPitchType.visibility = View.GONE
+
+        // ✅ readonly 規則：把可編輯 X（spinner/edit）都隱藏，避免誤會可修改
+        binding.spinnerClawsCount.visibility = View.GONE
+        binding.editClawsCount.visibility = View.GONE
+        binding.spinnerGiveawayCount.visibility = View.GONE
+
+        // ✅ 另外：把「夾出/消費」「樣/元」「贈送」「刮」這些 label 也隱藏（避免留空）
+        // 注意：下面這幾個 id 你如果命名不同，請換成你實際的 binding 名稱
+        binding.textClawsPrefix.visibility = View.GONE
+        binding.textClawsUnit.visibility = View.GONE
+        binding.textGiveawayPrefix.visibility = View.GONE
+        binding.textGiveawayUnit.visibility = View.GONE
+    }
+
+    private fun hidePitchRuleReadonly() {
+        binding.textPitchRuleReadonly.visibility = View.GONE
+
+        // 回到可編輯狀態：label 先打開（接著 applyPitchTypeUi 會決定顯示 spinner 或 edit）
+        binding.textClawsPrefix.visibility = View.VISIBLE
+        binding.textClawsUnit.visibility = View.VISIBLE
+        binding.textGiveawayPrefix.visibility = View.VISIBLE
+        binding.textGiveawayUnit.visibility = View.VISIBLE
+
+        binding.radioGroupPitchType.visibility = View.VISIBLE
+        binding.spinnerGiveawayCount.visibility = View.VISIBLE
+
+        // claws 的 spinner / edit 由你既有的 applyPitchTypeUi(isShopping=...) 控制
     }
 
     // ===========================================

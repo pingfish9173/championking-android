@@ -252,6 +252,18 @@
                 android:layout_marginBottom="2dp"
                 android:orientation="vertical">
 
+                <!-- readonly純顯示區塊 -->
+                <TextView
+                    android:id="@+id/textPitchRuleReadonly"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginBottom="2dp"
+                    android:visibility="gone"
+                    android:text="消費 0 元，贈送 0 刮"
+                    android:textSize="16sp"
+                    android:textColor="@android:color/black" />
+
                 <!-- Phase 1.1：贈送規則切換（版面微調） -->
                 <RadioGroup
                     android:id="@+id/radioGroupPitchType"
@@ -354,6 +366,7 @@
                     android:orientation="horizontal">
 
                     <TextView
+                        android:id="@+id/text_giveaway_prefix"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="2dp"
@@ -373,6 +386,7 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/text_giveaway_unit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="2dp"
