@@ -102,7 +102,9 @@ class ShelfManager(
             }
             append("大獎：$grandDisplay\n")
 
-            append("夾 ${card.clawsCount ?: "無"} 刮 ${card.giveawayCount ?: "無"}\n")
+            // ✅ 依 pitchType 切換文案：夾X刮X / 消費X刮X
+            val prefix = if (card.pitchType == "shopping") "消費" else "夾"
+            append("$prefix ${card.clawsCount ?: "無"} 刮 ${card.giveawayCount ?: "無"}\n")
         }
     }
 
