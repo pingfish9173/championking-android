@@ -88,8 +88,32 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             )
         }
 
+        // 設定 LINE 帳號帶底線
+        setupLineTextWithUnderline()
+
         binding.confirmPurchaseButton.setThrottledClick { showPurchaseConfirmationDialog() }
         binding.clearCartButton.setThrottledClick { clearCart() }
+    }
+
+    private fun setupLineTextWithUnderline() {
+        val fullText = "儲值請加入官方Line @376xuozd"
+        val underlinePart = "@376xuozd"
+        val spannable = android.text.SpannableString(fullText)
+
+        val start = fullText.indexOf(underlinePart)
+        if (start != -1) {
+            val end = start + underlinePart.length
+            // 加入底線
+            spannable.setSpan(
+                android.text.style.UnderlineSpan(),
+                start,
+                end,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+
+        // 找到該 TextView 並賦值
+        view?.findViewById<TextView>(R.id.line_id_text)?.text = spannable
     }
 
     override fun onDestroyView() {

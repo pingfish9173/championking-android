@@ -76,8 +76,9 @@
         android:elevation="4dp"
         android:padding="8dp">
 
-        <!-- 檔期活動區塊：文字改為「檔期活動：準備中...」 -->
+        <!-- 檔期活動區塊：文字改為「儲值請加入官方Line @376xuozd」 -->
         <LinearLayout
+            android:id="@+id/shop_activity_zone"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="3"
@@ -87,11 +88,21 @@
             android:gravity="center"
             android:layout_marginBottom="10dp">
 
+            <ImageView
+                android:id="@+id/line_qr_image"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:scaleType="fitCenter"
+                android:src="@drawable/line_qr" />
+
             <TextView
+                android:id="@+id/line_id_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="檔期活動：準備中..."
-                android:textSize="24sp"
+                android:layout_marginTop="4dp"
+                android:text="儲值請加入官方Line @376xuozd"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="#1976D2"
                 android:layout_gravity="center_horizontal"/>
