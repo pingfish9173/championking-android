@@ -46,6 +46,12 @@ class AboutTabletFragment : Fragment() {
     private val deployHistoryRepository = DeployHistoryRepository()
     private var deployHistoryListener: DbListenerHandle? = null
 
+    private lateinit var tabFeatures: LinearLayout
+    private lateinit var tabFeaturesText: TextView
+    private lateinit var tabFeaturesIndicator: View
+    private lateinit var contentScrollFeatures: View
+    private lateinit var contentTextFeatures: TextView
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -78,6 +84,57 @@ class AboutTabletFragment : Fragment() {
         contentTextAbout = view.findViewById(R.id.content_text_about)
         contentTextDisclaimer = view.findViewById(R.id.content_text_disclaimer)
         titleText = view.findViewById(R.id.title)
+
+        tabFeatures = view.findViewById(R.id.tab_features)
+        tabFeaturesText = view.findViewById(R.id.tab_features_text)
+        tabFeaturesIndicator = view.findViewById(R.id.tab_features_indicator)
+        contentScrollFeatures = view.findViewById(R.id.content_scroll_features)
+        contentTextFeatures = view.findViewById(R.id.content_text_features)
+
+        // 1. 定義內文 (這裡不需要手動加全形空格了，交給 Span 處理)
+        val contentFeatures = """
+一、商城：
+裡面分別有10刮、20刮、25刮、30刮、40刮、50刮、60刮、80刮、100刮、120刮、160刮、200刮、240刮，總共13種刮數的刮板，任君挑選，可選擇自己合適的刮板做購買。
+
+二、背包：
+可查看目前自己背包裡剩餘的刮板存貨。
+
+三、設定：
+1. 上板參數設定：
+上方有6個板位可供台主使用，可一次全部設定，也可只設定一個板位 (視每個台主使用情況有所不同)，右下方刮刮卡參數設定，刮數僅顯示背包裡有的庫存，特獎及大獎可依照每位台主自由選擇(點擊特獎或大獎可以直接點選左邊區域的數字，亦可點擊畫筆用輸入數字的方式)，夾出X刮及贈送X刮可選1~5自由設定，設定完成後按下儲存，此時設定好的參數會顯示在所選擇的板位區域，按下設為使用中(★)，右上角顯示★，表示上板成功，點擊左下方「玩家頁面」畫面即可跳轉。
+
+2. 下板設定：
+按下「改為未使用」，右上角★消失，即下板。
+
+3. 返回：
+按下返回，刮板將自動返回至背包(前提是刮板無刮開的狀態下才可進行)。
+
+4. 刪除：
+點選板位區任一板，按下刪除則自動銷毀(除刮開的刮數已超過此該板刮數之1/2(含)，且特獎尚未刮出)。
+
+5. 自動刮開：
+可以選擇自動刮開已儲存好的刮板刮數。
+
+四、換板密碼：
+可自由設定密碼，亦可隨時更改，在玩家頁面時，按下「下一板」，輸入密碼即係台主設定的換板密碼，輸入完成後即跳轉下一板。
+
+五、會員資訊：
+變更密碼：
+如欲變更密碼，輸入現在密碼再輸入新密碼即可變更。
+
+六、解除裝置綁定：
+為避免有心人士盜用，一個帳號不可同時綁兩個設備，當按下解除裝置綁定，則會自動登出，如帳號在登入狀態時，系統則自動綁定設備。
+
+七、檢查更新：
+勾選「自動檢查更新」，系統將自動偵測有更新檔時自動更新。
+""".trimIndent()
+
+        // 2. 調用美化函式
+        contentTextFeatures.text = formatFeatureContent(contentFeatures)
+
+        tabFeatures.setOnClickListener {
+            selectTab(TabType.FEATURES)
+        }
 
         // --- 遊戲協議內文 ----
         val contentAbout = """
@@ -186,6 +243,59 @@ class AboutTabletFragment : Fragment() {
         }
     }
 
+    private fun formatFeatureContent(fullText: String): SpannableStringBuilder {
+        val sb = SpannableStringBuilder()
+        val lines = fullText.split("\n")
+
+        // 保留您調整好的縮進距離
+        val titleIndent = 18  // 數字標題（1. 2. 等）的起點
+        val contentIndent = 46 // 說明文字整段內縮的起點
+
+        lines.forEach { line ->
+            val start = sb.length
+            sb.append(line).append("\n")
+            val end = sb.length
+
+            val trimmedLine = line.trim()
+
+            // --- 新增：處理大標題（一到七）加粗 ---
+            val mainTitles = listOf("一、", "二、", "三、", "四、", "五、", "六、", "七、")
+            if (mainTitles.any { trimmedLine.startsWith(it) }) {
+                sb.setSpan(
+                    android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                    start,
+                    end,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+
+            // 1. 處理 1. 到 5. 的標題行
+            else if (trimmedLine.startsWith("1.") || trimmedLine.startsWith("2.") ||
+                trimmedLine.startsWith("3.") || trimmedLine.startsWith("4.") ||
+                trimmedLine.startsWith("5.")) {
+
+                sb.setSpan(
+                    android.text.style.LeadingMarginSpan.Standard(titleIndent),
+                    start,
+                    end,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            // 2. 處理標題下的說明文字行（如果該行不為空，且不屬於大標題）
+            else if (line.isNotEmpty() && !mainTitles.any { line.startsWith(it) }) {
+
+                // 使用 LeadingMarginSpan.Standard(indent) 會讓該行所有文字（含換行）都縮排
+                sb.setSpan(
+                    android.text.style.LeadingMarginSpan.Standard(contentIndent),
+                    start,
+                    end,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        }
+        return sb
+    }
+
     /**
      * 從資料庫載入部署紀錄
      */
@@ -272,29 +382,36 @@ class AboutTabletFragment : Fragment() {
      * 選擇頁籤並更新視覺狀態
      */
     private fun selectTab(selectedTab: TabType) {
-
-        // 先重置狀態
+        // 重置所有狀態（記得加入新頁籤）
         resetTabState(tabUpdateLogText, tabUpdateLogIndicator)
+        resetTabState(tabFeaturesText, tabFeaturesIndicator)
         resetTabState(tabAboutText, tabAboutIndicator)
         resetTabState(tabDisclaimerText, tabDisclaimerIndicator)
 
-        // 隱藏所有內容
         contentScrollUpdateLog.visibility = View.GONE
+        contentScrollFeatures.visibility = View.GONE
         contentScrollAbout.visibility = View.GONE
         contentScrollDisclaimer.visibility = View.GONE
 
-        // 根據選擇的 tab 更新 UI + 標題
         when (selectedTab) {
             TabType.UPDATE_LOG -> {
                 setTabSelected(tabUpdateLogText, tabUpdateLogIndicator)
                 contentScrollUpdateLog.visibility = View.VISIBLE
                 titleText.text = "更新紀錄"
             }
+
+            TabType.FEATURES -> { // 新增處理
+                setTabSelected(tabFeaturesText, tabFeaturesIndicator)
+                contentScrollFeatures.visibility = View.VISIBLE
+                titleText.text = "功能介紹"
+            }
+
             TabType.ABOUT -> {
                 setTabSelected(tabAboutText, tabAboutIndicator)
                 contentScrollAbout.visibility = View.VISIBLE
                 titleText.text = "遊戲協議"
             }
+
             TabType.DISCLAIMER -> {
                 setTabSelected(tabDisclaimerText, tabDisclaimerIndicator)
                 contentScrollDisclaimer.visibility = View.VISIBLE
@@ -326,6 +443,7 @@ class AboutTabletFragment : Fragment() {
      */
     private enum class TabType {
         UPDATE_LOG,
+        FEATURES,
         ABOUT,
         DISCLAIMER
     }

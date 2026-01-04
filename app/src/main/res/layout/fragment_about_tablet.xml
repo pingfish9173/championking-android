@@ -58,6 +58,34 @@
                     android:visibility="visible" />
             </LinearLayout>
 
+            <!-- 功能介紹 Tab -->
+            <LinearLayout
+                android:id="@+id/tab_features"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:layout_marginLeft="16dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tab_features_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="功能介紹"
+                    android:textSize="18sp"
+                    android:textColor="#444444" />
+
+                <View
+                    android:id="@+id/tab_features_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#FF6B35"
+                    android:visibility="invisible" />
+            </LinearLayout>
+
             <!-- 遊戲協議 Tab -->
             <LinearLayout
                 android:id="@+id/tab_about"
@@ -147,6 +175,24 @@
                 android:textSize="16sp"
                 android:lineSpacingMultiplier="1.35"
                 android:padding="8dp" />
+        </ScrollView>
+
+        <!-- 功能介紹的 ScrollView -->
+        <ScrollView
+            android:id="@+id/content_scroll_features"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/content_text_features"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#333333"
+                android:textSize="18sp"
+                android:lineSpacingMultiplier="1.4"
+                android:padding="12dp" />
         </ScrollView>
 
         <!-- 遊戲協議的 ScrollView -->
