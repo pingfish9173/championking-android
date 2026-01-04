@@ -96,8 +96,8 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     private fun setupLineTextWithUnderline() {
-        val fullText = "儲值請加入官方Line @376xuozd"
-        val underlinePart = "@376xuozd"
+        val fullText = "儲值請加入官方Line @376xyozd"
+        val underlinePart = "@376xyozd"
         val spannable = android.text.SpannableString(fullText)
 
         val start = fullText.indexOf(underlinePart)

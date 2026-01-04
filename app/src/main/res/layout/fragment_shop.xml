@@ -76,7 +76,7 @@
         android:elevation="4dp"
         android:padding="8dp">
 
-        <!-- 檔期活動區塊：文字改為「儲值請加入官方Line @376xuozd」 -->
+        <!-- 檔期活動區塊：文字改為「儲值請加入官方Line @376xyozd」 -->
         <LinearLayout
             android:id="@+id/shop_activity_zone"
             android:layout_width="match_parent"
@@ -101,7 +101,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="儲值請加入官方Line @376xuozd"
+                android:text="儲值請加入官方Line @376xyozd"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="#1976D2"
