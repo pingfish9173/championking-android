@@ -445,7 +445,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
     private fun initVersionInfo() {
         // 顯示當前版本
         val versionName = BuildConfig.VERSION_NAME
-        binding.textCurrentVersion.text = versionName
+        binding.textCurrentVersion.text = "v${versionName}"
 
         // 顯示上次檢查時間
         updateLastCheckTime()
