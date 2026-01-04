@@ -32,8 +32,8 @@ android {
         applicationId = "com.champion.king"
         minSdk = 24
         targetSdk = 34
-        versionCode = 85
-        versionName = "1.1.41"
+        versionCode = 86
+        versionName = "1.1.42"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
