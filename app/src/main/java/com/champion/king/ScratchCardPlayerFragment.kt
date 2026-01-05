@@ -449,50 +449,65 @@ class ScratchCardPlayerFragment : Fragment() {
         }
     }
 
-    private fun updateCellDisplay(cellView: View, cellNumber: Int, isScratched: Boolean, number: Int?) {
-        // 檢查是否正在刮這個格子
+    fun updateCellDisplay(cellView: View, cellNumber: Int, isScratched: Boolean, number: Int?) {
         val isScratching = scratchingCells.contains(cellNumber)
 
         if (isScratched && number != null) {
-            // 已刮開：移除正在刮的標記並停止動畫
+            // 已刮開
             scratchingCells.remove(cellNumber)
             stopCellAnimation(cellNumber)
 
-            // 已刮開的背景：統一為白色
-            cellView.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.scratch_card_white))
+            val isSpecial = isSpecialPrize(number)
+            val isGrand = isGrandPrize(number)
 
-            // 判斷是否為特獎或大獎，設定對應的框
-            val strokeColor = when {
-                isSpecialPrize(number) -> R.color.scratch_card_gold
-                isGrandPrize(number) -> R.color.scratch_card_green
+            // ✅ 填滿底色判斷
+            val fillColorRes = when {
+                isSpecial -> R.color.scratch_card_gold      // 特獎：黃
+                isGrand -> R.color.scratch_card_green       // 大獎：綠
+                else -> R.color.scratch_card_white
+            }
+
+            // 框線顏色
+            val strokeColorRes = when {
+                isSpecial -> R.color.scratch_card_gold
+                isGrand -> R.color.scratch_card_green
                 else -> R.color.scratch_card_light_gray
             }
 
-            // 特獎和大獎用較粗的框，一般數字用細框
+            // 框線粗細
             val strokeWidth = when {
-                isSpecialPrize(number) || isGrandPrize(number) -> 4
+                isSpecial || isGrand -> 4
                 else -> 2
             }
 
-            // 創建帶有圓框的 Drawable
-            val drawable = ContextCompat.getDrawable(requireContext(), R.drawable.circle_cell_normal_background)?.mutate()
+            // 背景 drawable（整格填滿）
+            val drawable = ContextCompat
+                .getDrawable(requireContext(), R.drawable.circle_cell_normal_background)
+                ?.mutate()
+
             if (drawable is android.graphics.drawable.GradientDrawable) {
-                drawable.setColor(ContextCompat.getColor(requireContext(), R.color.scratch_card_white))
-                drawable.setStroke(strokeWidth, ContextCompat.getColor(requireContext(), strokeColor))
+                drawable.setColor(ContextCompat.getColor(requireContext(), fillColorRes))
+                drawable.setStroke(strokeWidth, ContextCompat.getColor(requireContext(), strokeColorRes))
             }
+
             cellView.background = drawable
 
-            // 數字顏色：統一為黑色
-            val textColor = R.color.black
+            // ✅ 特獎 / 大獎 → 白色字，其餘黑色
+            val textColorRes = if (isSpecial || isGrand) {
+                android.R.color.white
+            } else {
+                R.color.black
+            }
 
             if (cellView is TextView) {
                 cellView.text = number.toString()
-                cellView.setTextColor(ContextCompat.getColor(requireContext(), textColor))
+                cellView.setTextColor(ContextCompat.getColor(requireContext(), textColorRes))
             } else {
-                addNumberToCell(cellView, number, textColor)
+                addNumberToCell(cellView, number, textColorRes)
             }
+
         } else if (isScratching && !isScratched) {
-            // 正在刮但還未刮開：顯示漩渦流動效果
+            // 正在刮
             startSwirlAnimation(cellView, cellNumber)
 
             if (cellView is TextView) {
@@ -500,15 +515,20 @@ class ScratchCardPlayerFragment : Fragment() {
             } else {
                 removeNumberFromCell(cellView)
             }
+
         } else {
-            // 未刮開：黑色蓋板，灰色細圓框
+            // 尚未刮開
             stopCellAnimation(cellNumber)
 
-            val drawable = ContextCompat.getDrawable(requireContext(), R.drawable.circle_cell_background_black)?.mutate()
+            val drawable = ContextCompat
+                .getDrawable(requireContext(), R.drawable.circle_cell_background_black)
+                ?.mutate()
+
             if (drawable is android.graphics.drawable.GradientDrawable) {
                 drawable.setColor(ContextCompat.getColor(requireContext(), R.color.scratch_card_dark_gray))
                 drawable.setStroke(2, ContextCompat.getColor(requireContext(), R.color.scratch_card_light_gray))
             }
+
             cellView.background = drawable
 
             if (cellView is TextView) {
