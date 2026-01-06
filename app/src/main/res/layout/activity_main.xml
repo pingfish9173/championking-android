@@ -123,12 +123,11 @@
                         android:textSize="26sp" />
                     <TextView
                         android:id="@+id/special_prize_text_view_master"
-                        android:layout_width="52dp"
-                        android:layout_height="52dp"
-                        android:background="@drawable/special_prize_gold_circle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
                         android:ellipsize="none"
                         android:gravity="center"
-                        android:textColor="@color/scratch_card_dark_gray"
+                        android:textColor="@android:color/black"
                         android:textSize="20sp"
                         android:textStyle="bold"/>
                 </LinearLayout>

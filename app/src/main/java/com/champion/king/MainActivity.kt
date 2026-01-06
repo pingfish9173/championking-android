@@ -634,26 +634,56 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             specialPrizeTextViewPlayer to grandPrizeTextViewPlayer
         }
 
-        val textColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
-
         // === 特獎 ===
         specialPrizeTv?.apply {
-            text = specialPrize ?: "無"
-            setTextColor(textColor)
-            setBackgroundResource(R.drawable.special_prize_gold_circle)
+            val noPrize = specialPrize.isNullOrBlank() || specialPrize == "無"
+
+            if (noPrize) {
+                // ✅ 顯示純文字「無」：不要圓框
+                text = "無"
+                setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
+                background = null
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+
+                // 取消固定圓形大小，讓它像一般文字
+                val lp = layoutParams
+                lp?.width = LinearLayout.LayoutParams.WRAP_CONTENT
+                lp?.height = LinearLayout.LayoutParams.WRAP_CONTENT
+                layoutParams = lp
+                setPadding(0, 0, 0, 0)
+            } else {
+                // ✅ 黃底白字（用程式直接畫「填滿」避免 drawable 只有框）
+                text = specialPrize
+                setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.white))
+
+                val gold = ContextCompat.getColor(this@MainActivity, R.color.scratch_card_gold)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(gold)           // 填滿
+                    setStroke(3, gold)       // 邊框（同色）
+                }
+
+                // 恢復圓形大小 52dp
+                val sizePx = (52 * resources.displayMetrics.density).toInt()
+                val lp = layoutParams
+                lp?.width = sizePx
+                lp?.height = sizePx
+                layoutParams = lp
+            }
         }
 
-        // === 大獎 ===
+        // === 大獎（master 通常是 LinearLayout 容器）===
         if (grandPrizeTv is LinearLayout) {
             displayGrandPrizes(grandPrizeTv, grandPrize)
         }
     }
 
-
     private fun displayGrandPrizes(grandPrizeContainer: LinearLayout, grandPrizeStr: String?) {
         grandPrizeContainer.removeAllViews()
 
-        if (grandPrizeStr.isNullOrBlank()) {
+        val noPrize = grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無"
+        if (noPrize) {
+            // ✅ 顯示純文字「無」：不要圓框
             val tv = TextView(this).apply {
                 text = "無"
                 setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
@@ -663,15 +693,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             return
         }
 
-        // 最多 12 個大獎，4 個一排
+        // 最多 16 個大獎，4 個一排
         val allNumbers = grandPrizeStr.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .take(16)
+
         val chunked = allNumbers.chunked(4)
 
-        val greenColor = ContextCompat.getColor(this, R.color.scratch_card_green)
-        val whiteColor = ContextCompat.getColor(this, R.color.scratch_card_white)
-        val grayTextColor = ContextCompat.getColor(this, R.color.scratch_card_dark_gray)
+        val green = ContextCompat.getColor(this, R.color.scratch_card_green)
+        val whiteText = ContextCompat.getColor(this, android.R.color.white)
 
         val sizePx = (31 * resources.displayMetrics.density).toInt()
         val marginPx = (3 * resources.displayMetrics.density).toInt()
@@ -686,18 +716,21 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 val numView = TextView(this).apply {
                     text = num.toString()
                     textSize = 12f
-                    setTextColor(grayTextColor)
+                    setTextColor(whiteText)
                     gravity = Gravity.CENTER
+
+                    // ✅ 綠底填滿 + 白字
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
-                        setColor(whiteColor)
-                        setStroke(3, greenColor)
+                        setColor(green)        // 填滿
+                        setStroke(3, green)    // 邊框（同色）
                     }
 
                     val params = LinearLayout.LayoutParams(sizePx, sizePx)
                     params.setMargins(marginPx, marginPx, marginPx, marginPx)
                     layoutParams = params
                 }
+
                 rowLayout.addView(numView)
             }
 
@@ -705,7 +738,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            rowParams.setMargins(0, marginPx, 0, 0) // 行距縮小
+            rowParams.setMargins(0, marginPx, 0, 0)
             rowLayout.layoutParams = rowParams
 
             grandPrizeContainer.addView(rowLayout)
