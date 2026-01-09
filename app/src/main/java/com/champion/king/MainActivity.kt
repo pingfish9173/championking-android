@@ -126,6 +126,11 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var forceLogoutListener: ValueEventListener? = null
     private var forceLogoutRef: DatabaseReference? = null
 
+    // === AccountStatus 監聽（停用即登出）===
+    private var accountStatusListener: ValueEventListener? = null
+    private var accountStatusRef: DatabaseReference? = null
+    private var hasHandledSuspension: Boolean = false
+
     private val authRepository by lazy {
         AuthRepository(FirebaseDatabase.getInstance(DB_URL).reference)
     }
@@ -475,19 +480,27 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== OnAuthFlowListener ======
     override fun onLoginSuccess(loggedInUser: User) {
         currentUser = loggedInUser
+        hasHandledSuspension = false
+
+        // ✅ 登入當下就先判斷（避免畫面先進主頁又被踢）
+        if (loggedInUser.accountStatus == "SUSPENDED") {
+            Log.d(TAG, "登入成功但帳號為 SUSPENDED，立即登出")
+            handleAccountSuspended()
+            return
+        }
+
         Log.d(TAG, "登入成功，右上角資訊已更新為: ${loggedInUser.account}")
         render(Mode.MASTER)
 
         setupForceLogoutWatcher()
+        setupAccountStatusWatcher() // ✅ 新增：監聽停用狀態
 
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
         performScratchTempSync()
 
-        // 現在會載入和玩家頁面一致但無互動的刮卡顯示
         loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
 
-        // 觸發條件 2：登入成功後檢查更新
         triggerAutoUpdateCheck(reason = "login_success")
         ToastManager.show(this, "歡迎回來，${loggedInUser.account}！")
     }
@@ -867,6 +880,14 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     fun performLogout() {
         removeForceLogoutWatcher()
+        removeAccountStatusWatcher()
+        hasHandledSuspension = false
+
+        // Firebase Auth 登出（建議統一做，避免 token 還在）
+        try {
+            FirebaseAuth.getInstance().signOut()
+        } catch (_: Exception) {}
+
         SettingsViewModel.clearAllDrafts()
         currentUser = null
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
@@ -886,6 +907,78 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
         forceLogoutListener = null
         forceLogoutRef = null
+    }
+
+    private fun setupAccountStatusWatcher() {
+        val userKey = currentUser?.firebaseKey ?: return
+
+        // users/{uid}/accountStatus
+        accountStatusRef = database.child("users").child(userKey).child("accountStatus")
+
+        accountStatusListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val status = snapshot.getValue(String::class.java) ?: "ACTIVE"
+                Log.d(TAG, "AccountStatus changed: $status")
+
+                if (status == "SUSPENDED") {
+                    handleAccountSuspended()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "AccountStatus 監聽錯誤：${error.message}")
+            }
+        }
+
+        accountStatusRef?.addValueEventListener(accountStatusListener!!)
+    }
+
+    private fun removeAccountStatusWatcher() {
+        try {
+            accountStatusListener?.let { listener ->
+                accountStatusRef?.removeEventListener(listener)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "移除 accountStatus 監聽器時發生錯誤：${e.message}")
+        }
+        accountStatusListener = null
+        accountStatusRef = null
+    }
+
+    private fun handleAccountSuspended() {
+        if (hasHandledSuspension) return
+        hasHandledSuspension = true
+
+        Log.d(TAG, "偵測到帳號已停用（SUSPENDED），即刻登出")
+
+        // 先移除監聽，避免重複觸發
+        removeAccountStatusWatcher()
+        removeForceLogoutWatcher()
+
+        // Firebase Auth 登出
+        try {
+            FirebaseAuth.getInstance().signOut()
+        } catch (_: Exception) {}
+
+        runOnUiThread {
+            performLogoutWithMessage("您的帳號已被停用，請聯繫小編協助開通")
+        }
+    }
+
+    private fun performLogoutWithMessage(message: String) {
+        // 保險：清乾淨所有監聽
+        removeForceLogoutWatcher()
+        removeAccountStatusWatcher()
+
+        SettingsViewModel.clearAllDrafts()
+        currentUser = null
+
+        supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        render(Mode.MASTER)
+        loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+
+        ToastManager.show(this, message)
+        Log.d(TAG, "用戶已登出（原因：$message）")
     }
 
     private fun setupForceLogoutWatcher() {
