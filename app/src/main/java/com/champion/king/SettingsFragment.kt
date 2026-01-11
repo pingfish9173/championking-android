@@ -721,6 +721,7 @@ class SettingsFragment : Fragment() {
     private fun showUnsetShelfState() {
         val order = shelfManager.selectedShelfOrder
         val draft = viewModel.getDraft(order)
+        updateParametersTitle(order)
 
         // ✅ 未設置就是未設置：不要因為有草稿就改成 false
         isShowingUnsetState = true
@@ -817,6 +818,7 @@ class SettingsFragment : Fragment() {
         showRightPanel()
         isShowingUnsetState = false
         restorePreviewContainer()
+        updateParametersTitle(shelfManager.selectedShelfOrder)
 
         // 檢查是否應該顯示只讀模式：使用中 OR 已被刮過
         val shouldShowReadonly = selectedCard.inUsed || hasBeenScratched(selectedCard)
@@ -1404,6 +1406,15 @@ class SettingsFragment : Fragment() {
 
         // ✅ 立刻把新生成的 numberConfigurations 存進草稿，避免切換板位後被重置
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
+    }
+
+    private fun updateParametersTitle(order: Int?) {
+        val title = if (order != null && order in 1..6) {
+            "${order}號板參數設定"
+        } else {
+            "板位參數設定"
+        }
+        binding.textParametersTitle.text = title
     }
 
     // ② 顯示/重建預覽時，確保挑選模式狀態馬上套用
