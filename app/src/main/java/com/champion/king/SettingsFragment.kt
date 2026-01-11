@@ -1978,6 +1978,9 @@ class SettingsFragment : Fragment() {
             .create()
 
         dlg.setOnShowListener {
+            // ✅ 修正：讓 Toast 顯示在「數字鍵盤 Dialog」層級上方
+            ToastManager.setHostWindow(dlg.window)
+
             dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val x = currentValue()
 
@@ -1994,6 +1997,11 @@ class SettingsFragment : Fragment() {
                 onConfirm(x)
                 dlg.dismiss()
             }
+        }
+
+        // ✅ Dialog 關閉後務必清掉 host window，避免影響其他頁面的 Toast 層級
+        dlg.setOnDismissListener {
+            ToastManager.clearHostWindow()
         }
 
         dlg.show()
