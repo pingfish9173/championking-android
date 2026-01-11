@@ -489,10 +489,44 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 先全部恢復
+        // 1. 先全部恢復互動性 (這會導致所有按鈕暫時變成 Enabled)
         restoreAllInteractive()
 
-        if (!isFocusMode) return
+        // =================================================================
+        // ✅ BUG 修復：退出聚焦模式時，必須根據當前卡片狀態「校正」按鈕權限
+        // 避免原本應該 Disabled 的按鈕（如：使用中不可刪除、未設置不可自動刮開）被錯誤開啟
+        // =================================================================
+        if (!isFocusMode) {
+            val order = shelfManager.selectedShelfOrder
+            val card = viewModel.cards.value[order]
+
+            if (card == null) {
+                // 情境 A：未設置狀態 -> 只有儲存可用
+                setButtonsEnabled(
+                    save = true,
+                    toggleInUse = false,
+                    autoScratch = false,
+                    returnBtn = false,
+                    delete = false
+                )
+            } else {
+                // 情境 B：已設置狀態 -> 檢查是否為唯讀 (使用中 or 已刮過)
+                val isReadonly = card.inUsed || hasBeenScratched(card)
+                if (isReadonly) {
+                    if (card.inUsed) {
+                        // 使用中：不可保存/返回/刪除
+                        setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
+                    } else {
+                        // 已刮過但非使用中：不可保存/返回，可刪除
+                        setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = true)
+                    }
+                } else {
+                    // 完全可編輯狀態
+                    setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
+                }
+            }
+            return
+        }
 
         // 1) 禁用 + 降低透明度：上方架上列表整區
         setEnabledRecursively(binding.onShelfListContainer, false)
@@ -510,10 +544,11 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 3) 預覽區保持可用並高亮（可選：略微提高透明度讓更醒目）
+        // 3) 預覽區保持可用並高亮
         binding.scratchBoardArea.alpha = 1f
 
         // 4) 其他零散按鈕雙保險（Save / InUse / Return / Delete）
+        // 進入聚焦模式時，這些底部功能按鈕一律鎖定
         listOf(
             binding.buttonSaveSettings,
             binding.buttonToggleInuse,
