@@ -85,14 +85,20 @@ class SettingsFragment : Fragment() {
     private var currentFocusTarget: FocusTarget? = null
 
     // 資料類別
-    private data class ScratchTypeItem(val type: Int, val stock: Int) {
-        override fun toString(): String = if (stock > 0) {
+    private data class ScratchTypeItem(
+        val type: Int,
+        val stock: Int,
+        val isPlaceholder: Boolean = false
+    ) {
+        override fun toString(): String = if (isPlaceholder) {
+            "請選擇"
+        } else if (stock > 0) {
             "${type}刮 (剩${stock})"
         } else {
             "${type}刮 (無庫存)"
         }
 
-        fun getScratchType(): Int = type
+        fun getScratchType(): Int? = if (isPlaceholder) null else type
     }
 
     // 常數和狀態變數
@@ -330,38 +336,36 @@ class SettingsFragment : Fragment() {
                     position: Int,
                     id: Long
                 ) {
-                    // ★ 如果這次是「程式還原草稿」造成的 onItemSelected，就忽略（避免預覽被重建 random）
+                    // ★ 程式 setSelection 造成的回呼 → 忽略一次
                     if (suppressNextScratchTypeSelectionEvent) {
                         suppressNextScratchTypeSelectionEvent = false
                         return
                     }
 
-                    // ★ 如果正在更新 Spinner 或正在儲存，直接返回
+                    // ★ 更新 spinner / 正在儲存時不重建預覽
                     if (isUpdatingSpinner || isSavingInProgress) return
 
-                    val selectedItem =
-                        binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
-                    selectedItem?.let { item ->
-                        val scratchType = item.getScratchType()
-                        Log.d(
-                            "SettingsFragment",
-                            "用戶選擇了刮數: ${scratchType}刮, 庫存: ${item.stock}"
-                        )
+                    val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem ?: return
+                    val scratchType = selectedItem.getScratchType()
 
-                        if (item.stock > 0) {
-                            val selectedCard =
-                                viewModel.cards.value[shelfManager.selectedShelfOrder]
-                            if (selectedCard == null) {
-                                Log.d(
-                                    "SettingsFragment",
-                                    "清除未設置狀態，顯示 ${scratchType}刮 預覽"
-                                )
-                                isShowingUnsetState = false
-                                updatePreviewForScratchType(scratchType)
-                            }
-                        } else {
-                            Log.w("SettingsFragment", "${scratchType}刮 庫存為 0，無法選擇")
-                        }
+                    // ✅ 第 0 個「請選擇」＝未設置
+                    if (scratchType == null) {
+                        showUnsetShelfState()
+                        return
+                    }
+
+                    Log.d("SettingsFragment", "用戶選擇了刮數: ${scratchType}刮, 庫存: ${selectedItem.stock}")
+
+                    if (selectedItem.stock <= 0) {
+                        showToast("${scratchType}刮 無庫存，無法選擇")
+                        return
+                    }
+
+                    val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
+                    if (selectedCard == null) {
+                        // 未設置 → 顯示該刮數預覽（這是「使用者明確選刮數」才會走）
+                        isShowingUnsetState = false
+                        updatePreviewForScratchType(scratchType)
                     }
                 }
 
@@ -1015,6 +1019,10 @@ class SettingsFragment : Fragment() {
         }
 
         val scratchType = selectedItem.getScratchType()
+        if (scratchType == null) {
+            showToast("請先選擇刮數")
+            return
+        }
         val stock = selectedItem.stock
 
         if (stock <= 0) {
@@ -1557,7 +1565,8 @@ class SettingsFragment : Fragment() {
 
     private fun updateSpinnerWithStockData(user: User) {
         val stockMap = createStockMap(user)
-        val items = scratchOrder.map { ScratchTypeItem(it, stockMap[it] ?: 0) }
+        val items = listOf(ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true)) +
+                scratchOrder.map { ScratchTypeItem(it, stockMap[it] ?: 0) }
         val currentSelection = binding.spinnerScratchesCount.selectedItemPosition
 
         isUpdatingSpinner = true
@@ -1599,9 +1608,14 @@ class SettingsFragment : Fragment() {
 
     private fun initSpinnerWithPlaceholder() {
         safeExecute("初始化 Spinner") {
-            val items = scratchOrder.map { ScratchTypeItem(it, stock = 1) }
+            val items = listOf(ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true)) +
+                    scratchOrder.map { ScratchTypeItem(it, stock = 1) }
+
             val adapter = buildStockAwareAdapter(items)
             binding.spinnerScratchesCount.adapter = adapter
+
+            // ✅ 預設就是「請選擇」
+            binding.spinnerScratchesCount.setSelection(0)
         }
     }
 
