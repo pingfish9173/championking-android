@@ -2027,6 +2027,7 @@ class SettingsFragment : Fragment() {
      * 1) 隨機挑 eligible 的 X 格 → 設 scratched=true
      * 2) 預覽區立即刷新
      * 3) 寫回 Firebase（透過 viewModel.upsertCard）
+     * 4) ✅【新增】成功刮開 >=1 格後，立刻把右側參數區切換為唯讀模式
      */
     private fun performAutoScratch(card: ScratchCard, x: Int) {
         val order = shelfManager.selectedShelfOrder
@@ -2081,9 +2082,14 @@ class SettingsFragment : Fragment() {
         )
 
         // ✅ 立即更新「剩餘刮數」顯示（不等 viewModel 回推）
+        val updatedCard = card.copy(numberConfigurations = configs)
         val tempCards = viewModel.cards.value.toMutableMap()
-        tempCards[order] = card.copy(numberConfigurations = configs)
+        tempCards[order] = updatedCard
         updateRemainingScratchesInfo(tempCards)
+
+        // ✅【新增】自動刮開成功 >=1 格後，立即切換為唯讀模式
+        // 讓使用者當下就看到「不能再改參數」的狀態，不用等 Firebase 回推
+        showSetShelfState(updatedCard)
 
         showToast("已自動刮開 ${eligibleIdx.size} 格")
     }
