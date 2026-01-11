@@ -345,25 +345,41 @@ class SettingsFragment : Fragment() {
                     // ★ 更新 spinner / 正在儲存時不重建預覽
                     if (isUpdatingSpinner || isSavingInProgress) return
 
-                    val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem ?: return
+                    val selectedItem =
+                        binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem ?: return
+
                     val scratchType = selectedItem.getScratchType()
 
                     // ✅ 第 0 個「請選擇」＝未設置
                     if (scratchType == null) {
+                        // showUnsetShelfState() 內部應該會呼叫 hideRightPanel()
+                        // 並且顯示預覽「未設置」與清除參數區的內容
                         showUnsetShelfState()
                         return
                     }
 
-                    Log.d("SettingsFragment", "用戶選擇了刮數: ${scratchType}刮, 庫存: ${selectedItem.stock}")
+                    Log.d(
+                        "SettingsFragment",
+                        "用戶選擇了刮數: ${scratchType}刮, 庫存: ${selectedItem.stock}"
+                    )
 
+                    // 無庫存就不允許進入參數設定
                     if (selectedItem.stock <= 0) {
                         showToast("${scratchType}刮 無庫存，無法選擇")
+                        // 回到「請選擇」比較直覺（可選）
+                        // suppressNextScratchTypeSelectionEvent = true
+                        // isUpdatingSpinner = true
+                        // binding.spinnerScratchesCount.setSelection(0, false)
+                        // isUpdatingSpinner = false
                         return
                     }
 
+                    // ✅ 有選刮數 + 有庫存 → 顯示右側參數整區
+                    showRightPanel()
+
+                    // 只有未設置（selectedCard == null）才需要建立預覽版型
                     val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
                     if (selectedCard == null) {
-                        // 未設置 → 顯示該刮數預覽（這是「使用者明確選刮數」才會走）
                         isShowingUnsetState = false
                         updatePreviewForScratchType(scratchType)
                     }
@@ -713,6 +729,8 @@ class SettingsFragment : Fragment() {
         showScratchTypeSpinner()
 
         if (draft != null && draft.scratchType != null) {
+            showRightPanel()
+
             // ✅ 有草稿：直接還原草稿（不要先清掉預覽）
             setScratchTypeSpinnerSelection(draft.scratchType)
 
@@ -751,8 +769,10 @@ class SettingsFragment : Fragment() {
             val gp = draft.grandPrize
                 ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
             currentPreviewFragment?.setGrandSelectedNumbers(gp)
-
         } else {
+
+            hideRightPanel()
+
             // ✅ 沒草稿：才真的顯示「未設置」畫面並清空欄位
             showPreviewUnset()
             clearTextFieldsOnly()
@@ -794,6 +814,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showSetShelfState(selectedCard: ScratchCard) {
+        showRightPanel()
         isShowingUnsetState = false
         restorePreviewContainer()
 
@@ -821,7 +842,14 @@ class SettingsFragment : Fragment() {
         updateRefreshButtonVisibility()
     }
 
-    // 移除 handleCardsUpdate 方法，因為已經在 observeViewModel 中直接處理
+    private fun showRightPanel() {
+        binding.rightPanelContainer.visibility = View.VISIBLE
+    }
+
+    private fun hideRightPanel() {
+        binding.rightPanelContainer.visibility = View.GONE
+    }
+
 
     // ===========================================
     // 點擊事件處理方法
@@ -1267,7 +1295,7 @@ class SettingsFragment : Fragment() {
 
     // 插入只讀容器到布局中
     private fun insertReadonlyContainers(specialContainer: LinearLayout, grandContainer: LinearLayout) {
-        val settingsContainer = binding.settingParametersContainer
+        val settingsContainer = binding.rightPanelContainer
 
         // 找到原本特獎和大獎容器的位置
         val originalSpecialContainer = findViewContaining(binding.buttonPickSpecialPrize)
@@ -1293,14 +1321,20 @@ class SettingsFragment : Fragment() {
     }
 
     // 找到包含指定View的父容器
+    // 找到「rightPanelContainer 之下」包含 targetView 的那個直接子容器（例如：特獎那列 / 大獎那列）
     private fun findViewContaining(targetView: View): ViewGroup? {
-        var parent = targetView.parent
-        while (parent != null && parent != binding.settingParametersContainer) {
-            parent = parent.parent
+        val root = binding.rightPanelContainer
+
+        var current: View = targetView
+        var parent = targetView.parent as? ViewGroup
+
+        while (parent != null && parent != root) {
+            current = parent
+            parent = parent.parent as? ViewGroup
         }
-        return if (parent == binding.settingParametersContainer) {
-            targetView.parent as? ViewGroup
-        } else null
+
+        // current 就是 root 的直接 child（也就是你要隱藏/插入 label 的那一列容器）
+        return if (parent == root) current as? ViewGroup else null
     }
 
     // 移除只讀標籤
