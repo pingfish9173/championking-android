@@ -142,14 +142,18 @@ class SettingsFragment : Fragment() {
         initializeData()
         setupNumberPickResultListener()
 
-        // 設置初始選中的版位
+        // ✅ 修正：進入設置頁面第一時間，不要先顯示「1號板參數設定」
+        // 因為此時 cards 還沒載入，使用中板位也尚未決定
+        updateParametersTitle(null)     // 顯示「板位參數設定」
+        hideRightPanel()                // 保險：右側參數區先不要露出錯誤資訊
+
+        // 設置初始選中的版位（等 cards 進來後，會 selectShelf(inUseOrder) 並更新成正確標題）
         setupInitialShelfSelection()
 
         binding.radioGroupPitchType.setOnCheckedChangeListener { _, checkedId ->
             applyPitchTypeUi(isShopping = (checkedId == R.id.radioPitchShopping), syncValues = true)
         }
         applyPitchTypeUi(isShopping = binding.radioPitchShopping.isChecked, syncValues = false)
-
     }
 
     // 新增：追蹤是否已完成初始化
@@ -1696,6 +1700,7 @@ class SettingsFragment : Fragment() {
             binding.spinnerScratchesCount.adapter = adapter
 
             // ✅ 預設就是「請選擇」
+            suppressNextScratchTypeSelectionEvent = true
             binding.spinnerScratchesCount.setSelection(0)
         }
     }
