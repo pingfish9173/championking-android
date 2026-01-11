@@ -13,7 +13,7 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -66,7 +66,7 @@ class SettingsFragment : Fragment() {
     private lateinit var actionHandler: SettingsActionHandler
 
     // ViewModel（✅ 改成 activity scope：避免按 HOME/多工回來後草稿消失）
-    private val viewModel: SettingsViewModel by activityViewModels {
+    private val viewModel: SettingsViewModel by viewModels {
         val database = FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
         val repo = FirebaseRepository(database)
         val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()

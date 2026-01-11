@@ -16,6 +16,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import android.util.Log
 
 class FirebaseRepository(private val rootRef: DatabaseReference) {
 
@@ -25,9 +26,14 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
     private fun scratchCardRef(userKey: String, serial: String) = scratchCardsRef(userKey).child(serial)
     private fun backpackCounterKey(scratchesType: Int) = "scratchType_$scratchesType"
 
+    companion object {
+        private const val TAG = "FirebaseRepository"
+    }
+
     // 監聽 6 個版位：Flow<Map<order, ScratchCard>>
     fun listenScratchCardsFlow(userKey: String): Flow<Map<Int, ScratchCard>> = callbackFlow {
         val ref = scratchCardsRef(userKey)
+
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val map = mutableMapOf<Int, ScratchCard>()
@@ -40,9 +46,12 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                close(error.toException())
+                // 登出/權限切換時很容易發生，不要把整條 Flow 關死
+                trySend(emptyMap()).isSuccess
+                // 這邊不要 close(exception)，避免 UI 之後永遠收不到資料
             }
         }
+
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
     }

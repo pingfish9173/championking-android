@@ -23,7 +23,7 @@ class SettingsViewModel(
     // 6 版位資料（order -> ScratchCard）
     val cards: StateFlow<Map<Int, ScratchCard>> =
         repo.listenScratchCardsFlow(userKey)
-            .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // UI 事件（Toast等）
     private val _events = MutableSharedFlow<UiEvent>()
