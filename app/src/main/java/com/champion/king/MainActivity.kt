@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private val handler = Handler(Looper.getMainLooper())
 
     // === 廣告閒置顯示機制 ===
+    private val isAdEnabled = false // 💡 設定為 false 即可關閉廣告，改回 true 則恢復
     private var lastInteractionTime: Long = System.currentTimeMillis()
     private val idleTimeoutMillis = 15 * 60 * 1000L // 15分鐘
     private val idleHandler = Handler(Looper.getMainLooper())
@@ -1497,10 +1498,14 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun resetIdleTimer() {
         idleHandler.removeCallbacks(idleRunnable)
-        idleHandler.postDelayed(idleRunnable, idleTimeoutMillis)
+        // 只有在廣告開關開啟時，才啟動計時器
+        if (isAdEnabled) {
+            idleHandler.postDelayed(idleRunnable, idleTimeoutMillis)
+        }
     }
 
     private fun showAdPoster() {
+        if (!isAdEnabled) return // 💡 如果開關關閉，直接跳出不執行
         runOnUiThread {
             val decorView = window.decorView as FrameLayout
 
