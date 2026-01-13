@@ -2226,19 +2226,48 @@ class SettingsFragment : Fragment() {
         returnBtn: Boolean = true,
         delete: Boolean = true
     ) {
-        // ✅ 小工具：同時控制「能不能按」+「反灰視覺」
+        // 定義顏色
+        val colorDisabled = android.graphics.Color.LTGRAY
+        val colorBlue = android.graphics.Color.parseColor("#2196F3") // 儲存鍵專用藍色
+        // Android 預設紫色 (Material Purple 500)，如果不夠準確可改為 #6750A4 (Material 3)
+        val colorPurple = android.graphics.Color.parseColor("#6750A4")
+
+        val disabledTint = android.content.res.ColorStateList.valueOf(colorDisabled)
+        val blueTint = android.content.res.ColorStateList.valueOf(colorBlue)
+        val purpleTint = android.content.res.ColorStateList.valueOf(colorPurple)
+
+        // ✅ 小工具：同時控制「能不能按」+「顏色切換」
         fun apply(button: View, enabled: Boolean) {
             button.isEnabled = enabled
             button.isClickable = enabled
             button.isFocusable = enabled
-            button.alpha = if (enabled) 1.0f else 0.35f   // 反灰感，跟聚焦模式一致
+
+            if (button is Button) {
+                if (enabled) {
+                    // 🟢 啟用狀態：根據按鈕 ID 決定顏色
+                    if (button.id == R.id.button_save_settings) {
+                        button.backgroundTintList = blueTint // 儲存 -> 藍色
+                    } else {
+                        button.backgroundTintList = purpleTint // 其他 -> 紫色
+                    }
+                    button.alpha = 1.0f
+                } else {
+                    // 🛑 禁用狀態：統一設為灰色
+                    button.backgroundTintList = disabledTint
+                    button.alpha = 0.7f
+                }
+            } else {
+                // 非 Button 的 View
+                button.alpha = if (enabled) 1.0f else 0.35f
+            }
         }
 
-        // ✅ 你的規則：使用中 or 已刮過(>=1) → Save 一律強制 disabled + 反灰
+        // 判斷儲存按鈕是否須強制禁用 (使用中或已刮過)
         val order = shelfManager.selectedShelfOrder
         val card = viewModel.cards.value[order]
         val forceDisableSave = (card != null) && (card.inUsed || hasBeenScratched(card))
 
+        // 套用設定
         apply(binding.buttonSaveSettings, if (forceDisableSave) false else save)
         apply(binding.buttonToggleInuse, toggleInUse)
         apply(binding.buttonAutoScratch, autoScratch)
