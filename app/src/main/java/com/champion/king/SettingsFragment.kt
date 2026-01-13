@@ -497,14 +497,13 @@ class SettingsFragment : Fragment() {
         restoreAllInteractive()
 
         // =================================================================
-        // 退出聚焦模式時：根據當前卡片狀態「校正」按鈕權限 (上一輪修復的邏輯)
+        // 退出聚焦模式時：根據當前卡片狀態「校正」按鈕權限
         // =================================================================
         if (!isFocusMode) {
             val order = shelfManager.selectedShelfOrder
             val card = viewModel.cards.value[order]
 
             if (card == null) {
-                // 未設置狀態
                 setButtonsEnabled(
                     save = true,
                     toggleInUse = false,
@@ -513,7 +512,6 @@ class SettingsFragment : Fragment() {
                     delete = false
                 )
             } else {
-                // 已設置狀態 -> 檢查是否為唯讀
                 val isReadonly = card.inUsed || hasBeenScratched(card)
                 if (isReadonly) {
                     if (card.inUsed) {
@@ -551,12 +549,33 @@ class SettingsFragment : Fragment() {
         // 3) 預覽區保持可用並高亮
         binding.scratchBoardArea.alpha = 1f
 
+        // ✅ 3.5) ☆☆☆ 關鍵修正：聚焦時強制禁用「另一組」特/大獎控制元件（避免同列 parent 放行造成兩顆都能點）
+        fun disableView(v: View) {
+            v.isEnabled = false
+            v.alpha = 0.35f
+        }
+
+        when (currentFocusTarget) {
+            FocusTarget.SPECIAL -> {
+                // 只允許特獎那組，禁用大獎那組
+                disableView(binding.buttonPickGrandPrize)
+                disableView(binding.buttonGrandPrizeKeyboard)
+                disableView(binding.editTextGrandPrize)
+            }
+            FocusTarget.GRAND -> {
+                // 只允許大獎那組，禁用特獎那組
+                disableView(binding.buttonPickSpecialPrize)
+                disableView(binding.buttonSpecialPrizeKeyboard)
+                disableView(binding.editTextSpecialPrize)
+            }
+            else -> {}
+        }
+
         // 4) 其他零散按鈕雙保險（Save / InUse / AutoScratch / Return / Delete）
-        // ✅ 修正：在這裡加入了 binding.buttonAutoScratch
         listOf(
             binding.buttonSaveSettings,
             binding.buttonToggleInuse,
-            binding.buttonAutoScratch,    // <--- 新增這一行，確保進入聚焦模式時它被禁用
+            binding.buttonAutoScratch,
             binding.buttonReturnSelected,
             binding.buttonDeleteSelected
         ).forEach { v ->
@@ -604,13 +623,20 @@ class SettingsFragment : Fragment() {
     // 特獎挑選模式
     // ===========================================
 
-    // 特獎：進入挑選
+    // 特獎：進入挑選（✅ 互斥：同一時間只能特獎/大獎擇一）
     private fun enterSpecialPrizePickMode() {
+        // ✅ 若大獎模式正在選取，先退出（保險：避免兩個狀態同時 true）
+        if (isPickingGrandPrize) {
+            exitGrandPrizePickMode()
+        }
+
         isPickingSpecialPrize = true
         binding.buttonPickSpecialPrize.isPressed = true
         binding.buttonPickSpecialPrize.text = "特獎（選取中…）"
         showToast("請在左側刮板預覽區點選一個數字")
+
         currentPreviewFragment?.setSinglePickEnabled(true)
+        currentPreviewFragment?.setMultiPickEnabled(false)
 
         // ☆ 只允許「預覽區 + 特獎按鈕」
         updateFocusMode(true, FocusTarget.SPECIAL)
@@ -627,13 +653,20 @@ class SettingsFragment : Fragment() {
         updateFocusMode(false, null)
     }
 
-    // 大獎：進入多選
+    // 大獎：進入多選（✅ 互斥：同一時間只能特獎/大獎擇一）
     private fun enterGrandPrizePickMode() {
+        // ✅ 若特獎模式正在選取，先退出（保險：避免兩個狀態同時 true）
+        if (isPickingSpecialPrize) {
+            exitSpecialPrizePickMode()
+        }
+
         isPickingGrandPrize = true
         binding.buttonPickGrandPrize.isPressed = true
         binding.buttonPickGrandPrize.text = "大獎（多選中…）"
         showToast("請在左側預覽區多選數字（再點可取消）")
+
         currentPreviewFragment?.setMultiPickEnabled(true)
+        currentPreviewFragment?.setSinglePickEnabled(false)
 
         // ☆ 只允許「預覽區 + 大獎按鈕」
         updateFocusMode(true, FocusTarget.GRAND)
