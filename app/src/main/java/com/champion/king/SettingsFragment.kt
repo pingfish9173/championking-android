@@ -2136,15 +2136,23 @@ class SettingsFragment : Fragment() {
     }
 
     // ✅ 新增：獲取當前選擇的刮數
+    // ✅ 修正版：獲取當前刮數（優先用「目前板位卡片」的 scratchesType，避免 spinner 隱藏時讀到請選擇）
     private fun getCurrentScratchType(): Int? {
         return try {
-            val selectedItem = binding.spinnerScratchesCount.selectedItem
+            // 1) ✅ 若目前板位已設置卡片：直接用卡片的 scratchesType（最準）
+            val order = shelfManager.selectedShelfOrder
+            val cardType = viewModel.cards.value[order]?.scratchesType
+            if (cardType != null && cardType > 0) return cardType
 
-            // 處理 ScratchTypeItem 類型（從你現有的代碼中）
+            // 2) ✅ 若未設置但有草稿：用草稿記錄的 scratchType
+            val draftType = viewModel.getDraft(order)?.scratchType
+            if (draftType != null && draftType > 0) return draftType
+
+            // 3) 最後才讀 spinner（未設置狀態下才合理）
+            val selectedItem = binding.spinnerScratchesCount.selectedItem
             when (selectedItem) {
                 is ScratchTypeItem -> selectedItem.getScratchType()
                 is String -> {
-                    // 從字符串中提取刮數（例如 "10刮 (剩5)" -> 10）
                     val regex = Regex("(\\d+)刮")
                     val match = regex.find(selectedItem)
                     match?.groupValues?.get(1)?.toInt()
