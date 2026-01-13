@@ -931,7 +931,15 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
-        val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
+        val selectedOrder = shelfManager.selectedShelfOrder
+        val selectedCard = viewModel.cards.value[selectedOrder]
+
+        // ✅ 雙保險：就算 UI 哪裡把按鈕誤開，這裡也不允許儲存
+        if (selectedCard != null && (selectedCard.inUsed || hasBeenScratched(selectedCard))) {
+            showToast("此板位已使用中或已刮開，無法儲存參數")
+            return
+        }
+
         val scratchType = if (selectedCard != null) {
             selectedCard.scratchesType
         } else {
@@ -2218,11 +2226,24 @@ class SettingsFragment : Fragment() {
         returnBtn: Boolean = true,
         delete: Boolean = true
     ) {
-        binding.buttonSaveSettings.isEnabled = save
-        binding.buttonToggleInuse.isEnabled = toggleInUse
-        binding.buttonAutoScratch.isEnabled = autoScratch
-        binding.buttonReturnSelected.isEnabled = returnBtn
-        binding.buttonDeleteSelected.isEnabled = delete
+        // ✅ 小工具：同時控制「能不能按」+「反灰視覺」
+        fun apply(button: View, enabled: Boolean) {
+            button.isEnabled = enabled
+            button.isClickable = enabled
+            button.isFocusable = enabled
+            button.alpha = if (enabled) 1.0f else 0.35f   // 反灰感，跟聚焦模式一致
+        }
+
+        // ✅ 你的規則：使用中 or 已刮過(>=1) → Save 一律強制 disabled + 反灰
+        val order = shelfManager.selectedShelfOrder
+        val card = viewModel.cards.value[order]
+        val forceDisableSave = (card != null) && (card.inUsed || hasBeenScratched(card))
+
+        apply(binding.buttonSaveSettings, if (forceDisableSave) false else save)
+        apply(binding.buttonToggleInuse, toggleInUse)
+        apply(binding.buttonAutoScratch, autoScratch)
+        apply(binding.buttonReturnSelected, returnBtn)
+        apply(binding.buttonDeleteSelected, delete)
     }
 
     private fun setSpinnerSelection(spinner: Spinner, targetValue: Int?) {
