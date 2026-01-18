@@ -172,7 +172,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="4dp">
 
             <!-- 變更密碼 -->
             <Button
@@ -180,11 +180,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="變更密碼"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#2196F3"
-                android:paddingHorizontal="32dp"
-                android:paddingVertical="12dp" />
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp" />
 
             <!-- 間距 -->
             <Space
@@ -197,18 +197,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="解除裝置綁定"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#FF9800"
-                android:paddingHorizontal="24dp"
-                android:paddingVertical="12dp" />
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp" />
         </LinearLayout>
 
         <!-- 分隔線 -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp"
             android:background="#E0E0E0" />
 
@@ -280,11 +280,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="檢查更新"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textColor="#FFFFFF"
             android:backgroundTint="#4CAF50"
-            android:paddingHorizontal="32dp"
-            android:paddingVertical="12dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
             android:layout_gravity="start"
             android:layout_marginBottom="12dp" />
 

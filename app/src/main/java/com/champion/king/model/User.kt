@@ -13,6 +13,7 @@ data class User(
     var lineId: String = "",
     var remark: String = "",
     var point: Int = 0,
+    var billingMode: String = "POINT", // POINT | RENTAL
     var scratchCards: Map<String, ScratchCard>? = null,
     var scratchType_10: Int = 0,
     var scratchType_20: Int = 0,
@@ -33,8 +34,6 @@ data class User(
     var salt: String? = null,
     var passwordHash: String? = null,
     var devicePasswords: String? = null,
-
-    // 🔹 新增：裝置綁定相關欄位
     var deviceBindingStatus: String? = null,  // "BOUND" 或 "UNBOUND"
     var boundDeviceInfo: BoundDeviceInfo? = null  // 綁定的裝置資訊
 )
