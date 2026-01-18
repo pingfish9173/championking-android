@@ -110,14 +110,13 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     private fun setupLineTextWithUnderline() {
-        val fullText = "儲值請加入官方Line @376xyozd"
+        val fullText = "儲值請加入官方Line：\n@376xyozd" // 加入換行符號可以讓 ID 絕對置中
         val underlinePart = "@376xyozd"
         val spannable = android.text.SpannableString(fullText)
 
         val start = fullText.indexOf(underlinePart)
         if (start != -1) {
             val end = start + underlinePart.length
-            // 加入底線
             spannable.setSpan(
                 android.text.style.UnderlineSpan(),
                 start,
@@ -126,8 +125,11 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             )
         }
 
-        // 找到該 TextView 並賦值
-        view?.findViewById<TextView>(R.id.line_id_text)?.text = spannable
+        // 使用 binding 訪問更安全
+        binding.lineIdText.apply {
+            text = spannable
+            gravity = android.view.Gravity.CENTER // 確保程式碼層級也強制置中
+        }
     }
 
     override fun onDestroyView() {
