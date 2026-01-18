@@ -88,14 +88,17 @@ class SettingsFragment : Fragment() {
     private data class ScratchTypeItem(
         val type: Int,
         val stock: Int,
-        val isPlaceholder: Boolean = false
+        val isPlaceholder: Boolean = false,
+        /** RENTAL 吃到飽：不顯示庫存字樣 */
+        val showStockInfo: Boolean = true,
+        /** RENTAL 吃到飽：即使 stock=0 也允許選擇 */
+        val selectableWithoutStock: Boolean = false
     ) {
-        override fun toString(): String = if (isPlaceholder) {
-            "請選擇"
-        } else if (stock > 0) {
-            "${type}刮 (剩${stock})"
-        } else {
-            "${type}刮 (無庫存)"
+        override fun toString(): String = when {
+            isPlaceholder -> "請選擇"
+            !showStockInfo -> "${type}刮"
+            stock > 0 -> "${type}刮 (剩${stock})"
+            else -> "${type}刮 (無庫存)"
         }
 
         fun getScratchType(): Int? = if (isPlaceholder) null else type
@@ -125,6 +128,9 @@ class SettingsFragment : Fragment() {
 
     // ✅ 避免「程式碼 setSelection」後，Spinner 延遲觸發 onItemSelected 又把預覽 random 掉
     private var suppressNextScratchTypeSelectionEvent: Boolean = false
+
+    // ✅ 新增：記住目前帳號的計費模式（POINT / RENTAL），用於 UI 規則切換
+    private var currentBillingMode: String = "POINT"
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -367,14 +373,9 @@ class SettingsFragment : Fragment() {
                         "用戶選擇了刮數: ${scratchType}刮, 庫存: ${selectedItem.stock}"
                     )
 
-                    // 無庫存就不允許進入參數設定
-                    if (selectedItem.stock <= 0) {
+                    // ✅ POINT 才需要檢查庫存；RENTAL 吃到飽完全跳過庫存驗證
+                    if (currentBillingMode != "RENTAL" && selectedItem.stock <= 0) {
                         showToast("${scratchType}刮 無庫存，無法選擇")
-                        // 回到「請選擇」比較直覺（可選）
-                        // suppressNextScratchTypeSelectionEvent = true
-                        // isUpdatingSpinner = true
-                        // binding.spinnerScratchesCount.setSelection(0, false)
-                        // isUpdatingSpinner = false
                         return
                     }
 
@@ -1014,6 +1015,7 @@ class SettingsFragment : Fragment() {
             return
         }
         if (!validateBeforeSave(data)) return
+
         val sp = data.specialPrize?.toIntOrNull()
         if (sp != null && gpList.contains(sp)) {
             showToast("無法儲存：特獎不可同時為大獎，請調整選取")
@@ -1032,51 +1034,17 @@ class SettingsFragment : Fragment() {
 
         isSavingInProgress = true
 
-        Log.d("SettingsFragment", "準備儲存: isNewCard=$isNewCard, scratchType=${data.scratchType}")
+        Log.d("SettingsFragment", "準備儲存: isNewCard=$isNewCard, scratchType=${data.scratchType}, billingMode=$currentBillingMode")
 
-        if (isNewCard) {
-            Log.d("SettingsFragment", "新建版位，準備扣減庫存")
-            deductScratchTypeStock(data.scratchType) { success ->
-                if (success) {
-                    Log.d("SettingsFragment", "庫存扣減成功，開始創建卡片")
-                    upsertCardWithData(data, existingCard)
-
-                    // ★ 延遲後重置標記並手動更新 UI
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        kotlinx.coroutines.delay(500)
-                        isSavingInProgress = false
-
-                        // ★ 手動觸發 UI 更新
-                        val updatedCard = viewModel.cards.value[data.order]
-                        if (updatedCard != null) {
-                            // ✅ 儲存成功（已經變成正式資料）→ 清掉該板位草稿
-                            viewModel.clearDraft(data.order)
-
-                            Log.d("SettingsFragment", "儲存完成，手動更新 UI")
-                            showSetShelfState(updatedCard)
-                        } else {
-                            Log.w("SettingsFragment", "儲存完成但找不到卡片")
-                            showUnsetShelfState()
-                        }
-                    }
-                } else {
-                    isSavingInProgress = false
-                    showToast("庫存不足或扣減失敗")
-                }
-            }
-        } else {
-            Log.d("SettingsFragment", "更新現有版位，直接儲存")
-            upsertCardWithData(data, existingCard)
-
-            // ★ 延遲後重置標記並手動更新 UI
+        // ✅ 共用：儲存完成後手動更新 UI（避免重複碼）
+        fun finishAndRefreshUI() {
             viewLifecycleOwner.lifecycleScope.launch {
                 kotlinx.coroutines.delay(500)
                 isSavingInProgress = false
 
-                // ★ 手動觸發 UI 更新
                 val updatedCard = viewModel.cards.value[data.order]
                 if (updatedCard != null) {
-                    // ✅ 儲存成功（正式資料已存在）→ 也清掉草稿（保險）
+                    // ✅ 儲存成功 → 清掉該板位草稿
                     viewModel.clearDraft(data.order)
 
                     Log.d("SettingsFragment", "儲存完成，手動更新 UI")
@@ -1086,6 +1054,35 @@ class SettingsFragment : Fragment() {
                     showUnsetShelfState()
                 }
             }
+        }
+
+        if (isNewCard) {
+            Log.d("SettingsFragment", "新建版位流程")
+
+            // ✅ RENTAL：吃到飽 → 完全不使用背包庫存、不扣庫存，直接創建
+            if (currentBillingMode == "RENTAL") {
+                Log.d("SettingsFragment", "RENTAL 模式：跳過扣庫存，直接創建卡片")
+                upsertCardWithData(data, existingCard)
+                finishAndRefreshUI()
+                return
+            }
+
+            // ✅ POINT：維持原本邏輯，要扣減庫存
+            Log.d("SettingsFragment", "POINT 模式：準備扣減庫存")
+            deductScratchTypeStock(data.scratchType) { success ->
+                if (success) {
+                    Log.d("SettingsFragment", "庫存扣減成功，開始創建卡片")
+                    upsertCardWithData(data, existingCard)
+                    finishAndRefreshUI()
+                } else {
+                    isSavingInProgress = false
+                    showToast("庫存不足或扣減失敗")
+                }
+            }
+        } else {
+            Log.d("SettingsFragment", "更新現有版位，直接儲存")
+            upsertCardWithData(data, existingCard)
+            finishAndRefreshUI()
         }
     }
 
@@ -1109,6 +1106,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun handleReturnClick() {
+        // ✅ 租賃制：不允許返回（按鈕應該已是 disabled，這裡再加一道保險）
+        if (currentBillingMode == "RENTAL") {
+            return
+        }
         actionHandler.handleReturn(shelfManager.selectedShelfOrder, viewModel.cards.value)
     }
 
@@ -1619,6 +1620,12 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun deductScratchTypeStock(scratchType: Int, onComplete: (Boolean) -> Unit) {
+        // ✅ RENTAL 吃到飽：完全不扣背包庫存
+        if (currentBillingMode == "RENTAL") {
+            onComplete(true)
+            return
+        }
+
         val userRef = getUserFirebaseReference()
         if (userRef == null) {
             onComplete(false)
@@ -1679,13 +1686,61 @@ class SettingsFragment : Fragment() {
                     if (!isAdded || _binding == null) return@safeExecute
 
                     val user = snapshot.getValue(User::class.java) ?: return@safeExecute
-                    updateSpinnerWithStockData(user)
+
+                    // ✅ 記住目前帳號計費模式
+                    currentBillingMode = user.billingMode ?: "POINT"
+
+                    // ✅ RENTAL：吃到飽刮數清單；POINT：用背包庫存清單
+                    if (currentBillingMode == "RENTAL") {
+                        updateSpinnerForRentalMode()
+                    } else {
+                        updateSpinnerWithStockData(user)
+                    }
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e("SettingsFragment", "載入背包資料失敗: ${error.message}", error.toException())
             }
+        }
+    }
+
+    /**
+     * ✅ 租賃制（RENTAL）：吃到飽
+     * - 刮數下拉顯示「全部刮數」
+     * - 不顯示庫存資訊
+     * - 不因庫存為 0 而禁用項目
+     */
+    private fun updateSpinnerForRentalMode() {
+        val items = listOf(
+            ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true, showStockInfo = false)
+        ) + scratchOrder.map {
+            ScratchTypeItem(
+                type = it,
+                // 給一個明確的「可用」值，避免任何舊邏輯誤判
+                stock = Int.MAX_VALUE,
+                isPlaceholder = false,
+                showStockInfo = false,
+                selectableWithoutStock = true
+            )
+        }
+
+        val currentSelection = binding.spinnerScratchesCount.selectedItemPosition
+
+        isUpdatingSpinner = true
+        val adapter = buildStockAwareAdapter(items)
+        binding.spinnerScratchesCount.adapter = adapter
+
+        if (currentSelection in 0 until adapter.count) {
+            binding.spinnerScratchesCount.setSelection(currentSelection)
+        } else {
+            suppressNextScratchTypeSelectionEvent = true
+            binding.spinnerScratchesCount.setSelection(0)
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(100)
+            isUpdatingSpinner = false
         }
     }
 
@@ -1709,6 +1764,8 @@ class SettingsFragment : Fragment() {
             isUpdatingSpinner = false
         }
     }
+
+
 
     private fun createStockMap(user: User): Map<Int, Int> {
         return mapOf(
@@ -1758,8 +1815,10 @@ class SettingsFragment : Fragment() {
 
             override fun isEnabled(position: Int): Boolean {
                 return try {
-                    val item = getItem(position)
-                    (item?.stock ?: 0) > 0
+                    val item = getItem(position) ?: return false
+                    if (item.isPlaceholder) return false
+                    if (item.selectableWithoutStock) return true   // ✅ RENTAL
+                    item.stock > 0                                 // ✅ POINT
                 } catch (e: Exception) {
                     false
                 }
@@ -2271,7 +2330,9 @@ class SettingsFragment : Fragment() {
         apply(binding.buttonSaveSettings, if (forceDisableSave) false else save)
         apply(binding.buttonToggleInuse, toggleInUse)
         apply(binding.buttonAutoScratch, autoScratch)
-        apply(binding.buttonReturnSelected, returnBtn)
+        // ✅ 租賃制：禁用「返回」按鈕（不允許回收）
+        val returnEnabled = returnBtn && (currentBillingMode != "RENTAL")
+        apply(binding.buttonReturnSelected, returnEnabled)
         apply(binding.buttonDeleteSelected, delete)
     }
 
