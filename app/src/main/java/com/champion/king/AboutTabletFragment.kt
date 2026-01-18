@@ -52,6 +52,12 @@ class AboutTabletFragment : Fragment() {
     private lateinit var contentScrollFeatures: View
     private lateinit var contentTextFeatures: TextView
 
+    private lateinit var tabContact: LinearLayout
+    private lateinit var tabContactText: TextView
+    private lateinit var tabContactIndicator: View
+    private lateinit var contentScrollContact: View
+
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -90,6 +96,11 @@ class AboutTabletFragment : Fragment() {
         tabFeaturesIndicator = view.findViewById(R.id.tab_features_indicator)
         contentScrollFeatures = view.findViewById(R.id.content_scroll_features)
         contentTextFeatures = view.findViewById(R.id.content_text_features)
+
+        tabContact = view.findViewById(R.id.tab_contact)
+        tabContactText = view.findViewById(R.id.tab_contact_text)
+        tabContactIndicator = view.findViewById(R.id.tab_contact_indicator)
+        contentScrollContact = view.findViewById(R.id.content_scroll_contact)
 
         // 1. 定義內文 (這裡不需要手動加全形空格了，交給 Span 處理)
         val contentFeatures = """
@@ -134,6 +145,10 @@ class AboutTabletFragment : Fragment() {
 
         tabFeatures.setOnClickListener {
             selectTab(TabType.FEATURES)
+        }
+
+        tabContact.setOnClickListener {
+            selectTab(TabType.CONTACT)
         }
 
         // --- 遊戲協議內文 ----
@@ -386,11 +401,13 @@ class AboutTabletFragment : Fragment() {
         resetTabState(tabFeaturesText, tabFeaturesIndicator)
         resetTabState(tabAboutText, tabAboutIndicator)
         resetTabState(tabDisclaimerText, tabDisclaimerIndicator)
+        resetTabState(tabContactText, tabContactIndicator)
 
         contentScrollUpdateLog.visibility = View.GONE
         contentScrollFeatures.visibility = View.GONE
         contentScrollAbout.visibility = View.GONE
         contentScrollDisclaimer.visibility = View.GONE
+        contentScrollContact.visibility = View.GONE
 
         when (selectedTab) {
             TabType.UPDATE_LOG -> {
@@ -415,6 +432,12 @@ class AboutTabletFragment : Fragment() {
                 setTabSelected(tabDisclaimerText, tabDisclaimerIndicator)
                 contentScrollDisclaimer.visibility = View.VISIBLE
                 titleText.text = "免責聲明"
+            }
+
+            TabType.CONTACT -> {
+                setTabSelected(tabContactText, tabContactIndicator)
+                contentScrollContact.visibility = View.VISIBLE
+                titleText.text = "聯絡我們"
             }
         }
     }
@@ -443,6 +466,7 @@ class AboutTabletFragment : Fragment() {
     private enum class TabType {
         UPDATE_LOG,
         FEATURES,
+        CONTACT,
         ABOUT,
         DISCLAIMER
     }

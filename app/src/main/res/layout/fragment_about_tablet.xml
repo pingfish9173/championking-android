@@ -25,7 +25,7 @@
             android:textStyle="bold"
             android:gravity="start" />
 
-        <!-- 右側三個頁籤 -->
+        <!-- 右側頁籤 -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -79,6 +79,34 @@
 
                 <View
                     android:id="@+id/tab_features_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="4dp"
+                    android:background="#FF6B35"
+                    android:visibility="invisible" />
+            </LinearLayout>
+
+            <!-- 聯絡我們 Tab -->
+            <LinearLayout
+                android:id="@+id/tab_contact"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp"
+                android:layout_marginLeft="16dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/tab_contact_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="聯絡我們"
+                    android:textSize="18sp"
+                    android:textColor="#444444" />
+
+                <View
+                    android:id="@+id/tab_contact_indicator"
                     android:layout_width="match_parent"
                     android:layout_height="3dp"
                     android:layout_marginTop="4dp"
@@ -193,6 +221,42 @@
                 android:textSize="18sp"
                 android:lineSpacingMultiplier="1.4"
                 android:padding="12dp" />
+        </ScrollView>
+
+        <!-- 聯絡我們的 ScrollView -->
+        <ScrollView
+            android:id="@+id/content_scroll_contact"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="24dp">
+
+                <ImageView
+                    android:id="@+id/contact_qr"
+                    android:layout_width="260dp"
+                    android:layout_height="260dp"
+                    android:layout_marginTop="12dp"
+                    android:src="@drawable/line_qr"
+                    android:contentDescription="LINE QRCode" />
+
+                <TextView
+                    android:id="@+id/contact_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="掃取官方Line：@376xyozd\n小編會第一時間為您服務唷～"
+                    android:textColor="#333333"
+                    android:textSize="18sp"
+                    android:lineSpacingMultiplier="1.25"
+                    android:gravity="center" />
+            </LinearLayout>
         </ScrollView>
 
         <!-- 遊戲協議的 ScrollView -->
