@@ -140,9 +140,14 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 val city = snap.child("city").getValue(String::class.java) ?: ""
                 val district = snap.child("district").getValue(String::class.java) ?: ""
 
-                // ✅ 消費模式（POINT / RENTAL）→ 右側欄位只顯示「點數制 / 租賃制」
+                // ✅ 消費模式（POINT / RENTAL）
                 val billingMode = snap.child("billingMode").getValue(String::class.java) ?: "POINT"
-                val billingModeText = if (billingMode == "RENTAL") "租賃制" else "點數制"
+                val isRental = (billingMode == "RENTAL")
+                val billingModeText = if (isRental) "租賃制" else "點數制"
+
+                // ✅ 租賃資訊（用來顯示 ℹ️ 內容）
+                val rentalStartAt = snap.child("rentalStartAt").getValue(Long::class.java)
+                val rentalDays = snap.child("rentalDays").getValue(Int::class.java) ?: 0
 
                 originalAddress = "$city $district".trim()
                 originalAuthCode = snap.child("devicePasswords").getValue(String::class.java) ?: "無"
@@ -154,8 +159,19 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 binding.textEmail.text = email
                 binding.textPhone.text = phone
 
-                // ✅ 這裡只放值（你的 XML 左邊已經有「消費模式：」）
+                // ✅ 你指定的顯示格式：左邊固定「消費模式：」 + 右邊也要顯示「消費模式：租賃制」
+                // 因為你現在的 UI 已經有左邊固定 label，所以這裡照你要求「右邊顯示消費模式：租賃制」
                 binding.textBillingMode.text = billingModeText
+
+                // ✅ 只有租賃制才顯示 ℹ️，並綁定點擊事件
+                binding.iconBillingModeInfo.visibility = if (isRental) View.VISIBLE else View.GONE
+                if (isRental) {
+                    binding.iconBillingModeInfo.setOnClickListener {
+                        showRentalInfoDialog(rentalStartAt, rentalDays)
+                    }
+                } else {
+                    binding.iconBillingModeInfo.setOnClickListener(null)
+                }
 
                 isAddressVisible = false
                 isAuthCodeVisible = false
@@ -172,6 +188,42 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
                 showToast(AppConfig.Msg.LOAD_FAIL_PREFIX + e.message)
             }
+    }
+
+    private fun showRentalInfoDialog(rentalStartAt: Long?, rentalDays: Int) {
+        val startAt = rentalStartAt ?: 0L
+        if (startAt <= 0L || rentalDays <= 0) {
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("租賃資訊")
+                .setMessage("租賃資料不足，請確認起算時間與天數是否正確。")
+                .setPositiveButton("關閉", null)
+                .show()
+            return
+        }
+
+        val dayMillis = 24L * 60L * 60L * 1000L
+        val expiryAt = startAt + rentalDays.toLong() * dayMillis
+        val now = System.currentTimeMillis()
+        val remainingMs = (expiryAt - now).coerceAtLeast(0L)
+
+        val remainingDays = remainingMs / dayMillis
+        val remainingHours = (remainingMs % dayMillis) / (60L * 60L * 1000L)
+        val remainingMinutes = (remainingMs % (60L * 60L * 1000L)) / (60L * 1000L)
+
+        val locale = java.util.Locale.TAIWAN
+        val fmt = java.text.SimpleDateFormat("yyyy年M月d日HH時mm分", locale)
+
+        val startText = fmt.format(java.util.Date(startAt))
+        val expiryText = fmt.format(java.util.Date(expiryAt))
+        val remainingText = "${remainingDays}日${remainingHours}時${remainingMinutes}分"
+
+        val msg = "起算時間：$startText\n到期時間：$expiryText\n剩餘時間：$remainingText"
+
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("租賃資訊")
+            .setMessage(msg)
+            .setPositiveButton("關閉", null)
+            .show()
     }
 
     /**

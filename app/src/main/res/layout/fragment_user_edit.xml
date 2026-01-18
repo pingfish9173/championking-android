@@ -114,9 +114,8 @@
 
             <TextView
                 android:id="@+id/text_address"
-                android:layout_width="0dp"
+                android:layout_width="200dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:textColor="#111111"
                 android:textSize="16sp" />
 
@@ -150,9 +149,8 @@
 
             <TextView
                 android:id="@+id/text_authorization_code"
-                android:layout_width="0dp"
+                android:layout_width="200dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:textColor="#111111"
                 android:textSize="16sp" />
 
@@ -172,7 +170,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="24dp"
+            android:gravity="center_vertical">
 
             <TextView
                 android:layout_width="96dp"
@@ -183,13 +182,26 @@
                 android:textSize="14sp"
                 android:layout_marginEnd="8dp" />
 
+            <!-- 值：限制寬度，不撐滿 -->
             <TextView
                 android:id="@+id/text_billing_mode"
-                android:layout_width="0dp"
+                android:layout_width="70dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:textColor="#111111"
                 android:textSize="16sp" />
+
+            <!-- ℹ️ -->
+            <ImageView
+                android:id="@+id/icon_billing_mode_info"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_info"
+                android:contentDescription="租賃制資訊"
+                android:clickable="true"
+                android:focusable="true"
+                android:visibility="gone"
+                android:tint="@color/blue_500" />
         </LinearLayout>
 
         <!-- 按鈕區域（變更密碼 & 解除裝置綁定） -->
