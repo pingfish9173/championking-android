@@ -217,11 +217,37 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         val expiryText = fmt.format(java.util.Date(expiryAt))
         val remainingText = "${remainingDays}日${remainingHours}時${remainingMinutes}分"
 
-        val msg = "起算時間：$startText\n到期時間：$expiryText\n剩餘時間：$remainingText"
+        // ✅ 組合完整訊息文字
+        val fullText =
+            "起算時間：$startText\n" +
+                    "到期時間：$expiryText\n" +
+                    "剩餘時間：$remainingText"
+
+        // ✅ 使用 SpannableString 只標紅「剩餘時間的數值」
+        val spannable = android.text.SpannableString(fullText)
+
+        val target = "剩餘時間：$remainingText"
+        val startIndex = fullText.indexOf(target)
+        if (startIndex >= 0) {
+            val valueStart = startIndex + "剩餘時間：".length
+            val valueEnd = valueStart + remainingText.length
+
+            spannable.setSpan(
+                android.text.style.ForegroundColorSpan(
+                    androidx.core.content.ContextCompat.getColor(
+                        requireContext(),
+                        android.R.color.holo_red_dark
+                    )
+                ),
+                valueStart,
+                valueEnd,
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
 
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("租賃資訊")
-            .setMessage(msg)
+            .setMessage(spannable) // ✅ 注意這裡改成 Spannable
             .setPositiveButton("關閉", null)
             .show()
     }

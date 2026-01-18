@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF">
@@ -201,7 +202,7 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:visibility="gone"
-                android:tint="@color/blue_500" />
+                app:tint="@color/blue_500" />
         </LinearLayout>
 
         <!-- 按鈕區域（變更密碼 & 解除裝置綁定） -->
