@@ -14,6 +14,12 @@ data class User(
     var remark: String = "",
     var point: Int = 0,
     var billingMode: String = "POINT", // POINT | RENTAL
+    var rentalDays: Int = 0,
+    var rentalPlanId: String? = null,
+    var rentalPlanMoney: Int = 0,
+    var rentalPlanName: String? = null,
+    var rentalStartAt: Long? = null,
+    var rentalRenewedAt: Long? = null,
     var scratchCards: Map<String, ScratchCard>? = null,
     var scratchType_10: Int = 0,
     var scratchType_20: Int = 0,

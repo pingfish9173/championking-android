@@ -136,7 +136,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="12dp"
             android:gravity="center_vertical">
 
             <TextView
@@ -165,6 +165,31 @@
                 android:contentDescription="顯示/隱藏授權碼"
                 android:clickable="true"
                 android:focusable="true" />
+        </LinearLayout>
+
+        <!-- 消費模式（點數制 / 租賃制） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="96dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="消費模式："
+                android:textColor="#666666"
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/text_billing_mode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#111111"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <!-- 按鈕區域（變更密碼 & 解除裝置綁定） -->

@@ -140,9 +140,12 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 val city = snap.child("city").getValue(String::class.java) ?: ""
                 val district = snap.child("district").getValue(String::class.java) ?: ""
 
+                // ✅ 消費模式（POINT / RENTAL）→ 右側欄位只顯示「點數制 / 租賃制」
+                val billingMode = snap.child("billingMode").getValue(String::class.java) ?: "POINT"
+                val billingModeText = if (billingMode == "RENTAL") "租賃制" else "點數制"
+
                 originalAddress = "$city $district".trim()
-                originalAuthCode =
-                    snap.child("devicePasswords").getValue(String::class.java) ?: "無"
+                originalAuthCode = snap.child("devicePasswords").getValue(String::class.java) ?: "無"
 
                 // 🔒 再補一道保險
                 if (!isAdded || view == null) return@addOnSuccessListener
@@ -150,6 +153,9 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 binding.textAccount.text = account
                 binding.textEmail.text = email
                 binding.textPhone.text = phone
+
+                // ✅ 這裡只放值（你的 XML 左邊已經有「消費模式：」）
+                binding.textBillingMode.text = billingModeText
 
                 isAddressVisible = false
                 isAuthCodeVisible = false
