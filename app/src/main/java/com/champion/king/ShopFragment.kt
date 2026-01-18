@@ -36,6 +36,10 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     private var shopItemsHandle: DbListenerHandle? = null
     private var userPointsHandle: DbListenerHandle? = null
 
+    // ✅ 租賃制判斷（吃到飽不提供商城）
+    private var isRentalMode: Boolean = false
+    private var hasShownRentalShopToast: Boolean = false
+
     override fun onAttach(context: Context) {
         super.onAttach(context)
         if (context is UserSessionProvider) userSessionProvider = context
@@ -73,6 +77,8 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             binding.userPointsTextview.text = "我的點數: N/A"
             showToast("無法載入點數：用戶未登入")
         } else {
+            // ✅ 進商城：先檢查是否租賃制，租賃制就先提示一次
+            loadBillingModeAndMaybeToast(userKey)
             userPointsHandle = repo.observeUserPoints(
                 userKey,
                 onPoints = { p ->
@@ -91,7 +97,15 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         // 設定 LINE 帳號帶底線
         setupLineTextWithUnderline()
 
-        binding.confirmPurchaseButton.setThrottledClick { showPurchaseConfirmationDialog() }
+        binding.confirmPurchaseButton.setThrottledClick {
+            // ✅ 租賃制：按購買就擋下來
+            if (isRentalMode) {
+                showToast("此帳號為租賃制，無提供商城服務")
+                return@setThrottledClick
+            }
+            showPurchaseConfirmationDialog()
+        }
+
         binding.clearCartButton.setThrottledClick { clearCart() }
     }
 
@@ -121,6 +135,34 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         shopItemsHandle?.remove(); shopItemsHandle = null
         userPointsHandle?.remove(); userPointsHandle = null
         super.onDestroyView()
+    }
+
+    private fun loadBillingModeAndMaybeToast(userKey: String) {
+        // 這裡假設你的 users 節點結構是：users/{userKey}/billingMode
+        // （你前面 Settings 那邊就是 User 物件包含 billingMode）
+        val ref = com.google.firebase.database.FirebaseDatabase.getInstance()
+            .reference
+            .child("users")
+            .child(userKey)
+            .child("billingMode")
+
+        ref.addListenerForSingleValueEvent(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val mode = snapshot.getValue(String::class.java) ?: "POINT"
+                isRentalMode = (mode == "RENTAL")
+
+                // ✅ 進商城先提示一次
+                if (isRentalMode && !hasShownRentalShopToast && isAdded && view != null) {
+                    hasShownRentalShopToast = true
+                    showToast("此帳號為租賃制，無提供商城服務")
+                }
+            }
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                // 讀不到就當作 POINT，不影響原本商城
+                Log.w("ShopFragment", "loadBillingMode failed: ${error.message}")
+            }
+        })
     }
 
     // ====== UI ======
@@ -417,6 +459,12 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     private fun confirmPurchase(totalAmount: Int) = requireContext().guardOnline {
+        // ✅ 保險：租賃制一律不允許真正購買流程
+        if (isRentalMode) {
+            showToast("此帳號為租賃制，無提供商城服務")
+            return@guardOnline
+        }
+
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
         if (userKey.isNullOrEmpty()) {
             showToast("無法完成購買：用戶未登入！")
