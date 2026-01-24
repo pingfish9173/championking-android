@@ -180,8 +180,8 @@
 
                     <ImageView
                         android:id="@+id/shop_button_master"
-                        android:layout_width="45dp"
-                        android:layout_height="45dp"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
                         android:clickable="true"
                         android:contentDescription="商城"
                         android:focusable="true"
@@ -197,8 +197,8 @@
 
                     <ImageView
                         android:id="@+id/bag_button_master"
-                        android:layout_width="45dp"
-                        android:layout_height="45dp"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
                         android:clickable="true"
                         android:contentDescription="背包"
                         android:focusable="true"
@@ -214,8 +214,8 @@
 
                     <ImageView
                         android:id="@+id/config_button_master"
-                        android:layout_width="45dp"
-                        android:layout_height="45dp"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
                         android:clickable="true"
                         android:contentDescription="設定"
                         android:focusable="true"
@@ -231,8 +231,8 @@
 
                     <ImageView
                         android:id="@+id/user_button_master"
-                        android:layout_width="45dp"
-                        android:layout_height="45dp"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
                         android:clickable="true"
                         android:contentDescription="用戶"
                         android:focusable="true"
@@ -262,8 +262,8 @@
 
                     <ImageView
                         android:id="@+id/pad_button_master"
-                        android:layout_width="45dp"
-                        android:layout_height="45dp"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
                         android:layout_gravity="center"
                         android:clickable="true"
                         android:contentDescription="遊戲協議"
