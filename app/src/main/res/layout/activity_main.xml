@@ -28,7 +28,7 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="2.8"
+                android:layout_weight="2.5"
                 android:background="#FFFFFF"
                 android:padding="0dp"
                 android:layout_margin="0dp">
@@ -85,7 +85,7 @@
                         android:textSize="12sp"
                         android:textStyle="bold"
                         android:visibility="gone"
-                        android:paddingHorizontal="12dp"
+                        android:paddingHorizontal="6dp"
                         android:paddingVertical="6dp"
                         android:minHeight="36dp"
                         android:minWidth="72dp"
@@ -102,7 +102,7 @@
                 android:id="@+id/prize_info_container_master"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="3.6"
+                android:layout_weight="3.9"
                 android:background="#FFFFFF"
                 android:orientation="vertical"
                 android:padding="1dp"
@@ -180,8 +180,8 @@
 
                     <ImageView
                         android:id="@+id/shop_button_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="45dp"
+                        android:layout_height="45dp"
                         android:clickable="true"
                         android:contentDescription="商城"
                         android:focusable="true"
@@ -197,8 +197,8 @@
 
                     <ImageView
                         android:id="@+id/bag_button_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="45dp"
+                        android:layout_height="45dp"
                         android:clickable="true"
                         android:contentDescription="背包"
                         android:focusable="true"
@@ -214,8 +214,8 @@
 
                     <ImageView
                         android:id="@+id/config_button_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="45dp"
+                        android:layout_height="45dp"
                         android:clickable="true"
                         android:contentDescription="設定"
                         android:focusable="true"
@@ -231,8 +231,8 @@
 
                     <ImageView
                         android:id="@+id/user_button_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="45dp"
+                        android:layout_height="45dp"
                         android:clickable="true"
                         android:contentDescription="用戶"
                         android:focusable="true"
@@ -262,8 +262,8 @@
 
                     <ImageView
                         android:id="@+id/pad_button_master"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
+                        android:layout_width="45dp"
+                        android:layout_height="45dp"
                         android:layout_gravity="center"
                         android:clickable="true"
                         android:contentDescription="遊戲協議"
@@ -287,8 +287,8 @@
                         android:backgroundTint="#FF9800"
                         android:text="換板密碼"
                         android:textColor="#FFFFFF"
-                        android:textSize="11sp"
-                        android:paddingHorizontal="10dp"
+                        android:textSize="10sp"
+                        android:paddingHorizontal="5dp"
                         android:minHeight="0dp"
                         android:minWidth="0dp" />
 
@@ -296,12 +296,12 @@
                         android:id="@+id/button_master_player_switch_master"
                         android:layout_width="wrap_content"
                         android:layout_height="36dp"
-                        android:layout_marginHorizontal="4dp"
+                        android:layout_marginHorizontal="2dp"
                         android:backgroundTint="#FF9800"
                         android:text="玩家頁面"
                         android:textColor="#FFFFFF"
-                        android:textSize="11sp"
-                        android:paddingHorizontal="10dp"
+                        android:textSize="10sp"
+                        android:paddingHorizontal="5dp"
                         android:minHeight="0dp"
                         android:minWidth="0dp" />
                 </LinearLayout>
