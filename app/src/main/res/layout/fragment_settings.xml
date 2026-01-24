@@ -87,13 +87,13 @@
             android:layout_weight="3"
             android:background="#FFFFFF"
             android:orientation="vertical"
-            android:padding="8dp">
+            android:padding="6dp">
 
             <TextView
                 android:id="@+id/text_parameters_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="2dp"
+                android:layout_marginBottom="0dp"
                 android:text="刮刮卡參數設定"
                 android:textColor="#333333"
                 android:textSize="16sp"
@@ -104,7 +104,7 @@
                 android:id="@+id/layout_scratch_count_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="6dp"
+                android:layout_marginBottom="2dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
@@ -120,16 +120,16 @@
                     android:id="@+id/spinner_scratches_count"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="0.8"
                     android:entries="@array/scratches_count_options" />
 
                 <!-- 🔹 新增重新整理按鈕 -->
                 <ImageButton
                     android:id="@+id/button_refresh_scratch"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:background="@android:color/transparent"
-                    android:padding="6dp"
+                    android:padding="2dp"
                     android:src="@drawable/ic_refresh"
                     android:contentDescription="重新整理" />
             </LinearLayout>
@@ -157,18 +157,19 @@
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="6dp"
                         android:backgroundTint="#FF9800"
-                        android:minHeight="0dp"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="6dp"
                         android:text="特獎"
                         android:textColor="#FFFFFF"
-                        android:textSize="14sp" />
+                        android:textSize="14sp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minHeight="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:minWidth="0dp"/>
 
-                    <!-- ✅ 新增：輸入框與鉛筆圖標的容器 -->
                     <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
 
                         <EditText
                             android:id="@+id/edit_text_special_prize"
@@ -180,20 +181,20 @@
                             android:focusableInTouchMode="false"
                             android:hint="請選擇"
                             android:inputType="none"
-                            android:padding="6dp"
+                            android:padding="2dp"
                             android:paddingEnd="32dp"
                             android:textSize="12sp" />
 
                         <!-- ✅ 鉛筆圖標按鈕 -->
                         <ImageButton
                             android:id="@+id/button_special_prize_keyboard"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
                             android:layout_gravity="end|center_vertical"
                             android:layout_marginEnd="4dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="使用數字鍵盤輸入"
-                            android:padding="4dp"
+                            android:padding="2dp"
                             android:src="@android:drawable/ic_menu_edit"
                             app:tint="#757575" />
                     </FrameLayout>
@@ -203,6 +204,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
                     android:layout_marginBottom="2dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -213,18 +215,19 @@
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="6dp"
                         android:backgroundTint="#4CAF50"
-                        android:minHeight="0dp"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="6dp"
                         android:text="大獎"
                         android:textColor="#FFFFFF"
-                        android:textSize="14sp" />
+                        android:textSize="14sp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minHeight="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:minWidth="0dp"/>
 
-                    <!-- ✅ 新增：輸入框與鉛筆圖標的容器 -->
                     <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
 
                         <EditText
                             android:id="@+id/edit_text_grand_prize"
@@ -236,20 +239,20 @@
                             android:focusableInTouchMode="false"
                             android:hint="請選擇"
                             android:inputType="none"
-                            android:padding="6dp"
+                            android:padding="2dp"
                             android:paddingEnd="32dp"
                             android:textSize="12sp" />
 
                         <!-- ✅ 鉛筆圖標按鈕 -->
                         <ImageButton
                             android:id="@+id/button_grand_prize_keyboard"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
                             android:layout_gravity="end|center_vertical"
                             android:layout_marginEnd="4dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="使用數字鍵盤輸入"
-                            android:padding="4dp"
+                            android:padding="2dp"
                             android:src="@android:drawable/ic_menu_edit"
                             app:tint="#757575" />
                     </FrameLayout>
@@ -259,7 +262,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="2dp"
+                    android:layout_marginBottom="0dp"
                     android:orientation="vertical">
 
                     <!-- readonly純顯示區塊 -->
@@ -267,7 +270,7 @@
                         android:id="@+id/textPitchRuleReadonly"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="0dp"
                         android:layout_marginBottom="2dp"
                         android:visibility="gone"
                         android:text="消費 0 元，贈送 0 刮"
@@ -281,7 +284,7 @@
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="0dp"
                         android:layout_marginBottom="2dp"
                         android:padding="0dp">
 
@@ -411,31 +414,39 @@
                     android:id="@+id/button_save_settings"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="6dp"
                     android:backgroundTint="#2196F3"
-                    android:paddingVertical="6dp"
                     android:text="儲存"
                     android:textColor="#FFFFFF"
-                    android:textSize="14sp" />
+                    android:textSize="14sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="0dp"/>
 
                 <!-- 設為使用中 -->
                 <Button
                     android:id="@+id/button_toggle_inuse"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:paddingVertical="6dp"
+                    android:layout_marginTop="6dp"
                     android:text="設為使用中（★）"
-                    android:textSize="14sp" />
+                    android:textSize="14sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="0dp"/>
 
                 <!-- 自動刮開 -->
                 <Button
                     android:id="@+id/button_auto_scratch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="6dp"
                     android:text="自動刮開"
-                    android:enabled="false"/>
+                    android:enabled="false"
+                    android:textSize="14sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="0dp"/>
 
                 <!-- 返回／刪除 -->
                 <LinearLayout
@@ -452,9 +463,11 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:paddingVertical="6dp"
                         android:text="↻ 返回"
-                        android:textSize="14sp" />
+                        android:textSize="14sp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minHeight="0dp"/>
 
                     <Space
                         android:layout_width="6dp"
@@ -465,9 +478,11 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:paddingVertical="6dp"
                         android:text="🗑️ 刪除"
-                        android:textSize="14sp" />
+                        android:textSize="14sp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minHeight="0dp"/>
                 </LinearLayout>
 
                 <!-- 推到下方的空白填充,讓提醒固定在最底 -->
