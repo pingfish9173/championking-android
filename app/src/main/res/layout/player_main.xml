@@ -99,7 +99,7 @@
 
             <!-- 大獎 -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
                 android:gravity="center_vertical"
@@ -114,11 +114,15 @@
 
                 <LinearLayout
                     android:id="@+id/grand_prize_text_view_player"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:orientation="vertical"
-                    android:gravity="center_vertical"
-                    android:paddingTop="4dp" />
+                    android:gravity="start"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="2dp"
+                    android:clipToPadding="false"
+                    android:clipChildren="false" />
 
             </LinearLayout>
 

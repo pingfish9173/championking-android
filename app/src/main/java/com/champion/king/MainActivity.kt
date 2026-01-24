@@ -697,7 +697,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         val noPrize = grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無"
         if (noPrize) {
-            // ✅ 顯示純文字「無」：不要圓框
             val tv = TextView(this).apply {
                 text = "無"
                 setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
@@ -707,55 +706,83 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             return
         }
 
-        // 最多 16 個大獎，4 個一排
         val allNumbers = grandPrizeStr.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .take(16)
 
-        val chunked = allNumbers.chunked(4)
+        val columns = 4
+        val rows = allNumbers.chunked(columns)
+
+        fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+        val maxSizePx = dp(31)         // 舊平板理想大小
+        val minSizePx = dp(18)         // 寬度不足時允許縮到這裡
+        val gapPx = dp(6)              // 圓圈之間的水平間距（只放中間，不放左右邊界）
+        val vGapPx = dp(6)             // 垂直間距
 
         val green = ContextCompat.getColor(this, R.color.scratch_card_green)
         val whiteText = ContextCompat.getColor(this, android.R.color.white)
 
-        val sizePx = (31 * resources.displayMetrics.density).toInt()
-        val marginPx = (3 * resources.displayMetrics.density).toInt()
+        fun build(sizePx: Int) {
+            grandPrizeContainer.removeAllViews()
 
-        for (rowNumbers in chunked) {
-            val rowLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.START
+            val textSizeSp = when {
+                sizePx <= dp(20) -> 10f
+                sizePx <= dp(24) -> 11f
+                else -> 12f
             }
 
-            for (num in rowNumbers) {
-                val numView = TextView(this).apply {
-                    text = num.toString()
-                    textSize = 12f
-                    setTextColor(whiteText)
-                    gravity = Gravity.CENTER
-
-                    // ✅ 綠底填滿 + 白字
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(green)        // 填滿
-                        setStroke(3, green)    // 邊框（同色）
+            for (rowNumbers in rows) {
+                val rowLayout = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.START
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        topMargin = vGapPx
                     }
-
-                    val params = LinearLayout.LayoutParams(sizePx, sizePx)
-                    params.setMargins(marginPx, marginPx, marginPx, marginPx)
-                    layoutParams = params
                 }
 
-                rowLayout.addView(numView)
+                rowNumbers.forEachIndexed { idx, num ->
+                    val tv = TextView(this).apply {
+                        text = num.toString()
+                        textSize = textSizeSp
+                        setTextColor(whiteText)
+                        gravity = Gravity.CENTER
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(green)
+                            setStroke(3, green)
+                        }
+                        layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
+                            // ✅ 只在「不是第一顆」時給左邊 gap，避免最右邊爆掉
+                            if (idx != 0) leftMargin = gapPx
+                        }
+                    }
+                    rowLayout.addView(tv)
+                }
+
+                grandPrizeContainer.addView(rowLayout)
             }
+        }
 
-            val rowParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            rowParams.setMargins(0, marginPx, 0, 0)
-            rowLayout.layoutParams = rowParams
+        // 先用最大值畫一次
+        build(maxSizePx)
 
-            grandPrizeContainer.addView(rowLayout)
+        // 再用容器實際寬度重新計算，確保 4 顆 + 3 個 gap 一定塞得下
+        grandPrizeContainer.post {
+            val w = grandPrizeContainer.width -
+                    grandPrizeContainer.paddingLeft -
+                    grandPrizeContainer.paddingRight
+
+            if (w <= 0) return@post
+
+            // 需要塞入：4*size + 3*gap <= w
+            val computed = ((w - (gapPx * (columns - 1))) / columns)
+                .coerceIn(minSizePx, maxSizePx)
+
+            if (computed < maxSizePx) build(computed)
         }
     }
 
