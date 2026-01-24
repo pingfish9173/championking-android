@@ -28,7 +28,7 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="3"
+                android:layout_weight="2.8"
                 android:background="#FFFFFF"
                 android:padding="0dp"
                 android:layout_margin="0dp">
@@ -311,7 +311,7 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_weight="1.2"
                 android:background="#FFFFFF">
 
                 <FrameLayout
@@ -329,7 +329,7 @@
                         android:text="載入時間..."
                         android:textAlignment="center"
                         android:textColor="@android:color/black"
-                        android:textSize="22sp" />
+                        android:textSize="18sp" />
                 </FrameLayout>
             </FrameLayout>
         </LinearLayout>
