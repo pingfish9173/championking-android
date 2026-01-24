@@ -23,15 +23,11 @@ import com.champion.king.util.guardOnline
 import com.champion.king.util.setThrottledClick
 import com.champion.king.util.ToastManager
 import kotlinx.coroutines.launch
+import android.view.inputmethod.InputMethodManager
 
 class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
 
     companion object {
-        // 測試用帳號密碼 (生產環境應移除)
-        private const val TEST_ACCOUNT = "billy1"
-        private const val TEST_PASSWORD = "123456"
-
-        // UI 尺寸常數
         private const val DIALOG_PADDING_HORIZONTAL = 48
         private const val DIALOG_PADDING_VERTICAL_TOP = 24
         private const val DIALOG_PADDING_VERTICAL_BOTTOM = 8
@@ -62,6 +58,31 @@ class LoginFragment : BaseBindingFragment<FragmentLoginBinding>() {
         setupViews()
         setupRememberAccount()
         observeViewModel()
+        // 只有在非配置改變（如旋轉螢幕後回復）且有記憶帳號時才處理焦點
+        if (savedInstanceState == null) {
+            focusPasswordIfRemembered()
+        }
+    }
+
+    private fun focusPasswordIfRemembered() {
+        if (!isRememberAccount()) return
+
+        val passwordEt = binding.editTextLoginPassword
+
+        // 使用較短的延遲並確保視圖已經 Attached，避免與系統的 Auto-focus 衝突
+        passwordEt.postDelayed({
+            if (isAdded && !isDetached) { // 確保 Fragment 還在畫面上
+                passwordEt.requestFocus()
+
+                // 主動告知系統開啟鍵盤，避免系統判斷反覆
+                val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(passwordEt, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }, 200) // 200ms 是一個體感較流暢且能避開系統初始化重繪的數值
+    }
+
+    private fun isRememberAccount(): Boolean {
+        return prefs().getBoolean(AppConfig.Prefs.REMEMBER_ACCOUNT, false)
     }
 
     private fun setupViews() {
