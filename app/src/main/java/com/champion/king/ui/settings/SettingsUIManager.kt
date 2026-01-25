@@ -264,7 +264,9 @@ class SettingsUIManager(
 
         // ⭐ 修改點 1：除了 showSoftInputOnFocus，強制指定 InputType 為 NULL
         dialogEditText.showSoftInputOnFocus = false
-        dialogEditText.inputType = android.text.InputType.TYPE_NULL
+        dialogEditText.isCursorVisible = true       // ⭐ 強制游標顯示
+        dialogEditText.requestFocus()               // 確保取得焦點
+        dialogEditText.inputType = android.text.InputType.TYPE_CLASS_NUMBER
 
         // ⭐ 上方提示文字
         val topHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_top_hint)
@@ -274,9 +276,6 @@ class SettingsUIManager(
         // ⭐ 下方提示文字
         var bottomHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_bottom_hint)
         bottomHintText.visibility = if (allowComma) View.VISIBLE else View.GONE
-
-        // 禁用系統鍵盤
-        dialogEditText.showSoftInputOnFocus = false
 
         // ✅ 交換：逗點鍵的位置改成「清除」；清除鍵的位置改成「逗點」
         btnComma.text = "清除"
