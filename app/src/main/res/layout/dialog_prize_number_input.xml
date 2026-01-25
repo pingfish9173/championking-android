@@ -26,7 +26,7 @@
         android:inputType="none"
         android:minHeight="36dp"
         android:padding="6dp"
-        android:textSize="18sp" />
+        android:textSize="18sp"/>
 
     <!-- 數字鍵盤區域 -->
     <GridLayout
