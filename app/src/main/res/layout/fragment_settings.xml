@@ -181,9 +181,13 @@
                             android:focusableInTouchMode="false"
                             android:hint="請選擇"
                             android:inputType="none"
-                            android:padding="2dp"
-                            android:paddingEnd="32dp"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:paddingLeft="4dp"
+                            android:paddingRight="32dp"
+                            android:paddingTop="4dp"
+                            android:paddingBottom="12dp"
+                            android:lineSpacingMultiplier="1.4"
+                            android:gravity="top|start" />
 
                         <!-- ✅ 鉛筆圖標按鈕 -->
                         <ImageButton
@@ -239,9 +243,13 @@
                             android:focusableInTouchMode="false"
                             android:hint="請選擇"
                             android:inputType="none"
-                            android:padding="2dp"
-                            android:paddingEnd="32dp"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:paddingLeft="4dp"
+                            android:paddingRight="32dp"
+                            android:paddingTop="4dp"
+                            android:paddingBottom="12dp"
+                            android:lineSpacingMultiplier="1.4"
+                            android:gravity="top|start" />
 
                         <!-- ✅ 鉛筆圖標按鈕 -->
                         <ImageButton

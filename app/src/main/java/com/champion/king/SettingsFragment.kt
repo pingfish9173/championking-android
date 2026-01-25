@@ -663,7 +663,7 @@ class SettingsFragment : Fragment() {
 
         isPickingGrandPrize = true
         binding.buttonPickGrandPrize.isPressed = true
-        binding.buttonPickGrandPrize.text = "大獎（多選中…）"
+        binding.buttonPickGrandPrize.text = "大獎\r\n（多選中…）"
         showToast("請在左側預覽區多選數字（再點可取消）")
 
         currentPreviewFragment?.setMultiPickEnabled(true)
