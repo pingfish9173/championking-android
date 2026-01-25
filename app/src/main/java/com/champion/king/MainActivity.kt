@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -694,65 +695,40 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     private fun displayGrandPrizes(grandPrizeContainer: LinearLayout, grandPrizeStr: String?) {
-        // ===== 0) 防呆：容器先確保可見（不要做 INVISIBLE/ VISIBLE 造成閃）=====
-        // 不要再切 visibility，閃一下就是從這裡來的
+        // 1. 清空容器
+        grandPrizeContainer.removeAllViews()
 
-        // ===== 1) 空值 / 無 =====
-        val trimmedStr = grandPrizeStr?.trim()
-        val noPrize = trimmedStr.isNullOrBlank() || trimmedStr == "無"
+        val noPrize = grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無"
         if (noPrize) {
-            val newKey = "NO_PRIZE"
-            val lastKey = grandPrizeContainer.tag as? String
-            if (lastKey == newKey && grandPrizeContainer.childCountCompat() > 0) return
-
-            grandPrizeContainer.tag = newKey
-            grandPrizeContainer.removeAllViews()
-
             val tv = TextView(this).apply {
                 text = "無"
                 setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
                 textSize = 20f
             }
             grandPrizeContainer.addView(tv)
+            // 確保顯示（如果之前被隱藏）
+            grandPrizeContainer.alpha = 1f
             return
         }
 
-        // ===== 2) 解析數字（最多 16 個 = 4x4）=====
-        val allNumbers = trimmedStr!!
-            .split(",")
+        val allNumbers = grandPrizeStr!!.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .take(16)
-
-        if (allNumbers.isEmpty()) {
-            val newKey = "NO_PRIZE_EMPTY"
-            val lastKey = grandPrizeContainer.tag as? String
-            if (lastKey == newKey && grandPrizeContainer.childCountCompat() > 0) return
-
-            grandPrizeContainer.tag = newKey
-            grandPrizeContainer.removeAllViews()
-
-            val tv = TextView(this).apply {
-                text = "無"
-                setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
-                textSize = 20f
-            }
-            grandPrizeContainer.addView(tv)
-            return
-        }
 
         val columns = 4
         val rows = allNumbers.chunked(columns)
 
         fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-        val maxSizePx = dp(31)
-        val minSizePx = dp(18)
-        val gapPx = dp(6)
-        val vGapPx = dp(6)
+        val maxSizePx = dp(31)         // 理想最大大小
+        val minSizePx = dp(18)         // 最小允許大小
+        val gapPx = dp(6)              // 水平間距
+        val vGapPx = dp(6)             // 垂直間距
 
         val green = ContextCompat.getColor(this, R.color.scratch_card_green)
         val whiteText = ContextCompat.getColor(this, android.R.color.white)
 
+        // 定義繪製函式
         fun build(sizePx: Int) {
             grandPrizeContainer.removeAllViews()
 
@@ -767,10 +743,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.START
                     layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
                     ).apply {
-                        bottomMargin = vGapPx
+                        topMargin = vGapPx
                     }
                 }
 
@@ -783,7 +759,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         background = GradientDrawable().apply {
                             shape = GradientDrawable.OVAL
                             setColor(green)
-                            setStroke(dp(2), green)
+                            setStroke(3, green)
                         }
                         layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
                             if (idx != 0) leftMargin = gapPx
@@ -791,38 +767,51 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     }
                     rowLayout.addView(tv)
                 }
-
                 grandPrizeContainer.addView(rowLayout)
             }
         }
 
-        // ===== 3) 只在「內容 + size」真的變了才重畫（避免閃一下）=====
-        // doOnLayout 會在容器有尺寸後回呼；若已經 layout 好，也會很快觸發一次
-        grandPrizeContainer.doOnLayout { v ->
-            val w = v.width - v.paddingLeft - v.paddingRight
-            val finalSizePx = if (w > 0) {
-                ((w - (gapPx * (columns - 1))) / columns).coerceIn(minSizePx, maxSizePx)
-            } else {
-                maxSizePx
+        // ==========================================
+        //  修正邏輯：處理 wrap_content 初始寬度為 0 的問題
+        // ==========================================
+
+        val executeLayout = Runnable {
+            val w = grandPrizeContainer.width -
+                    grandPrizeContainer.paddingLeft -
+                    grandPrizeContainer.paddingRight
+
+            // 如果取得寬度仍 <= 0，恢復顯示並結束（避免無限隱藏），但通常這步會有寬度了
+            if (w <= 0) {
+                grandPrizeContainer.alpha = 1f
+                return@Runnable
             }
 
-            val newKey = "GP:$trimmedStr|SZ:$finalSizePx"
-            val lastKey = v.tag as? String
+            // 計算適合的大小
+            val computedSize = ((w - (gapPx * (columns - 1))) / columns)
+                .coerceIn(minSizePx, maxSizePx)
 
-            // 如果 key 沒變，而且目前有 child，就完全不動（最重要：不閃）
-            if (lastKey == newKey && v.childCountCompat() > 0) return@doOnLayout
+            // 用正確大小重畫
+            build(computedSize)
 
-            v.tag = newKey
-            build(finalSizePx)
+            // 最後顯示出來
+            grandPrizeContainer.alpha = 1f
         }
-    }
 
-    /**
-     * 兼容你目前專案環境：避免 childCount 擴充屬性不存在
-     * 直接走 Java 的 getChildCount()
-     */
-    private fun View.childCountCompat(): Int {
-        return if (this is android.view.ViewGroup) this.childCount else 0
+        if (grandPrizeContainer.width > 0) {
+            // 如果已經有寬度（例如資料刷新），直接執行
+            grandPrizeContainer.alpha = 1f
+            executeLayout.run()
+        } else {
+            // 【關鍵修正】
+            // 如果寬度是 0 (因為 wrap_content 且是空的)，我們必須先塞入東西把它「撐開」。
+            // 為了不讓使用者看到撐開的過程（避免閃爍），我們先設為透明 (alpha = 0)。
+
+            build(maxSizePx) // 先用最大尺寸撐開版面
+            grandPrizeContainer.alpha = 0f // 隱藏
+
+            // 等待 Layout 完成，取得被撐開後的實際可用寬度，再重畫
+            grandPrizeContainer.post(executeLayout)
+        }
     }
 
     private fun fetchAndDisplayPrizeInfo(userFirebaseKey: String, isMaster: Boolean) {
