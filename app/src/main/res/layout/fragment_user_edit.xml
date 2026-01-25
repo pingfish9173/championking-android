@@ -19,14 +19,14 @@
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="#333333"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="12dp" />
 
         <!-- 帳號 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:layout_width="96dp"
@@ -51,7 +51,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:layout_width="96dp"
@@ -76,7 +76,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:layout_width="96dp"
@@ -101,7 +101,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="6dp"
             android:gravity="center_vertical">
 
             <TextView
@@ -136,7 +136,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="6dp"
             android:gravity="center_vertical">
 
             <TextView
@@ -265,7 +265,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:layout_width="96dp"
@@ -324,7 +324,7 @@
             android:paddingHorizontal="16dp"
             android:paddingVertical="8dp"
             android:layout_gravity="start"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="6dp" />
 
         <!-- 自動檢查更新 -->
         <CheckBox
