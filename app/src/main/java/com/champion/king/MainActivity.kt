@@ -31,6 +31,7 @@ import com.champion.king.util.ToastManager
 import com.champion.king.util.UpdateHistoryFormatter
 import com.google.firebase.auth.FirebaseAuth
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.doOnLayout
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -693,10 +694,20 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     private fun displayGrandPrizes(grandPrizeContainer: LinearLayout, grandPrizeStr: String?) {
-        grandPrizeContainer.removeAllViews()
+        // ===== 0) 防呆：容器先確保可見（不要做 INVISIBLE/ VISIBLE 造成閃）=====
+        // 不要再切 visibility，閃一下就是從這裡來的
 
-        val noPrize = grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無"
+        // ===== 1) 空值 / 無 =====
+        val trimmedStr = grandPrizeStr?.trim()
+        val noPrize = trimmedStr.isNullOrBlank() || trimmedStr == "無"
         if (noPrize) {
+            val newKey = "NO_PRIZE"
+            val lastKey = grandPrizeContainer.tag as? String
+            if (lastKey == newKey && grandPrizeContainer.childCountCompat() > 0) return
+
+            grandPrizeContainer.tag = newKey
+            grandPrizeContainer.removeAllViews()
+
             val tv = TextView(this).apply {
                 text = "無"
                 setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
@@ -706,19 +717,38 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             return
         }
 
-        val allNumbers = grandPrizeStr.split(",")
+        // ===== 2) 解析數字（最多 16 個 = 4x4）=====
+        val allNumbers = trimmedStr!!
+            .split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .take(16)
+
+        if (allNumbers.isEmpty()) {
+            val newKey = "NO_PRIZE_EMPTY"
+            val lastKey = grandPrizeContainer.tag as? String
+            if (lastKey == newKey && grandPrizeContainer.childCountCompat() > 0) return
+
+            grandPrizeContainer.tag = newKey
+            grandPrizeContainer.removeAllViews()
+
+            val tv = TextView(this).apply {
+                text = "無"
+                setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
+                textSize = 20f
+            }
+            grandPrizeContainer.addView(tv)
+            return
+        }
 
         val columns = 4
         val rows = allNumbers.chunked(columns)
 
         fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-        val maxSizePx = dp(31)         // 舊平板理想大小
-        val minSizePx = dp(18)         // 寬度不足時允許縮到這裡
-        val gapPx = dp(6)              // 圓圈之間的水平間距（只放中間，不放左右邊界）
-        val vGapPx = dp(6)             // 垂直間距
+        val maxSizePx = dp(31)
+        val minSizePx = dp(18)
+        val gapPx = dp(6)
+        val vGapPx = dp(6)
 
         val green = ContextCompat.getColor(this, R.color.scratch_card_green)
         val whiteText = ContextCompat.getColor(this, android.R.color.white)
@@ -737,10 +767,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.START
                     layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
                     ).apply {
-                        topMargin = vGapPx
+                        bottomMargin = vGapPx
                     }
                 }
 
@@ -753,10 +783,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         background = GradientDrawable().apply {
                             shape = GradientDrawable.OVAL
                             setColor(green)
-                            setStroke(3, green)
+                            setStroke(dp(2), green)
                         }
                         layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
-                            // ✅ 只在「不是第一顆」時給左邊 gap，避免最右邊爆掉
                             if (idx != 0) leftMargin = gapPx
                         }
                     }
@@ -767,23 +796,33 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             }
         }
 
-        // 先用最大值畫一次
-        build(maxSizePx)
+        // ===== 3) 只在「內容 + size」真的變了才重畫（避免閃一下）=====
+        // doOnLayout 會在容器有尺寸後回呼；若已經 layout 好，也會很快觸發一次
+        grandPrizeContainer.doOnLayout { v ->
+            val w = v.width - v.paddingLeft - v.paddingRight
+            val finalSizePx = if (w > 0) {
+                ((w - (gapPx * (columns - 1))) / columns).coerceIn(minSizePx, maxSizePx)
+            } else {
+                maxSizePx
+            }
 
-        // 再用容器實際寬度重新計算，確保 4 顆 + 3 個 gap 一定塞得下
-        grandPrizeContainer.post {
-            val w = grandPrizeContainer.width -
-                    grandPrizeContainer.paddingLeft -
-                    grandPrizeContainer.paddingRight
+            val newKey = "GP:$trimmedStr|SZ:$finalSizePx"
+            val lastKey = v.tag as? String
 
-            if (w <= 0) return@post
+            // 如果 key 沒變，而且目前有 child，就完全不動（最重要：不閃）
+            if (lastKey == newKey && v.childCountCompat() > 0) return@doOnLayout
 
-            // 需要塞入：4*size + 3*gap <= w
-            val computed = ((w - (gapPx * (columns - 1))) / columns)
-                .coerceIn(minSizePx, maxSizePx)
-
-            if (computed < maxSizePx) build(computed)
+            v.tag = newKey
+            build(finalSizePx)
         }
+    }
+
+    /**
+     * 兼容你目前專案環境：避免 childCount 擴充屬性不存在
+     * 直接走 Java 的 getChildCount()
+     */
+    private fun View.childCountCompat(): Int {
+        return if (this is android.view.ViewGroup) this.childCount else 0
     }
 
     private fun fetchAndDisplayPrizeInfo(userFirebaseKey: String, isMaster: Boolean) {
