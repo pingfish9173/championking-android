@@ -262,6 +262,10 @@ class SettingsUIManager(
         dialogEditText.setText(currentValue ?: "")
         dialogEditText.setSelection(dialogEditText.text.length)
 
+        // ⭐ 修改點 1：除了 showSoftInputOnFocus，強制指定 InputType 為 NULL
+        dialogEditText.showSoftInputOnFocus = false
+        dialogEditText.inputType = android.text.InputType.TYPE_NULL
+
         // ⭐ 上方提示文字
         val topHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_top_hint)
         topHintText.text = hint
@@ -288,6 +292,10 @@ class SettingsUIManager(
             .setNegativeButton("取消", null)
             .create()
 
+        // ⭐ 修改點 2：在 Dialog 顯示前，設定 Window 屬性強制隱藏鍵盤
+        // 這行是解決特定平板會跳出鍵盤的關鍵
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+
         dialog.setOnShowListener {
             ToastManager.setHostWindow(dialog.window)
 
@@ -303,6 +311,10 @@ class SettingsUIManager(
                     showToast(result.errorMessage)
                 }
             }
+
+            // ⭐ 修改點 3 (雙保險)：視窗顯示時清除焦點再重新聚焦，防止系統輸入法搶入
+            dialogEditText.clearFocus()
+            dialogEditText.requestFocus()
         }
 
         dialog.setOnDismissListener {

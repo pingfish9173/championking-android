@@ -2057,6 +2057,15 @@ class SettingsFragment : Fragment() {
         edit.setText("")
         edit.setSelection(edit.text.length)
 
+        // ⭐ 修改點 1：徹底禁用系統鍵盤
+        // XML 中定義了 inputType="number"，這會導致某些平板忽略 showSoftInputOnFocus
+        // 所以這裡必須程式化覆寫為 TYPE_NULL
+        edit.showSoftInputOnFocus = false
+        edit.inputType = android.text.InputType.TYPE_NULL
+
+        // 保持游標可見 (有些設備設為 TYPE_NULL 會隱藏游標)
+        edit.isCursorVisible = true
+
         // ✅ 禁用系統鍵盤
         edit.showSoftInputOnFocus = false
 
@@ -2117,6 +2126,9 @@ class SettingsFragment : Fragment() {
             .setPositiveButton("確定", null) // ✅ 攔截：不要自動關閉
             .setNegativeButton("取消", null)
             .create()
+
+        // ⭐ 修改點 2：設定 Window 屬性強制隱藏鍵盤
+        dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
 
         dlg.setOnShowListener {
             // ✅ 修正：讓 Toast 顯示在「數字鍵盤 Dialog」層級上方
