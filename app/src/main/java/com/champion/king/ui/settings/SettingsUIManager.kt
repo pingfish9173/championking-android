@@ -260,13 +260,19 @@ class SettingsUIManager(
 
         // 設置當前值
         dialogEditText.setText(currentValue ?: "")
-        dialogEditText.setSelection(dialogEditText.text.length)
+
+        // ⭐ 修正點：在這裡設定游標到最後
+        // 使用 length 確保游標停在文字最後方
+        dialogEditText.post {
+            val textLength = dialogEditText.text?.length ?: 0
+            dialogEditText.setSelection(textLength)
+        }
 
         // ⭐ 修改點 1：除了 showSoftInputOnFocus，強制指定 InputType 為 NULL
         dialogEditText.showSoftInputOnFocus = false
         dialogEditText.isCursorVisible = true       // ⭐ 強制游標顯示
         dialogEditText.requestFocus()               // 確保取得焦點
-        dialogEditText.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        dialogEditText.inputType = android.text.InputType.TYPE_CLASS_TEXT
 
         // ⭐ 上方提示文字
         val topHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_top_hint)
@@ -371,21 +377,27 @@ class SettingsUIManager(
             }
         }
 
+        // 逗點按鈕（在 UI 上顯示為 ","，但在程式碼中 ID 是 btnClear）
         btnClear.setOnClickListener {
             if (!allowComma) return@setOnClickListener
-            val editable = dialogEditText.text ?: return@setOnClickListener
-            val start = dialogEditText.selectionStart
-            val end = dialogEditText.selectionEnd
-            if (start == -1 || end == -1) return@setOnClickListener
 
-            val insert = ","
-            if (start != end) {
-                editable.replace(start, end, insert)
-                dialogEditText.setSelection(start + insert.length)
-            } else {
-                editable.insert(start, insert)
-                dialogEditText.setSelection(start + insert.length)
-            }
+            val editable = dialogEditText.text ?: return@setOnClickListener
+
+            // 1. 取得當前游標位置，並確保 start 不會大於 end
+            val start = dialogEditText.selectionStart.coerceAtLeast(0)
+            val end = dialogEditText.selectionEnd.coerceAtLeast(0)
+            val minPos = minOf(start, end)
+            val maxPos = maxOf(start, end)
+
+            // 2. 執行插入 "," (使用 replace 可以在有選取文字時直接覆蓋)
+            val insertStr = ","
+            editable.replace(minPos, maxPos, insertStr)
+
+            // 3. 安全地移動游標：算出新位置，但絕不超過文字總長度 (防止閃退的關鍵)
+            val newCursorPos = minPos + insertStr.length
+            val safePos = newCursorPos.coerceAtMost(editable.length)
+
+            dialogEditText.setSelection(safePos)
         }
 
         dialog.show()
