@@ -8,6 +8,9 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.widget.Button
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 
 class ScratchDialog(
     context: Context,
@@ -17,7 +20,8 @@ class ScratchDialog(
     private val isSecondToLast: Boolean,
     private val hasUnscatchedPrizesRemaining: Boolean,
     private val onScratchStart: () -> Unit,
-    private val onScratchComplete: () -> Unit
+    private val onScratchComplete: () -> Unit,
+    private val onTimeoutForceReveal: (() -> Unit)? = null // ✅ 新增：逾時強制視為刮開
 ) : Dialog(context, android.R.style.Theme_Dialog) {
 
     private lateinit var scratchView: ScratchView
@@ -28,6 +32,18 @@ class ScratchDialog(
     private var hasClickedQuickScratch = false
     private var isPlayingSound = false
     private var hasTriggeredScratchStart = false
+
+    // ====== ✅ 60秒無動作 Timeout 機制 ======
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private val TIMEOUT_MS = 60_000L
+    private var lastInteractionAt = 0L
+
+    // 返回確認視窗（避免卡住）
+    private var backConfirmDialog: AlertDialog? = null
+
+    private val inactivityRunnable = Runnable {
+        handleInactivityTimeout()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         (context as? MainActivity)?.enableImmersiveMode()
@@ -41,6 +57,9 @@ class ScratchDialog(
 
         scratchView.setup(number, isSpecialPrize, isGrandPrize)
 
+        // ✅ Dialog 一出現就開始倒數（60秒無動作就自動處理）
+        resetInactivityTimer()
+
         // 監聽刮卡開始事件 - 防弊機制關鍵
         scratchView.setOnScratchStartListener {
             // 一旦開始刮卡，就不能通過點擊外部關閉
@@ -52,12 +71,18 @@ class ScratchDialog(
                 hasTriggeredScratchStart = true
                 onScratchStart.invoke()
             }
+
+            // ✅ 有刮動，重置倒數
+            resetInactivityTimer()
         }
 
         // 初始狀態允許點擊外部關閉
         setCanceledOnTouchOutside(true)
 
         quickScratchButton.setOnClickListener {
+            // ✅ 點按也算互動
+            resetInactivityTimer()
+
             // 標記為已點擊一鍵刮開
             hasClickedQuickScratch = true
 
@@ -77,6 +102,10 @@ class ScratchDialog(
             // 檢查是否已經在播放音效
             if (!isPlayingSound) {
                 isPlayingSound = true
+
+                // ✅ 已經進入完成收尾（播放音效），停止 Timeout 避免干擾
+                stopInactivityTimer()
+
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
@@ -93,6 +122,10 @@ class ScratchDialog(
 
             if (!isPlayingSound) {
                 isPlayingSound = true
+
+                // ✅ 已經進入完成收尾（播放音效），停止 Timeout 避免干擾
+                stopInactivityTimer()
+
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
@@ -134,37 +167,84 @@ class ScratchDialog(
         return super.dispatchKeyEvent(event)
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        // 只要玩家有觸碰，就視為仍在操作 -> 重置倒數
+        // （播放音效收尾時不重置，避免拖延）
+        if (!isPlayingSound) {
+            resetInactivityTimer()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     /**
      * 顯示返回確認視窗
      */
     private fun showBackConfirmationDialog() {
-        AlertDialog.Builder(context)
+        // ✅ 顯示確認視窗也算互動
+        resetInactivityTimer()
+
+        val dialog = AlertDialog.Builder(context)
             .setTitle("確認返回")
             .setMessage("您已刮開部分塗層，返回刮板後將視為一鍵刮開，是否確認返回？")
-            .setPositiveButton("確定") { dialog, _ ->
+            .setPositiveButton("確定") { d, _ ->
                 android.util.Log.d("ScratchDialog", "【返回確認】玩家確認返回，標記為已刮開")
 
-                // 停止音效（如果正在播放）
                 mediaPlayer?.stop()
                 mediaPlayer?.release()
                 mediaPlayer = null
 
-                // 調用完成回調，將 scratched 設為 true
+                // 視為刮開
                 onScratchComplete()
 
-                // 關閉確認視窗
-                dialog.dismiss()
-
-                // 關閉刮卡對話框
+                d.dismiss()
                 this@ScratchDialog.dismiss()
             }
-            .setNegativeButton("取消") { dialog, _ ->
+            .setNegativeButton("取消") { d, _ ->
                 android.util.Log.d("ScratchDialog", "【返回確認】玩家取消返回，繼續刮卡")
-                // 繼續刮卡，不做任何操作
-                dialog.dismiss()
+                d.dismiss()
+
+                // ✅ 繼續刮卡也重置倒數
+                resetInactivityTimer()
             }
-            .setCancelable(false) // 禁止點擊外部關閉確認視窗
-            .show()
+            .setCancelable(false)
+            .create()
+
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
+
+        // ✅ 保存起來，讓 Timeout 時可以一併關閉，避免卡住
+        backConfirmDialog = dialog
+    }
+
+    private fun resetInactivityTimer() {
+        lastInteractionAt = SystemClock.uptimeMillis()
+        timeoutHandler.removeCallbacks(inactivityRunnable)
+        timeoutHandler.postDelayed(inactivityRunnable, TIMEOUT_MS)
+    }
+
+    private fun stopInactivityTimer() {
+        timeoutHandler.removeCallbacks(inactivityRunnable)
+    }
+
+    private fun handleInactivityTimeout() {
+        // 播放音效中（代表已經完成流程在收尾），不要插手
+        if (isPlayingSound) return
+
+        // 如果剛好有返回確認視窗也一起關掉，避免殘留卡畫面
+        backConfirmDialog?.dismiss()
+        backConfirmDialog = null
+
+        if (hasTriggeredScratchStart) {
+            android.util.Log.d("ScratchDialog", "【無動作逾時】已開始刮卡但未完成，強制視為刮開並關閉")
+
+            // ✅ 你要的「刮沒乾淨跑掉」：直接視為刮開
+            // 優先走外部傳入的強制流程；沒傳就用原本 onScratchComplete
+            (onTimeoutForceReveal ?: onScratchComplete).invoke()
+        } else {
+            android.util.Log.d("ScratchDialog", "【無動作逾時】未開始刮卡，直接關閉")
+        }
+
+        dismiss()
     }
 
     fun hasStartedScratching(): Boolean {
@@ -216,6 +296,13 @@ class ScratchDialog(
     }
 
     override fun dismiss() {
+        // ✅ 清 Timeout
+        stopInactivityTimer()
+
+        // ✅ 清返回確認視窗
+        backConfirmDialog?.dismiss()
+        backConfirmDialog = null
+
         mediaPlayer?.release()
         mediaPlayer = null
         super.dismiss()

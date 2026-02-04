@@ -404,6 +404,11 @@ class ScratchCardPlayerFragment : Fragment() {
                     onScratchComplete = {
                         Log.d(TAG, "格子 $cellNumber 刮卡完成，標記 scratched = true")
                         scratchCell(serialNumber, cellNumber, cellView)
+                    },
+                    onTimeoutForceReveal = {
+                        // ✅ 你要的：刮一點點沒刮乾淨跑掉 -> 60秒後強制視為刮開
+                        Log.d(TAG, "【無動作逾時】格子 $cellNumber 已開始刮但未完成，強制視為刮開")
+                        scratchCell(serialNumber, cellNumber, cellView)
                     }
                 )
 
