@@ -776,9 +776,17 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         // ==========================================
 
         val executeLayout = Runnable {
-            val w = grandPrizeContainer.width -
+            val parentView = grandPrizeContainer.parent as? View
+
+            val containerW = grandPrizeContainer.width -
                     grandPrizeContainer.paddingLeft -
                     grandPrizeContainer.paddingRight
+
+            val parentW = if (parentView != null) {
+                parentView.width - parentView.paddingLeft - parentView.paddingRight
+            } else 0
+
+            val w = if (containerW > 0) containerW else parentW
 
             // 如果取得寬度仍 <= 0，恢復顯示並結束（避免無限隱藏），但通常這步會有寬度了
             if (w <= 0) {
