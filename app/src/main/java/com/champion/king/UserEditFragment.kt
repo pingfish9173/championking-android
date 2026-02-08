@@ -163,14 +163,14 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 // 因為你現在的 UI 已經有左邊固定 label，所以這裡照你要求「右邊顯示消費模式：租賃制」
                 binding.textBillingMode.text = billingModeText
 
-                // ✅ 只有租賃制才顯示 ℹ️，並綁定點擊事件
-                binding.iconBillingModeInfo.visibility = if (isRental) View.VISIBLE else View.GONE
-                if (isRental) {
-                    binding.iconBillingModeInfo.setOnClickListener {
+                // ✅ 租賃制 / 點數制 都顯示 ℹ️，點了依模式顯示不同內容
+                binding.iconBillingModeInfo.visibility = View.VISIBLE
+                binding.iconBillingModeInfo.setOnClickListener {
+                    if (isRental) {
                         showRentalInfoDialog(rentalStartAt, rentalDays)
+                    } else {
+                        showPointTotalSpentDialog(account) // ✅ 點數制：顯示累計消費金額
                     }
-                } else {
-                    binding.iconBillingModeInfo.setOnClickListener(null)
                 }
 
                 isAddressVisible = false
@@ -250,6 +250,97 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             .setMessage(spannable) // ✅ 注意這裡改成 Spannable
             .setPositiveButton("關閉", null)
             .show()
+    }
+
+    /**
+     * 點數制：顯示累計消費金額（改用後端 API：getTotalSpentByAccount）
+     */
+    private fun showPointTotalSpentDialog(account: String) {
+        if (account.isBlank()) {
+            showToast("無法取得帳號資訊")
+            return
+        }
+
+        // 先顯示載入中
+        val loadingDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("累計消費金額")
+            .setMessage("查詢中...")
+            .setCancelable(false)
+            .create()
+
+        loadingDialog.show()
+
+        try {
+            val jsonObject = JSONObject().apply {
+                put("account", account)
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val requestBody = jsonObject.toString().toRequestBody(mediaType)
+
+            val request = Request.Builder()
+                .url("https://gettotalspentbyaccount-qmvrvane7q-de.a.run.app")
+                .addHeader("X-App-Auth", BuildConfig.APP_SECRET)
+                .post(requestBody)
+                .build()
+
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.e("UserEditFragment", "getTotalSpentByAccount failed", e)
+                    activity?.runOnUiThread {
+                        if (!isAdded || view == null) return@runOnUiThread
+                        if (loadingDialog.isShowing) loadingDialog.dismiss()
+                        showToast("查詢失敗：${e.message}")
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use { resp ->
+                        val bodyStr = resp.body?.string().orEmpty()
+
+                        activity?.runOnUiThread {
+                            if (!isAdded || view == null) return@runOnUiThread
+                            if (loadingDialog.isShowing) loadingDialog.dismiss()
+
+                            if (!resp.isSuccessful) {
+                                // 盡量把後端回的 error 印出來
+                                val errMsg = try {
+                                    JSONObject(bodyStr).optString("error", "查詢失敗")
+                                } catch (_: Exception) {
+                                    "查詢失敗"
+                                }
+                                showToast(errMsg)
+                                return@runOnUiThread
+                            }
+
+                            try {
+                                val json = JSONObject(bodyStr)
+                                val total = json.optLong("totalMoneyAdded", 0L)
+
+                                val formatted = java.text.NumberFormat
+                                    .getNumberInstance(java.util.Locale.TAIWAN)
+                                    .format(total)
+
+                                androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                                    .setTitle("累計消費金額")
+                                    .setMessage("NT$ $formatted")
+                                    .setPositiveButton("關閉", null)
+                                    .show()
+
+                            } catch (e: Exception) {
+                                Log.e("UserEditFragment", "parse totalMoneyAdded failed", e)
+                                showToast("回傳解析失敗")
+                            }
+                        }
+                    }
+                }
+            })
+
+        } catch (e: Exception) {
+            Log.e("UserEditFragment", "build request failed", e)
+            if (loadingDialog.isShowing) loadingDialog.dismiss()
+            showToast("發生錯誤：${e.message}")
+        }
     }
 
     /**
