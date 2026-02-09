@@ -21,6 +21,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import com.champion.king.util.ToastManager
+import com.google.firebase.database.ServerValue
 
 class ScratchCardPlayerFragment : Fragment() {
 
@@ -649,43 +650,54 @@ class ScratchCardPlayerFragment : Fragment() {
     private fun scratchCell(serialNumber: String, cellNumber: Int, cellView: View) {
         val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
-        // 由於資料庫使用 scratched 欄位名稱，但模型類別使用 isScratched，
-        // 這裡直接更新資料庫中對應格子的 scratched 欄位
         database.child("users")
             .child(currentUserFirebaseKey)
             .child("scratchCards")
             .child(serialNumber)
             .child("numberConfigurations")
             .addListenerForSingleValueEvent(object : ValueEventListener {
+
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    // 遍歷 numberConfigurations 數組找到對應 id 的項目
+                    // 遍歷 numberConfigurations 找到對應 id 的項目
                     for ((index, child) in snapshot.children.withIndex()) {
                         val id = child.child("id").getValue(Int::class.java)
                         if (id == cellNumber) {
-                            // 更新該項目的 scratched 狀態
-                            database.child("users")
+
+                            // ✅ 若已刮開就不重複寫入 scratchedAt（保留第一次刮開時間）
+                            val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
+                            if (alreadyScratched) {
+                                scratchingCells.remove(cellNumber)
+                                Log.d(TAG, "格子 $cellNumber 已是刮開狀態，略過寫入 scratchedAt")
+                                return
+                            }
+
+                            val cellRef = database.child("users")
                                 .child(currentUserFirebaseKey)
                                 .child("scratchCards")
                                 .child(serialNumber)
                                 .child("numberConfigurations")
                                 .child(index.toString())
-                                .child("scratched")
-                                .setValue(true)
+
+                            // ✅ 一次更新 scratched + scratchedAt
+                            val updates = mapOf<String, Any>(
+                                "scratched" to true,
+                                "scratchedAt" to ServerValue.TIMESTAMP
+                            )
+
+                            cellRef.updateChildren(updates)
                                 .addOnSuccessListener {
                                     updateRemainingScratchesDisplay()
-                                    Log.d(TAG, "格子 $cellNumber 刮開成功")
+                                    Log.d(TAG, "格子 $cellNumber 刮開成功（已寫入 scratchedAt）")
                                     // ValueEventListener 會自動觸發UI更新
-                                    // 此時會調用 updateCellDisplay，顯示白色背景和數字
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "刮開格子 $cellNumber 失敗: ${e.message}", e)
-                                    activity?.let {
-                                        ToastManager.show(it, "刮卡操作失敗")
-                                    }
+                                    activity?.let { ToastManager.show(it, "刮卡操作失敗") }
                                     // 失敗時也要移除正在刮的標記
                                     scratchingCells.remove(cellNumber)
                                     updateCellDisplay(cellView, cellNumber, false, null)
                                 }
+
                             break
                         }
                     }
@@ -693,9 +705,7 @@ class ScratchCardPlayerFragment : Fragment() {
 
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "讀取格子配置失敗: ${error.message}", error.toException())
-                    activity?.let {
-                        ToastManager.show(it, "刮卡操作失敗")
-                    }
+                    activity?.let { ToastManager.show(it, "刮卡操作失敗") }
                     // 失敗時也要移除正在刮的標記
                     scratchingCells.remove(cellNumber)
                     cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }
