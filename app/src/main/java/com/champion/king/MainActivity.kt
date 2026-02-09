@@ -11,7 +11,6 @@ import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewTreeObserver
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -32,16 +31,13 @@ import com.champion.king.util.ToastManager
 import com.champion.king.util.UpdateHistoryFormatter
 import com.google.firebase.auth.FirebaseAuth
 import androidx.activity.OnBackPressedCallback
-import androidx.core.view.doOnLayout
 import com.champion.king.core.config.AppConfig
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
     // ====== UI Mode ======
     private enum class Mode { MASTER, PLAYER }
-
     private var mode: Mode = Mode.MASTER
-
     // ====== Master views ======
     private lateinit var currentTimeTextViewMaster: TextView
     private lateinit var userNamePointsTextViewMaster: TextView
@@ -59,7 +55,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private lateinit var fragmentContainerMaster: FrameLayout
     private lateinit var specialPrizeTextViewMaster: TextView
     private lateinit var grandPrizeTextViewMaster: LinearLayout
-
     // ====== Player views (nullable because not always in this layout) ======
     private var currentTimeTextViewPlayer: TextView? = null
     private var prizeInfoTextViewPlayer: TextView? = null // 保留欄位（若後續需要）
@@ -70,16 +65,16 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var watermarkOverlayContainerPlayer: FrameLayout? = null
     private var specialPrizeTextViewPlayer: TextView? = null
     private var grandPrizeTextViewPlayer: LinearLayout? = null
-
     // ====== Time updater ======
     private val handler = Handler(Looper.getMainLooper())
-
     // === 廣告閒置顯示機制 ===
     private val isAdEnabled = false // 💡 設定為 false 即可關閉廣告，改回 true 則恢復
     private var lastInteractionTime: Long = System.currentTimeMillis()
     private val idleTimeoutMillis = 15 * 60 * 1000L // 15分鐘
     private val idleHandler = Handler(Looper.getMainLooper())
     private val idleRunnable = Runnable { showAdPoster() }
+    private val SESSION_LAST_SEEN_AT = "SESSION_LAST_SEEN_AT"
+    private val SESSION_EXPIRE_MS = 3L * 24 * 60 * 60 * 1000 // 3 天
 
     private val updateTimeRunnable = object : Runnable {
         override fun run() {
@@ -156,7 +151,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 Log.d("MainActivity", "Back key disabled")
-                // 什麼都不做，直接吃掉 Back 鍵
             }
         })
 
@@ -180,7 +174,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         database = FirebaseDatabase.getInstance(DB_URL).reference
 
-        // 初始顯示「台主」佈局
         // ✅ 冷啟動才走這套（避免重建/旋轉造成流程混亂）
         if (savedInstanceState == null) {
 
@@ -192,22 +185,25 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 // ✅ 有 session：先顯示黑畫面/Loading，不要 render MASTER，避免閃
                 showBootLoadingScreen()
 
-                // 交給還原流程：成功會 render PLAYER；失敗會回到登入頁
-                tryRestoreSessionAndAutoLogin()
+                // ✅ 關鍵：要處理「還原失敗」→ 不能卡在 loading
+                val started = tryRestoreSessionAndAutoLogin()
+                if (!started) {
+                    // 還原流程沒有啟動（例如 session 過期、資料不完整）
+                    render(Mode.MASTER)
+                    loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+                    checkUpdateOnStart()
+                }
 
                 // ⚠️ 注意：這裡不要 checkUpdateOnStart（避免 loading 期間跳更新）
             } else {
                 // ✅ 沒 session：才進台主 + 登入頁（維持你原本行為）
                 render(Mode.MASTER)
                 loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
-
-                // 開啟 APP 還沒登入時檢查更新（你的既有策略）
                 checkUpdateOnStart()
             }
 
         } else {
             // 非冷啟動（理論上你已鎖橫向、很少走到）
-            // 保守做法：維持台主畫面
             render(Mode.MASTER)
         }
 
@@ -216,12 +212,57 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         resetIdleTimer() // 啟動閒置監測計時
     }
 
+    private fun markSessionSeen() {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
+        val userKey = sp.getString("SESSION_USER_KEY", null)
+        if (!loggedIn || userKey.isNullOrBlank()) return
+
+        sp.edit()
+            .putLong(SESSION_LAST_SEEN_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun isSessionExpiredByInactivity(): Boolean {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
+        val userKey = sp.getString("SESSION_USER_KEY", null)
+        if (!loggedIn || userKey.isNullOrBlank()) return false
+
+        val lastSeen = sp.getLong(SESSION_LAST_SEEN_AT, 0L)
+        if (lastSeen <= 0L) return false // 沒有紀錄就先不判過期（避免誤殺）
+
+        val diff = System.currentTimeMillis() - lastSeen
+        return diff >= SESSION_EXPIRE_MS
+    }
+
+    private fun enforceSessionExpiryIfNeeded(): Boolean {
+        if (!isSessionExpiredByInactivity()) return false
+
+        Log.d(TAG, "Session expired by inactivity. clear session.")
+        clearLoginSession()
+        currentUser = null
+
+        // 回到未登入狀態
+        supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        render(Mode.MASTER)
+        loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+        ToastManager.show(this, "已超過可用期限未使用，請重新登入")
+        return true
+    }
+
     private fun tryRestoreSessionAndAutoLogin(): Boolean {
         val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
         val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
         val userKey = sp.getString("SESSION_USER_KEY", null)
 
         if (!loggedIn || userKey.isNullOrBlank()) return false
+
+        // ✅ 只在「離開/沒使用」超過 3 天時，才視為未登入
+        if (isSessionExpiredByInactivity()) {
+            clearLoginSession()
+            return false
+        }
 
         autoRestoreFinished = false
 
@@ -370,7 +411,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun onResume() {
         super.onResume()
         handler.post(updateTimeRunnable)
-        // ✅ 不再在 onResume 做更新檢查，改由 3 個明確事件觸發（開啟未登入 / 登入成功 / 玩家切回台主成功）
+
+        // ✅ 從背景回來也要檢查：如果放著3天沒開再回來，立刻視為未登入
+        if (enforceSessionExpiryIfNeeded()) return
+
+        // ✅ 有在使用就更新 lastSeenAt（不會踢人）
+        markSessionSeen()
     }
 
     override fun onPause() {
@@ -696,7 +742,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
         sp.edit()
             .putBoolean("SESSION_LOGGED_IN", true)
-            .putString("SESSION_USER_KEY", user.firebaseKey) // 你程式裡已經在用 user.firebaseKey，表示這個欄位存在
+            .putString("SESSION_USER_KEY", user.firebaseKey)
+            .putLong(SESSION_LAST_SEEN_AT, System.currentTimeMillis()) // ✅ 登入當下視為「正在使用」
             .apply()
     }
 
@@ -705,6 +752,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         sp.edit()
             .remove("SESSION_LOGGED_IN")
             .remove("SESSION_USER_KEY")
+            .remove(SESSION_LAST_SEEN_AT)
             .apply()
     }
 
@@ -1798,6 +1846,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
         lastInteractionTime = System.currentTimeMillis()
         resetIdleTimer()
+
+        // ✅ 使用者有操作就刷新 lastSeenAt → 持續玩3天也不會被登出
+        markSessionSeen()
+
         return super.dispatchTouchEvent(ev)
     }
 
