@@ -22,6 +22,9 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import com.champion.king.util.ToastManager
 import com.google.firebase.database.ServerValue
+import android.os.Handler
+import android.os.Looper
+
 
 class ScratchCardPlayerFragment : Fragment() {
 
@@ -47,7 +50,17 @@ class ScratchCardPlayerFragment : Fragment() {
     private var relockTapCount = 0
     private var relockLastTapAt = 0L
 
+    // ====== Offline / Auto-retry ======
+    private val netHandler = Handler(Looper.getMainLooper())
+    private var netRetryRunnable: Runnable? = null
+    private var hasShownOfflineDialog = false
 
+    // ====== ScratchCards listener (avoid multiple listeners) ======
+    private var scratchCardsRef: DatabaseReference? = null
+    private var scratchCardsListener: ValueEventListener? = null
+
+    private val networkHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var networkLoopStarted = false
 
     companion object {
         private const val TAG = "ScratchCardPlayerFragment"
@@ -82,10 +95,10 @@ class ScratchCardPlayerFragment : Fragment() {
         scratchCardContainer = view.findViewById(R.id.scratch_card_container)
         noScratchCardText = view.findViewById(R.id.no_scratch_card_text)
         remainingScratchTextView = activity?.findViewById(R.id.remaining_scratches_text_view)
+
         remainingScratchTextView?.setOnClickListener {
             val now = android.os.SystemClock.elapsedRealtime()
             if (now - relockLastTapAt > 1200) {
-                // 超過 1.2 秒就重算一次連點
                 relockTapCount = 0
             }
             relockLastTapAt = now
@@ -94,11 +107,14 @@ class ScratchCardPlayerFragment : Fragment() {
             if (relockTapCount >= 7) {
                 relockTapCount = 0
                 (activity as? MainActivity)?.relockFromPlayerGesture()
-                activity?.let {
-                    ToastManager.show(it, "已重新啟用鎖定模式")
-                }
+                activity?.let { ToastManager.show(it, "已重新啟用鎖定模式") }
             }
         }
+
+        // ✅ 先啟動離線提示/自動重試（避免離線時出現空白）
+        startNetworkHintLoop()
+
+        // ✅ 載入刮刮卡（有網路會正常顯示格子；沒網路會顯示提示文字）
         loadUserScratchCards()
     }
 
@@ -148,59 +164,151 @@ class ScratchCardPlayerFragment : Fragment() {
             .show()
     }
 
+    private fun startNetworkHintLoop() {
+        if (networkLoopStarted) return
+        networkLoopStarted = true
+
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!isAdded) return
+
+                val online = isNetworkAvailable()
+                if (!online) {
+                    // 離線：確保畫面有提示（避免空白以為BUG）
+                    if (scratchCardContainer.childCount == 0) {
+                        displayNoScratchCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+                    }
+                    networkHandler.postDelayed(this, 1500)
+                    return
+                }
+
+                // 已連線：嘗試載入刮刮卡（若已成功顯示，就不會一直重建）
+                loadUserScratchCards()
+                networkHandler.postDelayed(this, 3000)
+            }
+        }
+
+        networkHandler.post(runnable)
+    }
+
+    private fun startNetworkAutoRetry() {
+        if (netRetryRunnable != null) return
+
+        netRetryRunnable = Runnable {
+            if (!isAdded) return@Runnable
+
+            if (isNetworkAvailable()) {
+                // 網路回來：停止輪詢並重新載入
+                stopNetworkAutoRetry()
+                hasShownOfflineDialog = false
+                activity?.let { ToastManager.show(it, "網路已連線，載入中...") }
+                loadUserScratchCards()
+            } else {
+                // 還是沒網路：2 秒後再試
+                netHandler.postDelayed(netRetryRunnable!!, 2000)
+            }
+        }
+
+        netHandler.postDelayed(netRetryRunnable!!, 2000)
+    }
+
+    private fun stopNetworkAutoRetry() {
+        netRetryRunnable?.let { netHandler.removeCallbacks(it) }
+        netRetryRunnable = null
+    }
+
+    private fun removeScratchCardsWatcher() {
+        scratchCardsListener?.let { l ->
+            scratchCardsRef?.removeEventListener(l)
+        }
+        scratchCardsListener = null
+        scratchCardsRef = null
+    }
+
+
+
     private fun loadUserScratchCards() {
-        val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey()
-        if (currentUserFirebaseKey == null) {
+        val uid = userSessionProvider?.getCurrentUserFirebaseKey()
+        if (uid.isNullOrBlank()) {
             displayNoScratchCardMessage("請先登入以查看刮刮卡。")
             return
         }
 
-        // 監聽使用者的刮刮卡資料變化
-        database.child("users")
-            .child(currentUserFirebaseKey)
-            .child("scratchCards")
-            .addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    if (!canSafelyUpdateUi()) return
+        // ✅ 無網路時：先顯示提示（避免玩家看到「空白」以為 BUG）
+        if (!isNetworkAvailable()) {
+            displayNoScratchCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+            return
+        }
 
-                    val available = mutableListOf<Pair<String, ScratchCard>>()
-                    for (child in snapshot.children) {
-                        val serialNumber = child.key ?: continue
-                        val card = child.getValue(ScratchCard::class.java)
-                        if (card != null && card.inUsed == true && card.order != null) {
-                            available.add(serialNumber to card)
-                        }
-                    }
+        // ✅ 防止重複掛監聽（避免多次 onDataChange 造成 UI 混亂）
+        scratchCardsListener?.let { old ->
+            scratchCardsRef?.removeEventListener(old)
+        }
 
-                    val toShow = available.minByOrNull { it.second.order!! }
-                    if (toShow != null) {
-                        val newSerial = toShow.first
-                        val newCard = toShow.second
+        scratchCardsRef = database.child("users").child(uid).child("scratchCards")
 
-                        // 只在序號改變時重建UI
-                        if (currentScratchCard?.serialNumber != newSerial) {
-                            Log.d(TAG, "切換刮刮卡序號: $newSerial")
-                            displayScratchCard(newSerial, newCard)
-                        } else {
-                            // 同一張卡，只更新格子狀態
-                            currentScratchCard = newCard
-                            updateExistingScratchCardUI(newCard)
-                        }
-                    } else {
-                        displayNoScratchCardMessage("目前沒有可用的刮刮卡。")
+        scratchCardsListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!canSafelyUpdateUi()) return
+
+                // ✅ 若此刻沒網路（例如進來後斷線），直接提示
+                if (!isNetworkAvailable()) {
+                    displayNoScratchCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+                    return
+                }
+
+                val available = mutableListOf<Pair<String, ScratchCard>>()
+                for (child in snapshot.children) {
+                    val serialNumber = child.key ?: continue
+                    val card = child.getValue(ScratchCard::class.java) ?: continue
+                    if (card.inUsed == true && card.order != null) {
+                        available.add(serialNumber to card)
                     }
                 }
 
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e(TAG, "載入刮刮卡資料失敗: ${error.message}", error.toException())
-                    if (canSafelyUpdateUi()) {
-                        activity?.let {
-                            ToastManager.show(it, "載入刮刮卡資料失敗。")
-                        }
-                        displayNoScratchCardMessage("載入刮刮卡失敗，請稍後再試。")
-                    }
+                val toShow = available.minByOrNull { it.second.order!! }
+                if (toShow == null) {
+                    displayNoScratchCardMessage("目前沒有可用的刮刮卡。")
+                    return
                 }
-            })
+
+                val newSerial = toShow.first
+                val newCard = toShow.second
+
+                // ✅ 一定要補 serialNumber，不然比對/切卡會出錯
+                newCard.serialNumber = newSerial
+
+                val uiNotBuiltYet =
+                    scratchCardContainer.childCount == 0 || cellViews.isEmpty()
+
+                // ✅ 只要「第一次建立UI / UI還沒建立 / 換卡」→ 一律重建 UI（避免空白）
+                if (uiNotBuiltYet || currentScratchCard?.serialNumber != newSerial) {
+                    Log.d(TAG, "displayScratchCard(): uiNotBuiltYet=$uiNotBuiltYet, serial=$newSerial")
+                    displayScratchCard(newSerial, newCard)
+                } else {
+                    // ✅ 同一張卡 → 只更新格子狀態（不卡頓、不閃爍）
+                    currentScratchCard = newCard
+                    updateExistingScratchCardUI(newCard)
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "載入刮刮卡資料失敗: ${error.message}", error.toException())
+
+                // ✅ 若是網路問題，給玩家看得懂的提示
+                if (!isNetworkAvailable()) {
+                    displayNoScratchCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+                    return
+                }
+
+                if (canSafelyUpdateUi()) {
+                    activity?.let { ToastManager.show(it, "載入刮刮卡資料失敗。") }
+                    displayNoScratchCardMessage("載入刮刮卡失敗，請稍後再試。")
+                }
+            }
+        }
+
+        scratchCardsRef?.addValueEventListener(scratchCardsListener!!)
     }
 
     private fun updateExistingScratchCardUI(updatedCard: ScratchCard) {
@@ -775,7 +883,19 @@ class ScratchCardPlayerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // 清理所有動畫，防止記憶體洩漏
+
+        // ✅ 移除 Firebase 監聽
+        scratchCardsListener?.let { listener ->
+            scratchCardsRef?.removeEventListener(listener)
+        }
+        scratchCardsListener = null
+        scratchCardsRef = null
+
+        // ✅ 停止網路 loop
+        networkHandler.removeCallbacksAndMessages(null)
+        networkLoopStarted = false
+
+        // ✅ 清理所有動畫
         cellAnimators.keys.toList().forEach { cellNumber ->
             stopCellAnimation(cellNumber)
         }
