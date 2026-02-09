@@ -33,6 +33,7 @@ import com.champion.king.util.UpdateHistoryFormatter
 import com.google.firebase.auth.FirebaseAuth
 import androidx.activity.OnBackPressedCallback
 import androidx.core.view.doOnLayout
+import com.champion.king.core.config.AppConfig
 
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
@@ -104,6 +105,11 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // 這裡改成 1 分鐘（60_000ms）。如果你真的想完全取消，可改為 0L。
     private val updateCheckThrottleMs: Long = 60_000L
 
+    private val AUTO_RESTORE_TIMEOUT_MS = 8000L  // 8 秒超時，避免開機卡死
+    private var autoRestoreFinished = false
+    private var autoRestoreTimeoutRunnable: Runnable? = null
+
+
     private fun triggerAutoUpdateCheck(reason: String, force: Boolean = false) {
         if (!updateManager.isAutoCheckEnabled()) return
         if (isUpdateDialogShowing) {
@@ -174,15 +180,191 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         database = FirebaseDatabase.getInstance(DB_URL).reference
 
-        // 初始顯示「台主」佈局 + Login
-        render(Mode.MASTER)
+        // 初始顯示「台主」佈局
+        // ✅ 冷啟動才走這套（避免重建/旋轉造成流程混亂）
         if (savedInstanceState == null) {
-            loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+
+            val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+            val hasSession = sp.getBoolean("SESSION_LOGGED_IN", false) &&
+                    !sp.getString("SESSION_USER_KEY", null).isNullOrBlank()
+
+            if (hasSession) {
+                // ✅ 有 session：先顯示黑畫面/Loading，不要 render MASTER，避免閃
+                showBootLoadingScreen()
+
+                // 交給還原流程：成功會 render PLAYER；失敗會回到登入頁
+                tryRestoreSessionAndAutoLogin()
+
+                // ⚠️ 注意：這裡不要 checkUpdateOnStart（避免 loading 期間跳更新）
+            } else {
+                // ✅ 沒 session：才進台主 + 登入頁（維持你原本行為）
+                render(Mode.MASTER)
+                loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+
+                // 開啟 APP 還沒登入時檢查更新（你的既有策略）
+                checkUpdateOnStart()
+            }
+
+        } else {
+            // 非冷啟動（理論上你已鎖橫向、很少走到）
+            // 保守做法：維持台主畫面
+            render(Mode.MASTER)
         }
+
         updateCurrentTime()
         enableImmersiveMode()
         resetIdleTimer() // 啟動閒置監測計時
-        checkUpdateOnStart()
+    }
+
+    private fun tryRestoreSessionAndAutoLogin(): Boolean {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
+        val userKey = sp.getString("SESSION_USER_KEY", null)
+
+        if (!loggedIn || userKey.isNullOrBlank()) return false
+
+        autoRestoreFinished = false
+
+        // ✅ 超時保險：避免重開機時 Firebase 不回呼造成卡死
+        autoRestoreTimeoutRunnable?.let { handler.removeCallbacks(it) }
+        autoRestoreTimeoutRunnable = Runnable {
+            if (autoRestoreFinished) return@Runnable
+            autoRestoreFinished = true
+
+            Log.w(TAG, "自動登入超時（可能是剛開機網路未就緒），先進玩家模式避免卡死")
+            ToastManager.show(this, "網路尚未就緒，先進入玩家模式")
+
+            // 先用「最小 user」進玩家（安全），不要進台主
+            val fallbackUser = User().apply {
+                firebaseKey = userKey
+                account = ""          // 不重要
+                accountStatus = "ACTIVE" // 先假設，等網路好再確認
+            }
+            onAutoRestoreSuccessToPlayer(fallbackUser)
+
+            // 背景重試撈 user（網路起來後補掛監聽、補同步、確認停用）
+            retryFetchUserAfterEnteredPlayer(userKey, attempt = 1)
+        }
+        handler.postDelayed(autoRestoreTimeoutRunnable!!, AUTO_RESTORE_TIMEOUT_MS)
+
+        // ✅ 直接用 userKey 把 user 撈回來
+        database.child("users").child(userKey)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (autoRestoreFinished) return  // 已經超時進玩家了，就不再走這裡切畫面
+
+                    autoRestoreFinished = true
+                    autoRestoreTimeoutRunnable?.let { handler.removeCallbacks(it) }
+
+                    val user = snapshot.getValue(User::class.java)
+                    if (user == null) {
+                        clearLoginSession()
+                        render(Mode.MASTER)
+                        loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
+                        return
+                    }
+
+                    user.firebaseKey = userKey
+
+                    if (user.accountStatus == "SUSPENDED") {
+                        clearLoginSession()
+                        handleAccountSuspended()
+                        return
+                    }
+
+                    // ✅ 成功：直接進玩家（不要進台主）
+                    onAutoRestoreSuccessToPlayer(user)
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    if (autoRestoreFinished) return
+
+                    autoRestoreFinished = true
+                    autoRestoreTimeoutRunnable?.let { handler.removeCallbacks(it) }
+
+                    Log.e(TAG, "自動登入失敗：${error.message}，先進玩家模式避免卡死")
+                    ToastManager.show(this@MainActivity, "連線中，先進入玩家模式")
+
+                    // 一樣：安全起見，先進玩家，不回台主
+                    val fallbackUser = User().apply {
+                        firebaseKey = userKey
+                        account = ""
+                        accountStatus = "ACTIVE"
+                    }
+                    onAutoRestoreSuccessToPlayer(fallbackUser)
+
+                    // 背景重試撈 user（網路好後補上）
+                    retryFetchUserAfterEnteredPlayer(userKey, attempt = 1)
+                }
+            })
+
+        return true
+    }
+
+    private fun retryFetchUserAfterEnteredPlayer(userKey: String, attempt: Int) {
+        // 最多重試 6 次：3s, 3s, 3s... 你也可以改成遞增
+        if (attempt > 6) {
+            Log.w(TAG, "背景重試撈 user 已達上限，停止重試")
+            return
+        }
+
+        handler.postDelayed({
+            database.child("users").child(userKey)
+                .addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val user = snapshot.getValue(User::class.java)
+                        if (user == null) {
+                            retryFetchUserAfterEnteredPlayer(userKey, attempt + 1)
+                            return
+                        }
+
+                        user.firebaseKey = userKey
+
+                        // ✅ 一旦拿到 user，補上 currentUser + 監聽 + 防弊同步 + 停用檢查
+                        currentUser = user
+
+                        if (user.accountStatus == "SUSPENDED") {
+                            clearLoginSession()
+                            handleAccountSuspended()
+                            return
+                        }
+
+                        setupForceLogoutWatcher()
+                        setupAccountStatusWatcher()
+                        performScratchTempSync()
+
+                        // 玩家畫面如果需要立刻刷新獎項/刮數資訊（可選）
+                        fetchAndDisplayPrizeInfo(userKey, isMaster = false)
+                        fetchAndDisplayClawsGiveawayInfo(userKey, giveawayCountTextViewPlayer)
+
+                        Log.d(TAG, "背景重試撈 user 成功，已補掛監聽/同步")
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {
+                        retryFetchUserAfterEnteredPlayer(userKey, attempt + 1)
+                    }
+                })
+        }, 3000L)
+    }
+
+    private fun onAutoRestoreSuccessToPlayer(user: User) {
+        // 這條路徑是「重開 APP 自動還原」才會走到
+        currentUser = user
+        hasHandledSuspension = false
+
+        // ✅ 掛上你原本登入成功會掛的監聽，避免後端停用/強登出失效
+        setupForceLogoutWatcher()
+        setupAccountStatusWatcher()
+
+        // ✅ 你原本登入成功會做的防弊同步，重開也做一次（但不進台主）
+        Log.d(TAG, "【自動還原登入】執行防弊檢查")
+        performScratchTempSync()
+
+        // ✅ 關鍵：直接進玩家模式（避免進台主頁）
+        render(Mode.PLAYER)
+
+        // 可選：自動還原專用提示（render 裡已經會 Toast「已切換至玩家頁面」）
+        ToastManager.show(this, "已自動進入玩家模式")
     }
 
     override fun onResume() {
@@ -492,6 +674,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             return
         }
 
+        saveLoginSession(loggedInUser)
+
         Log.d(TAG, "登入成功，右上角資訊已更新為: ${loggedInUser.account}")
         render(Mode.MASTER)
 
@@ -506,6 +690,61 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         triggerAutoUpdateCheck(reason = "login_success")
         ToastManager.show(this, "歡迎回來，${loggedInUser.account}！")
+    }
+
+    private fun saveLoginSession(user: User) {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        sp.edit()
+            .putBoolean("SESSION_LOGGED_IN", true)
+            .putString("SESSION_USER_KEY", user.firebaseKey) // 你程式裡已經在用 user.firebaseKey，表示這個欄位存在
+            .apply()
+    }
+
+    private fun clearLoginSession() {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        sp.edit()
+            .remove("SESSION_LOGGED_IN")
+            .remove("SESSION_USER_KEY")
+            .apply()
+    }
+
+    private fun showBootLoadingScreen() {
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val progress = ProgressBar(this).apply {
+            isIndeterminate = true
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+        }
+
+        val tv = TextView(this).apply {
+            text = "載入中..."
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 18f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = (60 * resources.displayMetrics.density).toInt()
+            }
+        }
+
+        root.addView(progress)
+        root.addView(tv)
+
+        setContentView(root)
+        enableImmersiveMode()
     }
 
     /**
@@ -953,6 +1192,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         } catch (_: Exception) {}
 
         SettingsViewModel.clearAllDrafts()
+        clearLoginSession()
         currentUser = null
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
         render(Mode.MASTER)
@@ -1035,6 +1275,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         removeAccountStatusWatcher()
 
         SettingsViewModel.clearAllDrafts()
+        clearLoginSession()
         currentUser = null
 
         supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
@@ -1290,6 +1531,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             runOnUiThread {
                 if (success && user != null) {
                     currentUser = user
+                    saveLoginSession(user)
                     render(Mode.MASTER)
                     performScratchTempSync()
                     loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
