@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private lateinit var currentTimeTextViewMaster: TextView
     private lateinit var userNamePointsTextViewMaster: TextView
     private lateinit var configButtonMaster: ImageView
-    private lateinit var logoutButtonMaster: TextView
+    private lateinit var logoutButtonMaster: ImageButton
     private lateinit var bagButtonMaster: ImageView
     private lateinit var shopButtonMaster: ImageView
     private lateinit var userButtonMaster: ImageView
