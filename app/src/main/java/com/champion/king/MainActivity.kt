@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private val idleRunnable = Runnable { showAdPoster() }
     private val SESSION_LAST_SEEN_AT = "SESSION_LAST_SEEN_AT"
     private val SESSION_EXPIRE_MS = 3L * 24 * 60 * 60 * 1000 // 3 天
+    lateinit var messageButtonMaster: ImageButton
 
     private val updateTimeRunnable = object : Runnable {
         override fun run() {
@@ -477,6 +478,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         currentTimeTextViewMaster = findViewById(R.id.current_time_text_view_master)
         userNamePointsTextViewMaster = findViewById(R.id.user_name_points_text_view_master)
         configButtonMaster = findViewById(R.id.config_button_master)
+        messageButtonMaster = findViewById(R.id.message_button_master)
         logoutButtonMaster = findViewById(R.id.logout_button_master)
         bagButtonMaster = findViewById(R.id.bag_button_master)
         shopButtonMaster = findViewById(R.id.shop_button_master)
@@ -530,12 +532,17 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 R.id.config_button_master -> {
                     loadFragment(SettingsFragment(), containerIdFor(Mode.MASTER))
                 }
+                R.id.message_button_master -> {
+                    clearRemainingScratchesDisplayOnMaster()  // 你原本各頁面都有清
+                    loadFragment(MessageFragment(), containerIdFor(Mode.MASTER))
+                }
             }
         }
         bagButtonMaster.setOnClickListener(protectedClick)
         shopButtonMaster.setOnClickListener(protectedClick)
         userButtonMaster.setOnClickListener(protectedClick)
         configButtonMaster.setOnClickListener(protectedClick)
+        messageButtonMaster.setOnClickListener(protectedClick)
 
         // 遊戲協議按鈕
         findViewById<ImageView>(R.id.pad_button_master).setOnClickListener {

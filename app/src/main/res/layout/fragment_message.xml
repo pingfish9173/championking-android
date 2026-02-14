@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/message_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FFFFFF"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tv_message_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="訊息通知"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:textSize="22sp" />
+
+    <!-- 之後要擴充列表/內容，可從這裡往下加 RecyclerView 或其他元件 -->
+</LinearLayout>
