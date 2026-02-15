@@ -14,6 +14,8 @@ import com.champion.king.data.api.dto.UnbindDeviceResponse
 import com.champion.king.data.api.dto.VersionInfo
 import retrofit2.http.GET
 import retrofit2.http.Query
+import com.champion.king.data.api.dto.GetUnreadCountResponse
+
 
 interface ApiService {
 
@@ -30,4 +32,10 @@ interface ApiService {
 
     @POST("https://unbinddevice-qmvrvane7q-de.a.run.app")
     suspend fun unbindDevice(@Body request: UnbindDeviceRequest): Response<UnbindDeviceResponse>
+
+    @GET("https://getunreadcount-qmvrvane7q-de.a.run.app")
+    suspend fun getUnreadCount(
+        @Query("userKey") userKey: String,
+        @Query("category") category: String = "ALL"
+    ): Response<GetUnreadCountResponse>
 }

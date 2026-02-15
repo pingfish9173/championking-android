@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private val SESSION_LAST_SEEN_AT = "SESSION_LAST_SEEN_AT"
     private val SESSION_EXPIRE_MS = 3L * 24 * 60 * 60 * 1000 // 3 天
     lateinit var messageButtonMaster: ImageButton
+    private var messageBadgeTextViewMaster: TextView? = null
 
     private val updateTimeRunnable = object : Runnable {
         override fun run() {
@@ -418,6 +419,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // ✅ 有在使用就更新 lastSeenAt（不會踢人）
         markSessionSeen()
+
+        if (mode == Mode.MASTER) refreshUnreadBadgeOnMaster()
     }
 
     override fun onPause() {
@@ -479,6 +482,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         userNamePointsTextViewMaster = findViewById(R.id.user_name_points_text_view_master)
         configButtonMaster = findViewById(R.id.config_button_master)
         messageButtonMaster = findViewById(R.id.message_button_master)
+        messageBadgeTextViewMaster = findViewById(R.id.message_badge_master)
         logoutButtonMaster = findViewById(R.id.logout_button_master)
         bagButtonMaster = findViewById(R.id.bag_button_master)
         shopButtonMaster = findViewById(R.id.shop_button_master)
@@ -627,6 +631,46 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun containerIdForCurrent(): Int = containerIdFor(mode)
 
+    private fun setMessageBadge(count: Int) {
+        val tv = messageBadgeTextViewMaster ?: return
+        if (count <= 0) {
+            tv.visibility = View.GONE
+            return
+        }
+        tv.visibility = View.VISIBLE
+        tv.text = if (count > 99) "99+" else count.toString()
+    }
+
+    private fun refreshUnreadBadgeOnMaster() {
+        val sp = getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, MODE_PRIVATE)
+        val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
+        val userKey = sp.getString("SESSION_USER_KEY", null)
+
+        if (!loggedIn || userKey.isNullOrBlank()) {
+            setMessageBadge(0)
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                val resp = com.champion.king.data.api.RetrofitClient.apiService
+                    .getUnreadCount(userKey = userKey, category = "ALL")
+
+                if (!resp.isSuccessful) {
+                    Log.e(TAG, "[getUnreadCount] http=${resp.code()} msg=${resp.message()}")
+                    return@launch
+                }
+
+                val body = resp.body()
+                val unread = body?.unread ?: 0
+                setMessageBadge(unread)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "[getUnreadCount] exception: ${e.message}", e)
+            }
+        }
+    }
+
     // ====== Time / Watermark ======
     private fun updateCurrentTime() {
         val text = try {
@@ -734,6 +778,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         setupForceLogoutWatcher()
         setupAccountStatusWatcher() // ✅ 新增：監聽停用狀態
+        setMessageBadge(0)                 // 先清空避免殘影（可選）
+        refreshUnreadBadgeOnMaster()       // ✅ 登入成功立刻抓未讀數
 
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
