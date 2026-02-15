@@ -419,8 +419,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // ✅ 有在使用就更新 lastSeenAt（不會踢人）
         markSessionSeen()
-
-        if (mode == Mode.MASTER) refreshUnreadBadgeOnMaster()
     }
 
     override fun onPause() {
@@ -436,6 +434,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             Mode.MASTER -> {
                 setContentView(R.layout.activity_main)
                 initMasterViews()
+                refreshUnreadBadgeOnMaster()
                 updateCurrentTime()
                 updateVersionInfo()
                 updateWatermarkDisplay(currentUser != null)
@@ -778,8 +777,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         setupForceLogoutWatcher()
         setupAccountStatusWatcher() // ✅ 新增：監聽停用狀態
-        setMessageBadge(0)                 // 先清空避免殘影（可選）
-        refreshUnreadBadgeOnMaster()       // ✅ 登入成功立刻抓未讀數
 
         // 登入成功後，執行防弊檢查
         Log.d(TAG, "【登入成功】執行防弊檢查")
