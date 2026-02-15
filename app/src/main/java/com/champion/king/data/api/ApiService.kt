@@ -38,4 +38,12 @@ interface ApiService {
         @Query("userKey") userKey: String,
         @Query("category") category: String = "ALL"
     ): Response<GetUnreadCountResponse>
+
+    @GET("https://listnotifications-qmvrvane7q-de.a.run.app")
+    suspend fun listNotifications(
+        @Query("userKey") userKey: String,
+        @Query("category") category: String = "USER",
+        @Query("limit") limit: Int = 10,
+        @Query("cursor") cursor: Long? = null
+    ): Response<com.champion.king.data.api.dto.ListNotificationsResponse>
 }
