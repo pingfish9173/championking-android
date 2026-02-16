@@ -132,7 +132,6 @@ class MessageFragment : Fragment() {
     }
 
     private fun showDeleteSelectedDialog() {
-        // 🌟 1. 取得已經拷貝的 Set，並轉成 List 供後續使用
         val selectedIdsList = adapter.getSelectedIds().toList()
         if (selectedIdsList.isEmpty()) return
         val uk = userKey ?: return
@@ -142,16 +141,23 @@ class MessageFragment : Fragment() {
             .setMessage("確定要刪除這 ${selectedIdsList.size} 則訊息嗎？")
             .setPositiveButton("刪除") { _, _ ->
 
-                // 2. 樂觀 UI 刪除 (轉回 Set 傳給 Adapter)
+                // 🌟 1. 先計算出即將被刪除的訊息中，各分類有幾個是「未讀」的
+                val unreadMap = adapter.getUnreadCountByCategory(selectedIdsList)
+
+                // 2. 樂觀 UI 刪除列表項目
                 adapter.removeMultipleByIds(selectedIdsList.toSet())
                 if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
 
-                // 3. 結束選擇模式 (這裡會清空 Adapter 的選取狀態，但不會影響 selectedIdsList 了！)
+                // 3. 結束選擇模式
                 adapter.exitSelectionMode()
 
-                // 4. 重刷 API 最準確
-                refreshTabBadges()
-                (activity as? MainActivity)?.refreshMessageBadge()
+                // 🌟 4. 樂觀 UI 扣減紅點 (不用等 API 回來，畫面瞬間回饋)
+                for ((cat, count) in unreadMap) {
+                    for (i in 0 until count) {
+                        decrementTabBadges(cat) // 扣掉 Tab 的紅點
+                        (activity as? MainActivity)?.decreaseMessageBadge() // 扣掉左側選單的紅點
+                    }
+                }
 
                 // 5. 背景呼叫多筆刪除 API
                 lifecycleScope.launch {
@@ -159,11 +165,15 @@ class MessageFragment : Fragment() {
                         val resp = RetrofitClient.apiService.deleteNotifications(
                             com.champion.king.data.api.dto.DeleteNotificationsRequest(
                                 userKey = uk,
-                                messageIds = selectedIdsList // 🌟 直接傳入我們保留好的 List
+                                messageIds = selectedIdsList
                             )
                         )
 
-                        if (!resp.isSuccessful || resp.body()?.success != true) {
+                        // 🌟 6. 確定後端真的刪除成功後，再重刷一次未讀數量，確保兩邊資料 100% 同步
+                        if (resp.isSuccessful && resp.body()?.success == true) {
+                            refreshTabBadges()
+                            (activity as? MainActivity)?.refreshMessageBadge()
+                        } else {
                             Log.e("MessageFragment", "[delete selected] backend returned false")
                         }
                     } catch (e: Exception) {
@@ -411,6 +421,19 @@ class MessageFragment : Fragment() {
         fun removeMultipleByIds(ids: Set<String>) {
             items.removeAll { ids.contains(it.messageId) }
             notifyDataSetChanged()
+        }
+
+        // 🌟 新增這個方法：用來計算即將被刪除的訊息中，各分類有多少是「未讀」的
+        fun getUnreadCountByCategory(ids: List<String>): Map<String, Int> {
+            val unreadMap = mutableMapOf<String, Int>()
+            for (item in items) {
+                // 如果這筆訊息在刪除清單中，且它是「未讀」的
+                if (ids.contains(item.messageId) && item.readAt == null) {
+                    val count = unreadMap.getOrDefault(item.category, 0)
+                    unreadMap[item.category] = count + 1
+                }
+            }
+            return unreadMap
         }
 
         // --- 以下為原本的方法 ---
