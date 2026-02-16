@@ -17,6 +17,8 @@ import retrofit2.http.Query
 import com.champion.king.data.api.dto.GetUnreadCountResponse
 import com.champion.king.data.api.dto.MarkReadNotificationsRequest
 import com.champion.king.data.api.dto.MarkReadNotificationsResponse
+import com.champion.king.data.api.dto.DeleteNotificationsRequest
+import com.champion.king.data.api.dto.DeleteNotificationsResponse
 
 interface ApiService {
 
@@ -52,4 +54,9 @@ interface ApiService {
     suspend fun markReadNotifications(
         @Body request: MarkReadNotificationsRequest
     ): Response<MarkReadNotificationsResponse>
+
+    @POST("https://deleteNotifications-qmvrvane7q-de.a.run.app")
+    suspend fun deleteNotifications(
+        @Body request: DeleteNotificationsRequest
+    ): Response<DeleteNotificationsResponse>
 }

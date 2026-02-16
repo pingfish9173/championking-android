@@ -24,9 +24,10 @@ class MessageFragment : Fragment() {
     private lateinit var rv: RecyclerView
     private lateinit var pb: ProgressBar
     private lateinit var tvEmpty: TextView
-    private val adapter = MessageAdapter { msg ->
-        onMessageClicked(msg)
-    }
+    private val adapter = MessageAdapter(
+        onClick = { msg -> onMessageClicked(msg) },
+        onLongPress = { msg -> onMessageLongPress(msg) }
+    )
     private var userKey: String? = null
     private var isLoading = false
     private var hasMore = true
@@ -176,10 +177,56 @@ class MessageFragment : Fragment() {
         }
     }
 
+    private fun onMessageLongPress(msg: NotificationMessageDto) {
+        val uk = userKey ?: return
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("刪除訊息")
+            .setMessage("確定要刪除這則訊息嗎？\n\n${msg.title}")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("刪除") { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        val resp = RetrofitClient.apiService.deleteNotifications(
+                            com.champion.king.data.api.dto.DeleteNotificationsRequest(
+                                userKey = uk,
+                                messageIds = listOf(msg.messageId)
+                            )
+                        )
+
+                        if (!resp.isSuccessful) {
+                            Log.e("MessageFragment", "[delete] http=${resp.code()} msg=${resp.message()}")
+                            return@launch
+                        }
+
+                        val body = resp.body()
+                        if (body?.success != true) {
+                            Log.e("MessageFragment", "[delete] success=false")
+                            return@launch
+                        }
+
+                        // ✅ UI 立即移除
+                        adapter.removeById(msg.messageId)
+
+                        // 空狀態
+                        if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
+
+                        // ✅ 更新左側紅點（如果是未讀被刪，未讀數也要下降）
+                        (activity as? MainActivity)?.refreshMessageBadge()
+
+                    } catch (e: Exception) {
+                        Log.e("MessageFragment", "[delete] exception: ${e.message}", e)
+                    }
+                }
+            }
+            .show()
+    }
+
     // ---------------- Adapter ----------------
 
     private class MessageAdapter(
-        private val onClick: (NotificationMessageDto) -> Unit
+        private val onClick: (NotificationMessageDto) -> Unit,
+        private val onLongPress: (NotificationMessageDto) -> Unit
     ) : RecyclerView.Adapter<MessageVH>() {
 
         private val items = mutableListOf<NotificationMessageDto>()
@@ -206,6 +253,13 @@ class MessageFragment : Fragment() {
             notifyItemChanged(idx)
         }
 
+        fun removeById(messageId: String) {
+            val idx = items.indexOfFirst { it.messageId == messageId }
+            if (idx < 0) return
+            items.removeAt(idx)
+            notifyItemRemoved(idx)
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageVH {
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
             return MessageVH(v)
@@ -215,6 +269,10 @@ class MessageFragment : Fragment() {
             val theItem = items[position]
             holder.bind(theItem, sdf)
             holder.itemView.setOnClickListener { onClick(theItem) }
+            holder.itemView.setOnLongClickListener {
+                onLongPress(theItem) // 你現在用 theItem 命名就用它
+                true
+            }
         }
 
         override fun getItemCount(): Int = items.size
