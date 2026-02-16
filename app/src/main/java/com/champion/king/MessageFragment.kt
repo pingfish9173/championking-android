@@ -24,7 +24,9 @@ class MessageFragment : Fragment() {
     private lateinit var rv: RecyclerView
     private lateinit var pb: ProgressBar
     private lateinit var tvEmpty: TextView
-    private val adapter = MessageAdapter()
+    private val adapter = MessageAdapter { msg ->
+        onMessageClicked(msg)
+    }
     private var userKey: String? = null
     private var isLoading = false
     private var hasMore = true
@@ -135,9 +137,50 @@ class MessageFragment : Fragment() {
         }
     }
 
+    private fun onMessageClicked(msg: NotificationMessageDto) {
+        // 已讀就不必打 API（也可改成仍進詳細頁）
+        if (msg.readAt != null) return
+
+        val uk = userKey ?: return
+
+        lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.apiService.markReadNotifications(
+                    com.champion.king.data.api.dto.MarkReadNotificationsRequest(
+                        userKey = uk,
+                        messageIds = listOf(msg.messageId)
+                    )
+                )
+
+                if (!resp.isSuccessful) {
+                    Log.e("MessageFragment", "[markRead] http=${resp.code()} msg=${resp.message()}")
+                    return@launch
+                }
+
+                val body = resp.body()
+                if (body?.success != true) {
+                    Log.e("MessageFragment", "[markRead] success=false")
+                    return@launch
+                }
+
+                // ✅ UI 立即更新：把該筆 readAt 設成現在
+                adapter.markRead(msg.messageId, System.currentTimeMillis())
+
+                // ✅（可選但很建議）同步更新左側紅點數字
+                // 需要 MainActivity 提供一個 public 的 badge refresh wrapper（看下一節）
+                (activity as? MainActivity)?.refreshMessageBadge()
+
+            } catch (e: Exception) {
+                Log.e("MessageFragment", "[markRead] exception: ${e.message}", e)
+            }
+        }
+    }
+
     // ---------------- Adapter ----------------
 
-    private class MessageAdapter : RecyclerView.Adapter<MessageVH>() {
+    private class MessageAdapter(
+        private val onClick: (NotificationMessageDto) -> Unit
+    ) : RecyclerView.Adapter<MessageVH>() {
 
         private val items = mutableListOf<NotificationMessageDto>()
         private val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
@@ -155,14 +198,23 @@ class MessageFragment : Fragment() {
             notifyItemRangeInserted(start, more.size)
         }
 
+        fun markRead(messageId: String, readAt: Long) {
+            val idx = items.indexOfFirst { it.messageId == messageId }
+            if (idx < 0) return
+            val old = items[idx]
+            items[idx] = old.copy(readAt = readAt)
+            notifyItemChanged(idx)
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageVH {
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
             return MessageVH(v)
         }
 
         override fun onBindViewHolder(holder: MessageVH, position: Int) {
-            val it = items[position]
-            holder.bind(it, sdf)
+            val theItem = items[position]
+            holder.bind(theItem, sdf)
+            holder.itemView.setOnClickListener { onClick(theItem) }
         }
 
         override fun getItemCount(): Int = items.size

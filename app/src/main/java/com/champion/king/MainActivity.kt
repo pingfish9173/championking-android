@@ -670,6 +670,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
     }
 
+    fun refreshMessageBadge() {
+        refreshUnreadBadgeOnMaster()
+    }
+
     // ====== Time / Watermark ======
     private fun updateCurrentTime() {
         val text = try {

@@ -15,7 +15,8 @@ import com.champion.king.data.api.dto.VersionInfo
 import retrofit2.http.GET
 import retrofit2.http.Query
 import com.champion.king.data.api.dto.GetUnreadCountResponse
-
+import com.champion.king.data.api.dto.MarkReadNotificationsRequest
+import com.champion.king.data.api.dto.MarkReadNotificationsResponse
 
 interface ApiService {
 
@@ -46,4 +47,9 @@ interface ApiService {
         @Query("limit") limit: Int = 10,
         @Query("cursor") cursor: Long? = null
     ): Response<com.champion.king.data.api.dto.ListNotificationsResponse>
+
+    @POST("https://markreadnotifications-qmvrvane7q-de.a.run.app")
+    suspend fun markReadNotifications(
+        @Body request: MarkReadNotificationsRequest
+    ): Response<MarkReadNotificationsResponse>
 }
