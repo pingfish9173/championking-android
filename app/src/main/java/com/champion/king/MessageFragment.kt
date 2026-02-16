@@ -205,11 +205,21 @@ class MessageFragment : Fragment() {
     }
 
     private fun onMessageClicked(msg: NotificationMessageDto) {
-        // 已讀就不必打 API（也可改成仍進詳細頁）
+        // 如果已經是已讀，就不做事
         if (msg.readAt != null) return
 
         val uk = userKey ?: return
 
+        // 🌟 1. 樂觀 UI 更新：立刻改變列表文字為已讀狀態
+        adapter.markRead(msg.messageId, System.currentTimeMillis())
+
+        // 🌟 2. 立刻扣減上方 Tab 的紅點數字
+        decrementTabBadges(msg.category)
+
+        // 🌟 3. 立刻扣減左側主選單的紅點數字
+        (activity as? MainActivity)?.decreaseMessageBadge()
+
+        // 🌟 4. 背景發送 API (不用等它回來，使用者已經可以繼續滑動了)
         lifecycleScope.launch {
             try {
                 val resp = RetrofitClient.apiService.markReadNotifications(
@@ -219,28 +229,16 @@ class MessageFragment : Fragment() {
                     )
                 )
 
-                if (!resp.isSuccessful) {
-                    Log.e("MessageFragment", "[markRead] http=${resp.code()} msg=${resp.message()}")
-                    return@launch
+                if (!resp.isSuccessful || resp.body()?.success != true) {
+                    Log.e("MessageFragment", "[markRead] backend returned false")
                 }
-
-                val body = resp.body()
-                if (body?.success != true) {
-                    Log.e("MessageFragment", "[markRead] success=false")
-                    return@launch
-                }
-
-                // UI 立即更新：把該筆 readAt 設成現在
-                adapter.markRead(msg.messageId, System.currentTimeMillis())
-
-                // 通知 MainActivity 更新左側選單的總未讀紅點
-                (activity as? MainActivity)?.refreshMessageBadge()
-
-                // 重新抓取並更新上方 Tab 的分類未讀數字
-                refreshTabBadges()
-
             } catch (e: Exception) {
                 Log.e("MessageFragment", "[markRead] exception: ${e.message}", e)
+                // 斷線或發生例外，依照你的需求跳出提示
+                com.champion.king.util.ToastManager.show(requireContext(), "網路連線異常，訊息狀態可能未同步")
+
+                // (選擇性) 如果你想做到很嚴謹，可以在這裡把剛才扣掉的紅點與已讀狀態 rollback 回來
+                // 但通常為了不干擾使用者，單純跳 Toast 提醒就足夠了
             }
         }
     }
@@ -253,6 +251,21 @@ class MessageFragment : Fragment() {
             .setMessage("確定要刪除這則訊息嗎？\n\n${msg.title}")
             .setNegativeButton("取消", null)
             .setPositiveButton("刪除") { _, _ ->
+
+                // 紀錄刪除前這則訊息是否「未讀」
+                val wasUnread = msg.readAt == null
+
+                // 🌟 1. 樂觀 UI 更新：立刻從列表 RecyclerView 中移除
+                adapter.removeById(msg.messageId)
+                if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
+
+                // 🌟 2. 如果刪除的是「未讀」訊息，才需要扣減紅點
+                if (wasUnread) {
+                    decrementTabBadges(msg.category)
+                    (activity as? MainActivity)?.decreaseMessageBadge()
+                }
+
+                // 🌟 3. 背景發送 API
                 lifecycleScope.launch {
                     try {
                         val resp = RetrofitClient.apiService.deleteNotifications(
@@ -262,33 +275,38 @@ class MessageFragment : Fragment() {
                             )
                         )
 
-                        if (!resp.isSuccessful) {
-                            Log.e("MessageFragment", "[delete] http=${resp.code()} msg=${resp.message()}")
-                            return@launch
+                        if (!resp.isSuccessful || resp.body()?.success != true) {
+                            Log.e("MessageFragment", "[delete] backend returned false")
                         }
-
-                        val body = resp.body()
-                        if (body?.success != true) {
-                            Log.e("MessageFragment", "[delete] success=false")
-                            return@launch
-                        }
-
-                        // UI 立即移除
-                        adapter.removeById(msg.messageId)
-                        if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
-
-                        // 更新左側紅點
-                        (activity as? MainActivity)?.refreshMessageBadge()
-
-                        // 🌟 新增：重新抓取並更新上方 Tab 的分類未讀數字
-                        refreshTabBadges()
-
                     } catch (e: Exception) {
                         Log.e("MessageFragment", "[delete] exception: ${e.message}", e)
+                        com.champion.king.util.ToastManager.show(requireContext(), "網路連線異常，無法同步刪除結果")
+                        // 若斷線，使用者重整畫面(切換Tab)資料還是會回來，所以不用刻意寫回滾邏輯
                     }
                 }
             }
             .show()
+    }
+
+    // 🌟 補上這個缺少的函式
+    private fun decrementTabBadges(category: String) {
+        decrementSingleTab(0) // Tab 0 永遠是 "ALL"，必扣
+        when (category) {
+            "USER" -> decrementSingleTab(1)
+            "PROMO" -> decrementSingleTab(2)
+        }
+    }
+
+    // 這是你原本已經有的函式
+    private fun decrementSingleTab(index: Int) {
+        val tab = tabLayout.getTabAt(index)
+        val badge = tab?.badge
+        if (badge != null && badge.number > 0) {
+            badge.number -= 1
+            if (badge.number <= 0) {
+                tab.removeBadge() // 如果扣到 0 就把紅點隱藏
+            }
+        }
     }
 
     // ---------------- Adapter ----------------

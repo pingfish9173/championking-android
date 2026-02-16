@@ -501,6 +501,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         findViewById<ImageView>(R.id.home_button_master).setOnClickListener {
             Log.d(TAG, "台主頁面 Home button clicked - 回到首頁")
             supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+            refreshMessageBadge()  // 🌟 新增這一行：每次點擊回到首頁時，重新拉取未讀訊息數量並更新紅點
             if (currentUser != null) {
                 loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
             } else {
@@ -537,6 +538,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
                 R.id.message_button_master -> {
                     clearRemainingScratchesDisplayOnMaster()  // 你原本各頁面都有清
+                    refreshMessageBadge()  // 🌟 新增這一行：點擊訊息按鈕進入時，強制重拉一次最新的未讀數字
                     loadFragment(MessageFragment(), containerIdFor(Mode.MASTER))
                 }
             }
@@ -672,6 +674,23 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     fun refreshMessageBadge() {
         refreshUnreadBadgeOnMaster()
+    }
+
+    fun decreaseMessageBadge() {
+        val tv = messageBadgeTextViewMaster ?: return
+        if (tv.visibility == View.GONE) return
+
+        val currentText = tv.text.toString()
+        if (currentText == "99+") {
+            // 如果顯示 99+，扣 1 還是 99+，這時為求精準我們還是讓它背景重刷一次
+            refreshMessageBadge()
+            return
+        }
+
+        val currentCount = currentText.toIntOrNull() ?: 0
+        if (currentCount > 0) {
+            setMessageBadge(currentCount - 1)
+        }
     }
 
     // ====== Time / Watermark ======
