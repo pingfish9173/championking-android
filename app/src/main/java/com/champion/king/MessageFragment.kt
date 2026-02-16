@@ -24,8 +24,12 @@ class MessageFragment : Fragment() {
     private lateinit var rv: RecyclerView
     private lateinit var pb: ProgressBar
     private lateinit var tvEmpty: TextView
-
     private val adapter = MessageAdapter()
+    private var userKey: String? = null
+    private var isLoading = false
+    private var hasMore = true
+    private var nextCursor: Long? = null
+    private val loadedIds = hashSetOf<String>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,6 +44,21 @@ class MessageFragment : Fragment() {
 
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
+        rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(recyclerView, dx, dy)
+                if (dy <= 0) return
+
+                val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                val lastVisible = lm.findLastVisibleItemPosition()
+                val total = adapter.itemCount
+
+                // 接近底部就載入（你可調整 threshold）
+                if (hasMore && !isLoading && total > 0 && lastVisible >= total - 2) {
+                    loadMoreUserMessages()
+                }
+            }
+        })
 
         loadFirstPageUserMessages()
 
@@ -49,7 +68,7 @@ class MessageFragment : Fragment() {
     private fun loadFirstPageUserMessages() {
         val sp = requireContext().getSharedPreferences(AppConfig.Prefs.LOGIN_PREFS, 0)
         val loggedIn = sp.getBoolean("SESSION_LOGGED_IN", false)
-        val userKey = sp.getString("SESSION_USER_KEY", null)
+        userKey = sp.getString("SESSION_USER_KEY", null)
 
         if (!loggedIn || userKey.isNullOrBlank()) {
             adapter.setItems(emptyList())
@@ -57,36 +76,61 @@ class MessageFragment : Fragment() {
             return
         }
 
+        // reset paging state
+        isLoading = false
+        hasMore = true
+        nextCursor = null
+        loadedIds.clear()
+        adapter.setItems(emptyList())
+
+        loadMoreUserMessages() // ✅ 直接用同一個 function 載第一頁
+    }
+
+    private fun loadMoreUserMessages() {
+        val uk = userKey ?: return
+        if (isLoading || !hasMore) return
+
+        isLoading = true
         pb.visibility = View.VISIBLE
         tvEmpty.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
                 val resp = RetrofitClient.apiService.listNotifications(
-                    userKey = userKey,
+                    userKey = uk,
                     category = "USER",
                     limit = 10,
-                    cursor = null
+                    cursor = nextCursor
                 )
-
-                pb.visibility = View.GONE
 
                 if (!resp.isSuccessful) {
                     Log.e("MessageFragment", "[listNotifications] http=${resp.code()} msg=${resp.message()}")
-                    tvEmpty.visibility = View.VISIBLE
                     return@launch
                 }
 
                 val body = resp.body()
                 val msgs = body?.messages ?: emptyList()
 
-                adapter.setItems(msgs)
-                tvEmpty.visibility = if (msgs.isEmpty()) View.VISIBLE else View.GONE
+                // 更新 nextCursor / hasMore
+                nextCursor = body?.nextCursor
+                hasMore = nextCursor != null
+
+                // 去重 + append
+                val newOnes = msgs.filter { loadedIds.add(it.messageId) }
+
+                adapter.appendItems(newOnes)
+
+                // 空狀態（只有在第一頁真的沒資料才顯示）
+                if (adapter.itemCount == 0) {
+                    tvEmpty.visibility = View.VISIBLE
+                }
 
             } catch (e: Exception) {
-                pb.visibility = View.GONE
                 Log.e("MessageFragment", "[listNotifications] exception: ${e.message}", e)
-                tvEmpty.visibility = View.VISIBLE
+                if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
+            } finally {
+                isLoading = false
+                pb.visibility = View.GONE
             }
         }
     }
@@ -102,6 +146,13 @@ class MessageFragment : Fragment() {
             items.clear()
             items.addAll(newItems)
             notifyDataSetChanged()
+        }
+
+        fun appendItems(more: List<NotificationMessageDto>) {
+            if (more.isEmpty()) return
+            val start = items.size
+            items.addAll(more)
+            notifyItemRangeInserted(start, more.size)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageVH {
