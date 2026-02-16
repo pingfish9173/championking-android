@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.champion.king.core.config.AppConfig
 import com.champion.king.data.api.RetrofitClient
 import com.champion.king.data.api.dto.NotificationMessageDto
+import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -24,6 +25,8 @@ class MessageFragment : Fragment() {
     private lateinit var rv: RecyclerView
     private lateinit var pb: ProgressBar
     private lateinit var tvEmpty: TextView
+    private lateinit var tabLayout: TabLayout // 新增 TabLayout
+
     private val adapter = MessageAdapter(
         onClick = { msg -> onMessageClicked(msg) },
         onLongPress = { msg -> onMessageLongPress(msg) }
@@ -33,6 +36,9 @@ class MessageFragment : Fragment() {
     private var hasMore = true
     private var nextCursor: Long? = null
     private val loadedIds = hashSetOf<String>()
+
+    // 定義當前選擇的 Category，預設為 "ALL"
+    private var currentCategory: String = "ALL"
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -44,6 +50,7 @@ class MessageFragment : Fragment() {
         rv = v.findViewById(R.id.rv_messages)
         pb = v.findViewById(R.id.pb_loading)
         tvEmpty = v.findViewById(R.id.tv_empty)
+        tabLayout = v.findViewById(R.id.tab_layout_messages) // 初始化 TabLayout
 
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
@@ -56,16 +63,72 @@ class MessageFragment : Fragment() {
                 val lastVisible = lm.findLastVisibleItemPosition()
                 val total = adapter.itemCount
 
-                // 接近底部就載入（你可調整 threshold）
                 if (hasMore && !isLoading && total > 0 && lastVisible >= total - 2) {
                     loadMoreUserMessages()
                 }
             }
         })
 
+        // 設定 TabLayout 切換事件
+        setupTabLayout()
+
+        // 畫面載入時先抓第一頁
         loadFirstPageUserMessages()
 
         return v
+    }
+
+    // 取得各分類的未讀數並更新 Tab Badge
+    private fun refreshTabBadges() {
+        val uk = userKey ?: return
+        // 必須與 TabLayout 中的順序一致：0=ALL, 1=USER, 2=PROMO
+        val categories = listOf("ALL", "USER", "PROMO")
+
+        lifecycleScope.launch {
+            categories.forEachIndexed { index, cat ->
+                try {
+                    val resp = RetrofitClient.apiService.getUnreadCount(userKey = uk, category = cat)
+                    if (resp.isSuccessful) {
+                        val unread = resp.body()?.unread ?: 0
+                        val tab = tabLayout.getTabAt(index)
+
+                        if (unread > 0) {
+                            // 顯示並設定紅點數字
+                            tab?.orCreateBadge?.apply {
+                                number = unread
+                                // 可選：如果你想自訂紅點顏色，可以加上這兩行
+                                // backgroundColor = ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark)
+                                // badgeTextColor = ContextCompat.getColor(requireContext(), android.R.color.white)
+                            }
+                        } else {
+                            // 未讀數為 0 時移除紅點
+                            tab?.removeBadge()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MessageFragment", "[refreshTabBadges] category=$cat exception: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun setupTabLayout() {
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                // 根據選中的 Tab 更新 currentCategory
+                currentCategory = when (tab?.position) {
+                    0 -> "ALL"
+                    1 -> "USER"
+                    2 -> "PROMO"
+                    else -> "ALL"
+                }
+                // 切換 Tab 後重新載入第一頁
+                loadFirstPageUserMessages()
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+            override fun onTabReselected(tab: TabLayout.Tab?) {}
+        })
     }
 
     private fun loadFirstPageUserMessages() {
@@ -76,6 +139,8 @@ class MessageFragment : Fragment() {
         if (!loggedIn || userKey.isNullOrBlank()) {
             adapter.setItems(emptyList())
             tvEmpty.visibility = View.VISIBLE
+            // 未登入時清空所有 Badge
+            for (i in 0..2) tabLayout.getTabAt(i)?.removeBadge()
             return
         }
 
@@ -86,7 +151,10 @@ class MessageFragment : Fragment() {
         loadedIds.clear()
         adapter.setItems(emptyList())
 
-        loadMoreUserMessages() // ✅ 直接用同一個 function 載第一頁
+        loadMoreUserMessages()
+
+        // 🌟 新增：載入資料時同步更新 Tab 上的紅點數字
+        refreshTabBadges()
     }
 
     private fun loadMoreUserMessages() {
@@ -99,9 +167,10 @@ class MessageFragment : Fragment() {
 
         lifecycleScope.launch {
             try {
+                // 將這裡寫死的 "USER" 替換成動態的 currentCategory
                 val resp = RetrofitClient.apiService.listNotifications(
                     userKey = uk,
-                    category = "USER",
+                    category = currentCategory,
                     limit = 10,
                     cursor = nextCursor
                 )
@@ -114,16 +183,13 @@ class MessageFragment : Fragment() {
                 val body = resp.body()
                 val msgs = body?.messages ?: emptyList()
 
-                // 更新 nextCursor / hasMore
                 nextCursor = body?.nextCursor
                 hasMore = nextCursor != null
 
-                // 去重 + append
                 val newOnes = msgs.filter { loadedIds.add(it.messageId) }
 
                 adapter.appendItems(newOnes)
 
-                // 空狀態（只有在第一頁真的沒資料才顯示）
                 if (adapter.itemCount == 0) {
                     tvEmpty.visibility = View.VISIBLE
                 }
@@ -164,12 +230,14 @@ class MessageFragment : Fragment() {
                     return@launch
                 }
 
-                // ✅ UI 立即更新：把該筆 readAt 設成現在
+                // UI 立即更新：把該筆 readAt 設成現在
                 adapter.markRead(msg.messageId, System.currentTimeMillis())
 
-                // ✅（可選但很建議）同步更新左側紅點數字
-                // 需要 MainActivity 提供一個 public 的 badge refresh wrapper（看下一節）
+                // 通知 MainActivity 更新左側選單的總未讀紅點
                 (activity as? MainActivity)?.refreshMessageBadge()
+
+                // 重新抓取並更新上方 Tab 的分類未讀數字
+                refreshTabBadges()
 
             } catch (e: Exception) {
                 Log.e("MessageFragment", "[markRead] exception: ${e.message}", e)
@@ -205,14 +273,15 @@ class MessageFragment : Fragment() {
                             return@launch
                         }
 
-                        // ✅ UI 立即移除
+                        // UI 立即移除
                         adapter.removeById(msg.messageId)
-
-                        // 空狀態
                         if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
 
-                        // ✅ 更新左側紅點（如果是未讀被刪，未讀數也要下降）
+                        // 更新左側紅點
                         (activity as? MainActivity)?.refreshMessageBadge()
+
+                        // 🌟 新增：重新抓取並更新上方 Tab 的分類未讀數字
+                        refreshTabBadges()
 
                     } catch (e: Exception) {
                         Log.e("MessageFragment", "[delete] exception: ${e.message}", e)
