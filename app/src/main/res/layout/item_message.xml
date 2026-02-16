@@ -2,41 +2,49 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:padding="12dp"
-    android:background="#FFFFFF">
+    android:gravity="center_vertical"
+    android:background="@drawable/cell_background">
 
-    <TextView
-        android:id="@+id/tv_item_title"
-        android:layout_width="match_parent"
+    <CheckBox
+        android:id="@+id/cb_message_select"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="標題"
-        android:textColor="#000000"
-        android:textStyle="bold"
-        android:textSize="16sp" />
+        android:layout_marginEnd="8dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/tv_item_body"
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="內容"
-        android:textColor="#333333"
-        android:textSize="14sp" />
+        android:layout_weight="1"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tv_item_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="時間"
-        android:textColor="#888888"
-        android:textSize="12sp" />
+        <TextView
+            android:id="@+id/tv_item_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#000000"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="12dp"
-        android:background="#EEEEEE" />
+        <TextView
+            android:id="@+id/tv_item_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#333333"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tv_item_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#999999"
+            android:textSize="14sp" />
+    </LinearLayout>
 
 </LinearLayout>
