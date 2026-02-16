@@ -5,39 +5,29 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CheckBox
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.RelativeLayout
-import android.widget.TextView
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.champion.king.core.config.AppConfig
+import com.champion.king.core.ui.BaseBindingFragment
 import com.champion.king.data.api.RetrofitClient
 import com.champion.king.data.api.dto.NotificationMessageDto
+import com.champion.king.databinding.FragmentMessageBinding
+import com.champion.king.databinding.ItemMessageBinding
 import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class MessageFragment : Fragment() {
+class MessageFragment : BaseBindingFragment<FragmentMessageBinding>() {
 
-    private lateinit var rv: RecyclerView
-    private lateinit var pb: ProgressBar
-    private lateinit var tvEmpty: TextView
-    private lateinit var tabLayout: TabLayout
-
-    // 🌟 Headers
-    private lateinit var llNormalActions: android.widget.LinearLayout
-    private lateinit var rlSelectionActions: RelativeLayout
-    private lateinit var rlSelectionHeader: RelativeLayout
-    private lateinit var tvSelectionCount: TextView
-    private lateinit var btnCancelSelection: ImageView
-    private lateinit var btnDeleteSelected: ImageView
-    private lateinit var cbSelectAll: CheckBox
+    override fun createBinding(
+        inflater: LayoutInflater,
+        container: ViewGroup?
+    ): FragmentMessageBinding {
+        return FragmentMessageBinding.inflate(inflater, container, false)
+    }
 
     private val adapter = MessageAdapter(
         onClick = { msg -> onMessageClicked(msg) },
@@ -52,49 +42,24 @@ class MessageFragment : Fragment() {
 
     private var currentCategory: String = "ALL"
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val v = inflater.inflate(R.layout.fragment_message, container, false)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
-        rv = v.findViewById(R.id.rv_messages)
-        pb = v.findViewById(R.id.pb_loading)
-        tvEmpty = v.findViewById(R.id.tv_empty)
-        tabLayout = v.findViewById(R.id.tab_layout_messages)
-
-        // Headers
-        llNormalActions = v.findViewById(R.id.ll_normal_actions)
-        rlSelectionActions = v.findViewById(R.id.rl_selection_actions)
-        tvSelectionCount = v.findViewById(R.id.tv_selection_count)
-        btnCancelSelection = v.findViewById(R.id.btn_cancel_selection)
-        btnDeleteSelected = v.findViewById(R.id.btn_delete_selected)
-
-        // 🌟 綁定全選 CheckBox
-        cbSelectAll = v.findViewById(R.id.cb_select_all)
-
-        // 🌟 點擊全選的邏輯 (使用 setOnClickListener 避免與程式自動勾選衝突)
-        cbSelectAll.setOnClickListener {
-            if (cbSelectAll.isChecked) {
+        binding.cbSelectAll.setOnClickListener {
+            if (binding.cbSelectAll.isChecked) {
                 adapter.selectAll()
             } else {
                 adapter.deselectAll()
             }
         }
 
-        val btnMarkAllRead: ImageView = v.findViewById(R.id.btn_mark_all_read)
-        btnMarkAllRead.setOnClickListener { showMarkAllReadDialog() }
+        binding.btnMarkAllRead.setOnClickListener { showMarkAllReadDialog() }
+        binding.btnCancelSelection.setOnClickListener { adapter.exitSelectionMode() }
+        binding.btnDeleteSelected.setOnClickListener { showDeleteSelectedDialog() }
 
-        // 取消選擇按鈕
-        btnCancelSelection.setOnClickListener { adapter.exitSelectionMode() }
-
-        // 刪除所選按鈕
-        btnDeleteSelected.setOnClickListener { showDeleteSelectedDialog() }
-
-        rv.layoutManager = LinearLayoutManager(requireContext())
-        rv.adapter = adapter
-        rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+        binding.rvMessages.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvMessages.adapter = adapter
+        binding.rvMessages.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
                 if (dy <= 0) return
@@ -109,26 +74,21 @@ class MessageFragment : Fragment() {
             }
         })
 
-        // 監聽 Adapter 選擇狀態變化，來切換頂部 Header
         adapter.onSelectionModeChange = { isSelectionMode, selectedCount ->
             if (isSelectionMode) {
-                llNormalActions.visibility = View.GONE
-                rlSelectionActions.visibility = View.VISIBLE
-                tvSelectionCount.text = "已選擇 $selectedCount 項"
-
-                // 🌟 當前勾選數量等於總數量時，自動將全選 CheckBox 打勾
-                cbSelectAll.isChecked = selectedCount > 0 && selectedCount == adapter.itemCount
+                binding.llNormalActions.visibility = View.GONE
+                binding.rlSelectionActions.visibility = View.VISIBLE
+                binding.tvSelectionCount.text = "已選擇 $selectedCount 項"
+                binding.cbSelectAll.isChecked = selectedCount > 0 && selectedCount == adapter.itemCount
             } else {
-                rlSelectionActions.visibility = View.GONE
-                llNormalActions.visibility = View.VISIBLE
-                cbSelectAll.isChecked = false // 退出時重置
+                binding.rlSelectionActions.visibility = View.GONE
+                binding.llNormalActions.visibility = View.VISIBLE
+                binding.cbSelectAll.isChecked = false
             }
         }
 
         setupTabLayout()
         loadFirstPageUserMessages()
-
-        return v
     }
 
     private fun showDeleteSelectedDialog() {
@@ -141,25 +101,20 @@ class MessageFragment : Fragment() {
             .setMessage("確定要刪除這 ${selectedIdsList.size} 則訊息嗎？")
             .setPositiveButton("刪除") { _, _ ->
 
-                // 🌟 1. 先計算出即將被刪除的訊息中，各分類有幾個是「未讀」的
                 val unreadMap = adapter.getUnreadCountByCategory(selectedIdsList)
 
-                // 2. 樂觀 UI 刪除列表項目
                 adapter.removeMultipleByIds(selectedIdsList.toSet())
-                if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
+                if (adapter.itemCount == 0) binding.tvEmpty.visibility = View.VISIBLE
 
-                // 3. 結束選擇模式
                 adapter.exitSelectionMode()
 
-                // 🌟 4. 樂觀 UI 扣減紅點 (不用等 API 回來，畫面瞬間回饋)
                 for ((cat, count) in unreadMap) {
                     for (i in 0 until count) {
-                        decrementTabBadges(cat) // 扣掉 Tab 的紅點
-                        (activity as? MainActivity)?.decreaseMessageBadge() // 扣掉左側選單的紅點
+                        decrementTabBadges(cat)
+                        (activity as? MainActivity)?.decreaseMessageBadge()
                     }
                 }
 
-                // 5. 背景呼叫多筆刪除 API
                 lifecycleScope.launch {
                     try {
                         val resp = RetrofitClient.apiService.deleteNotifications(
@@ -169,7 +124,6 @@ class MessageFragment : Fragment() {
                             )
                         )
 
-                        // 🌟 6. 確定後端真的刪除成功後，再重刷一次未讀數量，確保兩邊資料 100% 同步
                         if (resp.isSuccessful && resp.body()?.success == true) {
                             refreshTabBadges()
                             (activity as? MainActivity)?.refreshMessageBadge()
@@ -193,7 +147,7 @@ class MessageFragment : Fragment() {
             .setMessage("確定要將所有訊息標示為已讀嗎？")
             .setPositiveButton("確定") { _, _ ->
                 adapter.markAllRead()
-                for (i in 0..2) tabLayout.getTabAt(i)?.removeBadge()
+                for (i in 0..2) binding.tabLayoutMessages.getTabAt(i)?.removeBadge()
                 (activity as? MainActivity)?.clearMessageBadge()
 
                 lifecycleScope.launch {
@@ -223,7 +177,7 @@ class MessageFragment : Fragment() {
                     val resp = RetrofitClient.apiService.getUnreadCount(userKey = uk, category = cat)
                     if (resp.isSuccessful) {
                         val unread = resp.body()?.unread ?: 0
-                        val tab = tabLayout.getTabAt(index)
+                        val tab = binding.tabLayoutMessages.getTabAt(index)
                         if (unread > 0) tab?.orCreateBadge?.apply { number = unread }
                         else tab?.removeBadge()
                     }
@@ -233,7 +187,7 @@ class MessageFragment : Fragment() {
     }
 
     private fun setupTabLayout() {
-        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+        binding.tabLayoutMessages.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 currentCategory = when (tab?.position) {
                     0 -> "ALL"
@@ -241,7 +195,7 @@ class MessageFragment : Fragment() {
                     2 -> "PROMO"
                     else -> "ALL"
                 }
-                adapter.exitSelectionMode() // 切換 Tab 時取消選擇模式
+                adapter.exitSelectionMode()
                 loadFirstPageUserMessages()
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
@@ -255,8 +209,8 @@ class MessageFragment : Fragment() {
 
         if (!sp.getBoolean("SESSION_LOGGED_IN", false) || userKey.isNullOrBlank()) {
             adapter.setItems(emptyList())
-            tvEmpty.visibility = View.VISIBLE
-            for (i in 0..2) tabLayout.getTabAt(i)?.removeBadge()
+            binding.tvEmpty.visibility = View.VISIBLE
+            for (i in 0..2) binding.tabLayoutMessages.getTabAt(i)?.removeBadge()
             return
         }
 
@@ -275,8 +229,8 @@ class MessageFragment : Fragment() {
         if (isLoading || !hasMore) return
 
         isLoading = true
-        pb.visibility = View.VISIBLE
-        tvEmpty.visibility = View.GONE
+        binding.pbLoading.visibility = View.VISIBLE
+        binding.tvEmpty.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
@@ -300,20 +254,18 @@ class MessageFragment : Fragment() {
                 Log.e("MessageFragment", "[listNotifications] exception: ${e.message}", e)
             } finally {
                 isLoading = false
-                pb.visibility = View.GONE
-                if (adapter.itemCount == 0) tvEmpty.visibility = View.VISIBLE
+                binding.pbLoading.visibility = View.GONE
+                if (adapter.itemCount == 0) binding.tvEmpty.visibility = View.VISIBLE
             }
         }
     }
 
     private fun onMessageClicked(msg: NotificationMessageDto) {
-        // 如果目前是選擇模式，點擊就是勾選/取消勾選
         if (adapter.isSelectionMode) {
             adapter.toggleSelection(msg.messageId)
             return
         }
 
-        // 一般模式：已讀邏輯
         if (msg.readAt != null) return
         val uk = userKey ?: return
 
@@ -334,7 +286,6 @@ class MessageFragment : Fragment() {
     }
 
     private fun onMessageLongPress(msg: NotificationMessageDto) {
-        // 如果還沒進入選擇模式，長按就進入選擇模式並勾選當前項
         if (!adapter.isSelectionMode) {
             adapter.enterSelectionMode(msg.messageId)
         }
@@ -349,7 +300,7 @@ class MessageFragment : Fragment() {
     }
 
     private fun decrementSingleTab(index: Int) {
-        val tab = tabLayout.getTabAt(index)
+        val tab = binding.tabLayoutMessages.getTabAt(index)
         val badge = tab?.badge
         if (badge != null && badge.number > 0) {
             badge.number -= 1
@@ -367,7 +318,8 @@ class MessageFragment : Fragment() {
         private val items = mutableListOf<NotificationMessageDto>()
         private val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
 
-        // 🌟 選擇模式狀態
+        // 🌟 已移除 promoCache，因為不需要再快取了
+
         var isSelectionMode = false
             private set
         private val selectedMessageIds = mutableSetOf<String>()
@@ -377,14 +329,14 @@ class MessageFragment : Fragment() {
             isSelectionMode = true
             selectedMessageIds.add(initialId)
             onSelectionModeChange?.invoke(true, selectedMessageIds.size)
-            notifyDataSetChanged() // 顯示全部的 CheckBox
+            notifyDataSetChanged()
         }
 
         fun exitSelectionMode() {
             isSelectionMode = false
             selectedMessageIds.clear()
             onSelectionModeChange?.invoke(false, 0)
-            notifyDataSetChanged() // 隱藏全部的 CheckBox
+            notifyDataSetChanged()
         }
 
         fun toggleSelection(messageId: String) {
@@ -395,12 +347,10 @@ class MessageFragment : Fragment() {
             }
             onSelectionModeChange?.invoke(isSelectionMode, selectedMessageIds.size)
 
-            // 僅更新點擊的該筆 UI，增加效能
             val idx = items.indexOfFirst { it.messageId == messageId }
             if (idx >= 0) notifyItemChanged(idx)
         }
 
-        // 🌟 新增：全部選取
         fun selectAll() {
             selectedMessageIds.clear()
             items.forEach { selectedMessageIds.add(it.messageId) }
@@ -408,14 +358,12 @@ class MessageFragment : Fragment() {
             notifyDataSetChanged()
         }
 
-        // 🌟 新增：全部取消選取
         fun deselectAll() {
             selectedMessageIds.clear()
             onSelectionModeChange?.invoke(isSelectionMode, 0)
             notifyDataSetChanged()
         }
 
-        // 🌟 加上 .toSet() 確保回傳的是「拷貝」，而非原本的記憶體參考
         fun getSelectedIds(): Set<String> = selectedMessageIds.toSet()
 
         fun removeMultipleByIds(ids: Set<String>) {
@@ -423,11 +371,9 @@ class MessageFragment : Fragment() {
             notifyDataSetChanged()
         }
 
-        // 🌟 新增這個方法：用來計算即將被刪除的訊息中，各分類有多少是「未讀」的
         fun getUnreadCountByCategory(ids: List<String>): Map<String, Int> {
             val unreadMap = mutableMapOf<String, Int>()
             for (item in items) {
-                // 如果這筆訊息在刪除清單中，且它是「未讀」的
                 if (ids.contains(item.messageId) && item.readAt == null) {
                     val count = unreadMap.getOrDefault(item.category, 0)
                     unreadMap[item.category] = count + 1
@@ -436,7 +382,6 @@ class MessageFragment : Fragment() {
             return unreadMap
         }
 
-        // --- 以下為原本的方法 ---
         fun setItems(newItems: List<NotificationMessageDto>) {
             items.clear()
             items.addAll(newItems)
@@ -470,12 +415,13 @@ class MessageFragment : Fragment() {
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageVH {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
-            return MessageVH(v)
+            val binding = ItemMessageBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            return MessageVH(binding)
         }
 
         override fun onBindViewHolder(holder: MessageVH, position: Int) {
             val theItem = items[position]
+            // 🌟 拔掉 promoCache 參數
             holder.bind(theItem, sdf, isSelectionMode, selectedMessageIds.contains(theItem.messageId))
 
             holder.itemView.setOnClickListener { onClick(theItem) }
@@ -488,35 +434,39 @@ class MessageFragment : Fragment() {
         override fun getItemCount(): Int = items.size
     }
 
-    private class MessageVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    private class MessageVH(private val binding: ItemMessageBinding) : RecyclerView.ViewHolder(binding.root) {
 
-        private val tvTitle: TextView = itemView.findViewById(R.id.tv_item_title)
-        private val tvBody: TextView = itemView.findViewById(R.id.tv_item_body)
-        private val tvTime: TextView = itemView.findViewById(R.id.tv_item_time)
-        private val cbSelect: CheckBox = itemView.findViewById(R.id.cb_message_select)
+        // 🌟 已移除 promoRef，不需再連接 Firebase promotions 節點
 
-        fun bind(it: NotificationMessageDto, sdf: SimpleDateFormat, isSelectionMode: Boolean, isSelected: Boolean) {
-            tvBody.text = it.body
-            tvTime.text = sdf.format(Date(it.createdAt))
+        fun bind(
+            it: NotificationMessageDto,
+            sdf: SimpleDateFormat,
+            isSelectionMode: Boolean,
+            isSelected: Boolean
+        ) {
+            val timeString = sdf.format(Date(it.createdAt))
+            binding.tvItemTime.text = timeString
 
-            // 🌟 判斷是否已讀，動態改變標題與背景
+            // 🌟 核心修正：不管是 USER 還是 PROMO，現在 inbox 裡面都有 title 和 body 了，直接拿來用！
+            val displayTitle = it.title ?: "系統公告"
+            val displayBody = it.body ?: ""
+
+            binding.tvItemBody.text = displayBody
+
             if (it.readAt == null) {
-                // 未讀：加上字樣，並使用原本的灰色背景
-                tvTitle.text = "${it.title}  (未讀)"
-                itemView.setBackgroundResource(R.drawable.cell_background)
+                binding.tvItemTitle.text = "$displayTitle  (未讀)"
+                binding.root.setBackgroundResource(R.drawable.cell_background)
             } else {
-                // 已讀：純標題，並切換成剛才建立的白色背景
-                tvTitle.text = it.title
-                itemView.setBackgroundResource(R.drawable.cell_background_read)
+                binding.tvItemTitle.text = displayTitle
+                binding.root.setBackgroundResource(R.drawable.cell_background_read)
             }
 
-            // 處理 CheckBox 多選狀態
             if (isSelectionMode) {
-                cbSelect.visibility = View.VISIBLE
-                cbSelect.isChecked = isSelected
+                binding.cbMessageSelect.visibility = View.VISIBLE
+                binding.cbMessageSelect.isChecked = isSelected
             } else {
-                cbSelect.visibility = View.GONE
-                cbSelect.isChecked = false
+                binding.cbMessageSelect.visibility = View.GONE
+                binding.cbMessageSelect.isChecked = false
             }
         }
     }
