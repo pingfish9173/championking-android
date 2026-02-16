@@ -693,6 +693,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
     }
 
+    fun clearMessageBadge() {
+        val tv = messageBadgeTextViewMaster ?: return
+        tv.visibility = View.GONE
+        tv.text = "0"
+    }
+
     // ====== Time / Watermark ======
     private fun updateCurrentTime() {
         val text = try {
