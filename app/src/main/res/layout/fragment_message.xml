@@ -63,7 +63,7 @@
                 android:padding="10dp"
                 android:layout_gravity="center_vertical"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_broom"
+                android:src="@drawable/ic_mark_email_read"
                 app:tint="#666666" />
         </LinearLayout>
 
