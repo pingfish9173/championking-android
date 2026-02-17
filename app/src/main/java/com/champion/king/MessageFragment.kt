@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.graphics.Color
 
 class MessageFragment : BaseBindingFragment<FragmentMessageBinding>() {
 
@@ -59,6 +60,8 @@ class MessageFragment : BaseBindingFragment<FragmentMessageBinding>() {
 
         binding.rvMessages.layoutManager = LinearLayoutManager(requireContext())
         binding.rvMessages.adapter = adapter
+        val divider = androidx.recyclerview.widget.DividerItemDecoration(requireContext(), androidx.recyclerview.widget.LinearLayoutManager.VERTICAL)
+        binding.rvMessages.addItemDecoration(divider)
         binding.rvMessages.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
@@ -435,9 +438,6 @@ class MessageFragment : BaseBindingFragment<FragmentMessageBinding>() {
     }
 
     private class MessageVH(private val binding: ItemMessageBinding) : RecyclerView.ViewHolder(binding.root) {
-
-        // 🌟 已移除 promoRef，不需再連接 Firebase promotions 節點
-
         fun bind(
             it: NotificationMessageDto,
             sdf: SimpleDateFormat,
@@ -446,27 +446,29 @@ class MessageFragment : BaseBindingFragment<FragmentMessageBinding>() {
         ) {
             val timeString = sdf.format(Date(it.createdAt))
             binding.tvItemTime.text = timeString
-
-            // 🌟 核心修正：不管是 USER 還是 PROMO，現在 inbox 裡面都有 title 和 body 了，直接拿來用！
             val displayTitle = it.title ?: "系統公告"
             val displayBody = it.body ?: ""
-
-            binding.tvItemBody.text = displayBody
-
-            if (it.readAt == null) {
-                binding.tvItemTitle.text = "$displayTitle  (未讀)"
-                binding.root.setBackgroundResource(R.drawable.cell_background)
-            } else {
-                binding.tvItemTitle.text = displayTitle
-                binding.root.setBackgroundResource(R.drawable.cell_background_read)
-            }
-
+            applyTextAndStyle(it, displayTitle, displayBody)
             if (isSelectionMode) {
                 binding.cbMessageSelect.visibility = View.VISIBLE
                 binding.cbMessageSelect.isChecked = isSelected
             } else {
                 binding.cbMessageSelect.visibility = View.GONE
                 binding.cbMessageSelect.isChecked = false
+            }
+        }
+
+        private fun applyTextAndStyle(it: NotificationMessageDto, displayTitle: String, displayBody: String) {
+            binding.tvItemBody.text = displayBody
+
+            if (it.readAt == null) {
+                binding.tvItemTitle.text = "$displayTitle  (未讀)"
+                // 未讀：給一個極淡的灰藍色背景（不帶邊框），讓未讀訊息稍微跳出來
+                binding.root.setBackgroundColor(Color.parseColor("#F4F7FB"))
+            } else {
+                binding.tvItemTitle.text = displayTitle
+                // 已讀：純白背景
+                binding.root.setBackgroundColor(Color.WHITE)
             }
         }
     }
