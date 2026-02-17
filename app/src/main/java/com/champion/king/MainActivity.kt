@@ -106,7 +106,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var autoRestoreFinished = false
     private var autoRestoreTimeoutRunnable: Runnable? = null
 
-
     private fun triggerAutoUpdateCheck(reason: String, force: Boolean = false) {
         if (!updateManager.isAutoCheckEnabled()) return
         if (isUpdateDialogShowing) {
@@ -1497,37 +1496,38 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun showNextVersionPasswordInputDialog() {
         val key = currentUser?.firebaseKey ?: run {
             ToastManager.show(this, "驗證失敗：未找到用戶。")
-            Log.e(TAG, "驗證換版密碼失敗：currentUserFirebaseKey 為空。")
             return
         }
 
-        // 先檢查是否允許切換到下一版
-        Log.d(TAG, "【下一版按鈕】開始檢查是否允許切換")
         checkCanSwitchToNextVersion(key) { canSwitch, message ->
             if (canSwitch) {
-                // 允許切換，顯示密碼輸入視窗
-                Log.d(TAG, "【下一版按鈕】檢查通過，顯示密碼輸入視窗")
-
                 val input = EditText(this).apply {
                     hint = "請輸入換版密碼"
                     inputType = android.text.InputType.TYPE_CLASS_TEXT or
                             android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
                 }
-                AlertDialog.Builder(this)
+
+                val dialog = AlertDialog.Builder(this)
                     .setTitle("換版密碼")
                     .setMessage("請輸入換版密碼：")
                     .setView(input)
-                    .setPositiveButton("確定") { dialog, _ ->
+                    .setPositiveButton("確定") { d, _ ->
                         val pwd = input.text.toString().trim()
                         if (pwd.isNotEmpty()) verifySwitchVersionPassword(pwd)
                         else ToastManager.show(this, "密碼不能為空！")
-                        dialog.dismiss()
+                        d.dismiss()
                     }
                     .setNegativeButton("取消") { d, _ -> d.dismiss() }
-                    .show()
+                    .create()
+
+                // 🌟 呼叫小幫手
+                val timeoutHelper = DialogTimeoutHelper(dialog, input)
+
+                dialog.setOnShowListener { timeoutHelper.startTimer() } // 🌟 啟動
+                dialog.setOnDismissListener { timeoutHelper.stopTimer() } // 🌟 關閉
+
+                dialog.show()
             } else {
-                // 不允許切換，顯示提示視窗
-                Log.d(TAG, "【下一版按鈕】檢查未通過：$message")
                 showCannotSwitchDialog(message ?: "不允許切換到下一版")
             }
         }
@@ -1624,8 +1624,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .setNegativeButton("取消", null)
             .create()
 
+        // 🌟 呼叫小幫手，並把需要監聽的 EditText 傳進去
+        val timeoutHelper = DialogTimeoutHelper(dialog, accountEt, passwordEt)
+
         dialog.setOnShowListener {
             ToastManager.setHostWindow(dialog.window)
+            timeoutHelper.startTimer() // 🌟 啟動倒數
+
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val account = accountEt.text.toString().trim()
                 val pwd = passwordEt.text.toString().trim()
@@ -1642,6 +1647,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         dialog.setOnDismissListener {
             ToastManager.clearHostWindow()
+            timeoutHelper.stopTimer() // 🌟 關閉倒數
         }
 
         dialog.show()
@@ -1769,15 +1775,20 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
      * 顯示不允許切換版位的提示視窗
      */
     private fun showCannotSwitchDialog(message: String) {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("無法切換版位")
             .setMessage(message)
-            .setPositiveButton("確定") { dialog, _ ->
-                Log.d(TAG, "【切換版位】用戶確認無法切換的提示")
-                dialog.dismiss()
-            }
-            .setCancelable(false) // 禁止點擊外部關閉
-            .show()
+            .setPositiveButton("確定") { d, _ -> d.dismiss() }
+            .setCancelable(false)
+            .create()
+
+        // 🌟 呼叫小幫手 (這個視窗沒有輸入框，所以不傳 EditText)
+        val timeoutHelper = DialogTimeoutHelper(dialog)
+
+        dialog.setOnShowListener { timeoutHelper.startTimer() } // 🌟 啟動
+        dialog.setOnDismissListener { timeoutHelper.stopTimer() } // 🌟 關閉
+
+        dialog.show()
     }
 
     /**
@@ -2103,6 +2114,47 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun unlockAppFromScreen() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
+        }
+    }
+
+    // 🌟 1. 統一設定閒置時間：以後要改幾分鐘，只要改這裡就好！（60_000L = 60秒）
+    private val DIALOG_IDLE_TIMEOUT_MS = 60_000L
+
+    // 🌟 2. 抽出共用的計時器小幫手
+    private inner class DialogTimeoutHelper(
+        private val dialog: AlertDialog,
+        vararg editTexts: EditText // 允許傳入多個輸入框
+    ) {
+        private val handler = Handler(Looper.getMainLooper())
+        private val dismissRunnable = Runnable {
+            if (dialog.isShowing) {
+                ToastManager.show(this@MainActivity, "閒置過久，已自動關閉視窗")
+                dialog.dismiss()
+                Log.d("DialogTimeout", "視窗已因閒置自動關閉")
+            }
+        }
+
+        init {
+            // 監聽所有傳入的輸入框，只要有打字就重新倒數
+            val textWatcher = object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { resetTimer() }
+            }
+            editTexts.forEach { it.addTextChangedListener(textWatcher) }
+        }
+
+        fun startTimer() {
+            handler.removeCallbacks(dismissRunnable)
+            handler.postDelayed(dismissRunnable, DIALOG_IDLE_TIMEOUT_MS)
+        }
+
+        fun stopTimer() {
+            handler.removeCallbacks(dismissRunnable)
+        }
+
+        private fun resetTimer() {
+            startTimer()
         }
     }
 
