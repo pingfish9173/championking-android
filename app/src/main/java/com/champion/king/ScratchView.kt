@@ -31,6 +31,12 @@ class ScratchView @JvmOverloads constructor(
 
     // 新增：追蹤是否已經觸發完成事件
     private var hasTriggeredComplete = false
+    // 🛑 檢查是否允許刮卡的回呼函式
+    private var canScratchCheck: (() -> Boolean)? = null
+
+    fun setCanScratchCheck(checker: () -> Boolean) {
+        this.canScratchCheck = checker
+    }
 
     private val scratchPaint = Paint().apply {
         isAntiAlias = true
@@ -135,6 +141,12 @@ class ScratchView @JvmOverloads constructor(
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                // 🛑 第 2 道鎖：手指碰觸螢幕的瞬間，立刻向外部確認是否連線
+                val canScratch = canScratchCheck?.invoke() ?: true
+                if (!canScratch) {
+                    return false // 回傳 false 代表拒絕這次觸控，畫面不會有任何刮痕
+                }
+
                 scratchPath.reset()
                 scratchPath.moveTo(event.x, event.y)
                 scratchPath.lineTo(event.x + 0.1f, event.y + 0.1f)

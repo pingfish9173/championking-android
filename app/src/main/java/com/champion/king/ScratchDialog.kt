@@ -11,6 +11,7 @@ import android.widget.Button
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.champion.king.util.ToastManager
 
 class ScratchDialog(
     context: Context,
@@ -40,6 +41,45 @@ class ScratchDialog(
 
     // 返回確認視窗（避免卡住）
     private var backConfirmDialog: AlertDialog? = null
+    // ====== 💓 心跳偵測機制 (Heartbeat) ======
+    private val heartbeatHandler = Handler(Looper.getMainLooper())
+    private var isHeartbeatActive = false
+
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            if (!isHeartbeatActive) return
+            val mainActivity = getMainActivity() ?: return
+            val userKey = (mainActivity as? UserSessionProvider)?.getCurrentUserFirebaseKey()
+
+            if (userKey.isNullOrEmpty()) return
+
+            val pingRef = com.google.firebase.database.FirebaseDatabase.getInstance()
+                .reference.child("users").child(userKey).child("ping")
+
+            var isAcked = false
+            val timeoutRunnable = Runnable {
+                if (!isAcked && isHeartbeatActive) {
+                    android.util.Log.e("ScratchDialog", "【心跳機制】逾時未收到回應，網路已斷線，強制關閉視窗")
+                    ToastManager.show(mainActivity, "網路連線中斷，請確認網路狀態")
+                    dismiss() // 🚨 這裡直接強制關閉對話框！
+                }
+            }
+
+            // 1.5 秒沒收到回應就判斷為斷線
+            heartbeatHandler.postDelayed(timeoutRunnable, 1500L)
+
+            // 送出心跳包
+            pingRef.setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                .addOnCompleteListener {
+                    isAcked = true
+                    heartbeatHandler.removeCallbacks(timeoutRunnable)
+                    if (isHeartbeatActive) {
+                        // 成功的話，2.5 秒後再跳動一次
+                        heartbeatHandler.postDelayed(this, 2500L)
+                    }
+                }
+        }
+    }
 
     private val inactivityRunnable = Runnable {
         handleInactivityTimeout()
@@ -56,6 +96,25 @@ class ScratchDialog(
         quickScratchButton = findViewById(R.id.quick_scratch_button)
 
         scratchView.setup(number, isSpecialPrize, isGrandPrize)
+        // 🛑 注入第 2 道鎖的邏輯：提供 ScratchView 檢查連線狀態
+        scratchView.setCanScratchCheck {
+            val mainActivity = getMainActivity()
+            if (mainActivity == null) return@setCanScratchCheck false
+
+            // 1. Android 系統層級檢查 (阻擋假 Wi-Fi)
+            if (!isNetworkAvailable(mainActivity)) {
+                ToastManager.show(mainActivity, "偵測到網路異常，禁止刮卡")
+                return@setCanScratchCheck false
+            }
+
+            // 2. Firebase 被動狀態檢查
+            if (!mainActivity.isFirebaseConnected) {
+                ToastManager.show(mainActivity, "連線中斷！請確認網路狀態")
+                return@setCanScratchCheck false
+            }
+
+            true
+        }
 
         // ✅ Dialog 一出現就開始倒數（60秒無動作就自動處理）
         resetInactivityTimer()
@@ -80,6 +139,21 @@ class ScratchDialog(
         setCanceledOnTouchOutside(true)
 
         quickScratchButton.setOnClickListener {
+            // 🛑 第 3 道鎖：點擊一鍵刮開時，瞬間檢查連線
+            val mainActivity = getMainActivity()
+            if (mainActivity == null || !isNetworkAvailable(mainActivity) || !mainActivity.isFirebaseConnected) {
+                mainActivity?.let { ToastManager.show(it, "連線中斷！無法執行一鍵刮開") }
+                return@setOnClickListener
+            }
+            val isConnected = mainActivity?.isFirebaseConnected ?: false
+
+            if (!isConnected) {
+                if (mainActivity != null) {
+                    ToastManager.show(mainActivity, "連線中斷！無法執行一鍵刮開")
+                }
+                return@setOnClickListener // 擋下操作
+            }
+
             // ✅ 點按也算互動
             resetInactivityTimer()
 
@@ -288,6 +362,34 @@ class ScratchDialog(
         }
     }
 
+    // 🛠️ 將被 Dialog 包裝過的 Context 拆包，找回 MainActivity
+    private fun getMainActivity(): MainActivity? {
+        var currentContext = context
+        while (currentContext is android.content.ContextWrapper) {
+            if (currentContext is MainActivity) {
+                return currentContext
+            }
+            currentContext = currentContext.baseContext
+        }
+        return null
+    }
+
+    // 🛠️ 檢查系統是否驗證過有真實外網
+    private fun isNetworkAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } else {
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return networkInfo != null && networkInfo.isConnected
+        }
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!canCancelByTouchingOutside && event.action == MotionEvent.ACTION_DOWN) {
             return true
@@ -295,26 +397,35 @@ class ScratchDialog(
         return super.onTouchEvent(event)
     }
 
-    override fun dismiss() {
-        // ✅ 清 Timeout
-        stopInactivityTimer()
+    override fun onStart() {
+        super.onStart()
+        (context as? MainActivity)?.enableImmersiveMode()
+        ToastManager.setHostWindow(window)
 
-        // ✅ 清返回確認視窗
+        // 🌟 視窗一打開，立刻啟動心跳機制
+        isHeartbeatActive = true
+        heartbeatHandler.post(heartbeatRunnable)
+    }
+
+    override fun dismiss() {
+        // 🌟 視窗關閉時，立刻停止心跳，避免浪費資源
+        isHeartbeatActive = false
+        heartbeatHandler.removeCallbacksAndMessages(null)
+
+        stopInactivityTimer()
         backConfirmDialog?.dismiss()
         backConfirmDialog = null
-
         mediaPlayer?.release()
         mediaPlayer = null
         super.dismiss()
     }
 
-    override fun onStart() {
-        super.onStart()
-        (context as? MainActivity)?.enableImmersiveMode()
-    }
     override fun onStop() {
         super.onStop()
         (context as? MainActivity)?.enableImmersiveMode()
+
+        // 🌟 對話框關閉時，解除綁定，把 Toast 畫布還給 MainActivity
+        ToastManager.clearHostWindow()
     }
 
 }

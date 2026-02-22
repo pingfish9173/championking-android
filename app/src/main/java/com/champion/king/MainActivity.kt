@@ -77,6 +77,25 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private val SESSION_EXPIRE_MS = 3L * 24 * 60 * 60 * 1000 // 3 天
     lateinit var messageButtonMaster: ImageButton
     private var messageBadgeTextViewMaster: TextView? = null
+    // ====== Firebase 真實連線狀態 ======
+    var isFirebaseConnected: Boolean = false
+    private var connectionListener: ValueEventListener? = null
+
+    private fun setupFirebaseConnectionMonitor() {
+        // 監聽 Firebase 內建的 .info/connected 節點
+        val connectedRef = FirebaseDatabase.getInstance(DB_URL).getReference(".info/connected")
+        connectionListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                isFirebaseConnected = snapshot.getValue(Boolean::class.java) ?: false
+                Log.d(TAG, "Firebase 實體連線狀態: \$isFirebaseConnected")
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.w(TAG, "監聽 Firebase 連線狀態失敗")
+            }
+        }
+        connectedRef.addValueEventListener(connectionListener!!)
+    }
 
     private val updateTimeRunnable = object : Runnable {
         override fun run() {
@@ -174,6 +193,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
 
         database = FirebaseDatabase.getInstance(DB_URL).reference
+        setupFirebaseConnectionMonitor() // 🌟 啟動連線監聽
 
         // ✅ 冷啟動才走這套（避免重建/旋轉造成流程混亂）
         if (savedInstanceState == null) {
@@ -424,6 +444,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         super.onPause()
         handler.removeCallbacks(updateTimeRunnable)
         idleHandler.removeCallbacks(idleRunnable) // 停止閒置檢查
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        connectionListener?.let {
+            FirebaseDatabase.getInstance(DB_URL).getReference(".info/connected").removeEventListener(it)
+        }
     }
 
     // ====== Rendering ======

@@ -134,15 +134,14 @@ class ScratchCardPlayerFragment : Fragment() {
         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Android 6.0 及以上版本
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
 
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+            // 🌟 關鍵升級：不只要有 Wi-Fi/行動網路，還必須有「真實網際網路存取能力(INTERNET)」
+            // 並且經過系統驗證確實能通外網 (VALIDATED)
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         } else {
-            // Android 6.0 以下版本
             @Suppress("DEPRECATION")
             val networkInfo = connectivityManager.activeNetworkInfo
             @Suppress("DEPRECATION")
@@ -472,67 +471,122 @@ class ScratchCardPlayerFragment : Fragment() {
                 return@setOnClickListener
             }
 
-            // 檢查網路連線
+            // 🛑 第 1 道鎖：檢查 Android 系統是否驗證過有真實外網
             if (!isNetworkAvailable()) {
-                Log.w(TAG, "【網路檢查】無網路連線，拒絕刮卡")
-                showNetworkErrorDialog()
+                Log.w(TAG, "【網路檢查】無真實網際網路存取，拒絕開啟刮卡視窗")
+                activity?.let { ToastManager.show(it, "偵測到網路異常，請檢查是否連上有效的 Wi-Fi 或行動網路") }
                 return@setOnClickListener
             }
 
-            Log.d(TAG, "【網路檢查】網路連線正常，允許刮卡")
+            // 🛑 第 2 道鎖：檢查 Firebase 真實連線狀態
+            val isReallyConnected = (activity as? MainActivity)?.isFirebaseConnected ?: false
+            if (!isReallyConnected) {
+                Log.w(TAG, "【連線檢查】未連接至資料庫，拒絕開啟刮卡視窗")
+                activity?.let { ToastManager.show(it, "資料庫連線中斷，請確認網路狀態後再試") }
+                return@setOnClickListener
+            }
+
+            Log.d(TAG, "【連線檢查】資料庫連線正常，準備進行主動敲門測試")
 
             // ✅ 只允許「未刮開」且 number 有效的格子進行互動
             if (refreshedConfig?.scratched != true && number != null) {
 
-                // ✅ 一旦決定要開小視窗，就先鎖住（防止多指連續觸發）
-                isScratchDialogShowing = true
-
-                scratchingCells.add(cellNumber)
-                updateCellDisplay(cellView, cellNumber, false, number)
-
-                val isSecondToLast = isSecondToLastScratch()
-                val hasUnscatchedPrizes = hasUnscatchedPrizes()
-                val (totalCells, scratchedCount, remainingCount) = getScratchCardStats()
-                Log.d(TAG, "點擊格子 $cellNumber: 總格數=$totalCells, 已刮=$scratchedCount, 剩餘=$remainingCount")
-                Log.d(TAG, "是否倒數第二刮=$isSecondToLast, 剩餘是否有獎項=$hasUnscatchedPrizes")
-
-                (activity as? MainActivity)?.enableImmersiveMode()
-
-                // 顯示刮卡彈窗
-                val dialog = ScratchDialog(
-                    requireContext(),
-                    number,
-                    isSpecialPrize(number),
-                    isGrandPrize(number),
-                    isSecondToLast,
-                    hasUnscatchedPrizes,
-                    onScratchStart = {
-                        Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡")
-                        writeTempScratch(serialNumber, cellNumber)
-                    },
-                    onScratchComplete = {
-                        Log.d(TAG, "格子 $cellNumber 刮卡完成，標記 scratched = true")
-                        scratchCell(serialNumber, cellNumber, cellView)
-                    },
-                    onTimeoutForceReveal = {
-                        // ✅ 你要的：刮一點點沒刮乾淨跑掉 -> 60秒後強制視為刮開
-                        Log.d(TAG, "【無動作逾時】格子 $cellNumber 已開始刮但未完成，強制視為刮開")
-                        scratchCell(serialNumber, cellNumber, cellView)
-                    }
-                )
-
-                dialog.setOnDismissListener {
-                    // ✅ 小視窗關閉後解除鎖定，允許下一次點擊
-                    isScratchDialogShowing = false
-
-                    val hasStartedScratching = dialog.hasStartedScratching()
-                    if (!hasStartedScratching) {
-                        scratchingCells.remove(cellNumber)
-                        updateCellDisplay(cellView, cellNumber, false, number)
-                    }
-                    (activity as? MainActivity)?.enableImmersiveMode()
+                val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
+                if (userKey.isNullOrEmpty()) {
+                    activity?.let { ToastManager.show(it, "發生錯誤：找不到使用者資訊") }
+                    return@setOnClickListener
                 }
-                dialog.show()
+
+                // 🛑 終極防線：主動敲門測試 (Active Pre-flight Check)
+                // 目的：破解假 Wi-Fi / TCP Half-Open 幽靈空窗期
+                val pingRef = database.child("users").child(userKey).child("ping")
+
+                // 暫時鎖住格子，避免玩家這 1.5 秒內狂點
+                cellView.isEnabled = false
+                var isAcknowledged = false
+                var isTimedOut = false
+
+                val timeoutHandler = Handler(Looper.getMainLooper())
+                val timeoutRunnable = Runnable {
+                    if (!isAcknowledged) {
+                        isTimedOut = true
+                        cellView.isEnabled = true // 解鎖
+                        Log.w(TAG, "【敲門測試】1.5秒內未收到伺服器回應，判定為假性連線(空窗期)")
+                        activity?.let { ToastManager.show(it, "網路不穩定，無法開啟刮卡，請稍後再試") }
+                    }
+                }
+
+                // 開始 1.5 秒倒數
+                timeoutHandler.postDelayed(timeoutRunnable, 1500)
+
+                // 送出極小封包 (時間戳記) 給伺服器，要求伺服器必須回應
+                pingRef.setValue(ServerValue.TIMESTAMP).addOnCompleteListener { task ->
+                    isAcknowledged = true
+                    timeoutHandler.removeCallbacks(timeoutRunnable)
+
+                    // 如果已經逾時（玩家已被提示不穩），就算後來網路恢復，也不要突然彈出視窗嚇人
+                    if (isTimedOut) return@addOnCompleteListener
+
+                    cellView.isEnabled = true // 解鎖
+
+                    if (task.isSuccessful) {
+                        Log.d(TAG, "【敲門測試】伺服器秒回！確認為真實網路，開啟刮卡視窗")
+
+                        // ✅ 通過所有測試，真正開啟小視窗
+                        isScratchDialogShowing = true
+
+                        scratchingCells.add(cellNumber)
+                        updateCellDisplay(cellView, cellNumber, false, number)
+
+                        val isSecondToLast = isSecondToLastScratch()
+                        val hasUnscatchedPrizes = hasUnscatchedPrizes()
+                        val (totalCells, scratchedCount, remainingCount) = getScratchCardStats()
+                        Log.d(TAG, "點擊格子 $cellNumber: 總格數=$totalCells, 已刮=$scratchedCount, 剩餘=$remainingCount")
+                        Log.d(TAG, "是否倒數第二刮=$isSecondToLast, 剩餘是否有獎項=$hasUnscatchedPrizes")
+
+                        (activity as? MainActivity)?.enableImmersiveMode()
+
+                        // 顯示刮卡彈窗
+                        val dialog = ScratchDialog(
+                            requireContext(),
+                            number,
+                            isSpecialPrize(number),
+                            isGrandPrize(number),
+                            isSecondToLast,
+                            hasUnscatchedPrizes,
+                            onScratchStart = {
+                                Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡")
+                                writeTempScratch(serialNumber, cellNumber)
+                            },
+                            onScratchComplete = {
+                                Log.d(TAG, "格子 $cellNumber 刮卡完成，標記 scratched = true")
+                                scratchCell(serialNumber, cellNumber, cellView)
+                            },
+                            onTimeoutForceReveal = {
+                                // ✅ 你要的：刮一點點沒刮乾淨跑掉 -> 60秒後強制視為刮開
+                                Log.d(TAG, "【無動作逾時】格子 $cellNumber 已開始刮但未完成，強制視為刮開")
+                                scratchCell(serialNumber, cellNumber, cellView)
+                            }
+                        )
+
+                        dialog.setOnDismissListener {
+                            // ✅ 小視窗關閉後解除鎖定，允許下一次點擊
+                            isScratchDialogShowing = false
+
+                            val hasStartedScratching = dialog.hasStartedScratching()
+                            if (!hasStartedScratching) {
+                                scratchingCells.remove(cellNumber)
+                                updateCellDisplay(cellView, cellNumber, false, number)
+                            }
+                            (activity as? MainActivity)?.enableImmersiveMode()
+                        }
+                        dialog.show()
+
+                    } else {
+                        Log.w(TAG, "【敲門測試】封包傳送失敗: ${task.exception?.message}")
+                        activity?.let { ToastManager.show(it, "網路異常，請重試") }
+                    }
+                }
             }
         }
     }
