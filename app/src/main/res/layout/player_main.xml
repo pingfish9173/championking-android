@@ -56,7 +56,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:gravity="center"
-                android:text="夾出X樣，贈送X刮"
+                android:text=""
                 android:textColor="#00008B"
                 android:textSize="34sp" />
         </FrameLayout>
