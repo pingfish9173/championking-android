@@ -595,6 +595,13 @@ class ScratchCardPlayerFragment : Fragment() {
     private fun writeTempScratch(serialNumber: String, cellNumber: Int) {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
+        // 🌟 終極防線：寫入手機本地硬碟 (SharedPreferences)
+        val sp = requireContext().getSharedPreferences("LocalPendingScratches_$userKey", Context.MODE_PRIVATE)
+        val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        pendingSet.add("$serialNumber:$cellNumber")
+        sp.edit().putStringSet("pending_scratches", pendingSet).apply()
+        Log.d(TAG, "🔒 [本地硬碟防弊] 已將卡 $serialNumber 格子 $cellNumber 寫入本地備用紀錄")
+
         try {
             val db = FirebaseDatabase.getInstance().reference
             val tempRef = db.child("users").child(userKey).child("scratchCardsTemp").push()
@@ -850,7 +857,14 @@ class ScratchCardPlayerFragment : Fragment() {
                                 .addOnSuccessListener {
                                     updateRemainingScratchesDisplay()
                                     Log.d(TAG, "格子 $cellNumber 刮開成功（已寫入 scratchedAt）")
-                                    // ValueEventListener 會自動觸發UI更新
+
+                                    // 🌟 伺服器已確認收到，解除本地硬碟防弊鎖
+                                    val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: ""
+                                    val sp = requireContext().getSharedPreferences("LocalPendingScratches_$currentUserFirebaseKey", Context.MODE_PRIVATE)
+                                    val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                                    pendingSet.remove("$serialNumber:$cellNumber")
+                                    sp.edit().putStringSet("pending_scratches", pendingSet).apply()
+                                    Log.d(TAG, "🔓 [本地硬碟防弊] 伺服器已接收，從本地備用紀錄移除格子 $cellNumber")
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "刮開格子 $cellNumber 失敗: ${e.message}", e)

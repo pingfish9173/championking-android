@@ -908,6 +908,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         val userKey = currentUser?.firebaseKey ?: return
         Log.d(TAG, "【同步 scratchCardsTemp】開始同步用戶 $userKey 的暫存刮卡紀錄")
 
+        // 🌟 呼叫本地硬碟回補機制
+        syncLocalPendingScratches()
+
         val userRef = database.child("users").child(userKey)
         val tempRef = userRef.child("scratchCardsTemp")
 
@@ -2141,6 +2144,59 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun unlockAppFromScreen() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
+        }
+    }
+
+    /**
+     * 從本地 SharedPreferences 撈取因為「斷線+滑掉APP」而遺失的刮卡紀錄，並強制回補到資料庫
+     */
+    private fun syncLocalPendingScratches() {
+        val userKey = currentUser?.firebaseKey ?: return
+        val sp = getSharedPreferences("LocalPendingScratches_$userKey", MODE_PRIVATE)
+        val pendingSet = sp.getStringSet("pending_scratches", emptySet()) ?: emptySet()
+
+        if (pendingSet.isEmpty()) {
+            Log.d(TAG, "【本地硬碟防弊】沒有斷線遺留的本地紀錄。")
+            return
+        }
+
+        Log.d(TAG, "🚨 【本地硬碟防弊】發現 ${pendingSet.size} 筆斷線且APP被關閉的遺失紀錄，啟動強制回補！")
+
+        val userRef = database.child("users").child(userKey)
+
+        pendingSet.forEach { entry ->
+            val parts = entry.split(":")
+            if (parts.size == 2) {
+                val cardId = parts[0]
+                val cellNumber = parts[1].toIntOrNull()
+
+                if (cellNumber != null) {
+                    val targetRef = userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                    targetRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                        override fun onDataChange(configSnapshot: DataSnapshot) {
+                            for ((index, config) in configSnapshot.children.withIndex()) {
+                                val id = config.child("id").getValue(Int::class.java)
+                                if (id == cellNumber) {
+                                    // 執行回補
+                                    targetRef.child(index.toString()).child("scratched").setValue(true)
+                                    targetRef.child(index.toString()).child("scratchedAt").setValue(ServerValue.TIMESTAMP)
+                                    Log.d(TAG, "✅ 【本地硬碟防弊】成功回補遺失紀錄: 卡=$cardId, 格=$cellNumber")
+
+                                    // 回補成功後，從本地 SharedPreferences 移除
+                                    val currentSp = getSharedPreferences("LocalPendingScratches_$userKey", MODE_PRIVATE)
+                                    val currentSet = currentSp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                                    currentSet.remove(entry)
+                                    currentSp.edit().putStringSet("pending_scratches", currentSet).apply()
+                                    break
+                                }
+                            }
+                        }
+                        override fun onCancelled(error: DatabaseError) {
+                            Log.e(TAG, "【本地硬碟防弊】回補失敗: ${error.message}")
+                        }
+                    })
+                }
+            }
         }
     }
 
