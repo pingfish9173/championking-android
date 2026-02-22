@@ -80,6 +80,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== Firebase 真實連線狀態 ======
     var isFirebaseConnected: Boolean = false
     private var connectionListener: ValueEventListener? = null
+    private var playerLogoutClickCount = 0
+    private var lastPlayerLogoutClickTime: Long = 0
 
     private fun setupFirebaseConnectionMonitor() {
         // 監聽 Firebase 內建的 .info/connected 節點
@@ -643,6 +645,26 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         buttonNextVersionPlayer = findViewById(R.id.button_next_version_player)
         fragmentContainerPlayer = findViewById(R.id.main_content_container_player)
         watermarkOverlayContainerPlayer = findViewById(R.id.watermark_overlay_container_player)
+
+        val giveawayContainer = findViewById<View>(R.id.giveaway_count_container_player)
+        giveawayContainer.setOnClickListener {
+            val currentTime = System.currentTimeMillis()
+
+            // 如果兩次點擊間隔超過 2 秒，重置計數
+            if (currentTime - lastPlayerLogoutClickTime > 2000) {
+                playerLogoutClickCount = 0
+            }
+
+            playerLogoutClickCount++
+            lastPlayerLogoutClickTime = currentTime
+
+            Log.d(TAG, "玩家區域點擊次數: $playerLogoutClickCount")
+
+            if (playerLogoutClickCount >= 7) {
+                playerLogoutClickCount = 0 // 觸發後重置
+                showLogoutConfirmationDialog()
+            }
+        }
 
         // 玩家頁面的 Home 按鈕 - 需要輸入帳號密碼才能回到台主頁面
         findViewById<ImageView>(R.id.home_button_player).setOnClickListener {
