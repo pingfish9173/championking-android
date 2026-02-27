@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     // ====== Player Split views ======
     private var currentTimeTextViewPlayerSplit: TextView? = null
     private var buttonNextVersionPlayerSplit: Button? = null
-    private var homeButtonPlayerSplit: ImageView? = null
+    private var logoSplit: ImageView? = null
     private var slidingMenuRoot: View? = null
     private var menuContentLayout: View? = null
     private var menuToggleButton: View? = null
@@ -298,7 +298,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         autoRestoreFinished = false
 
-        // ✅ 超時保險：避免重開機時 Firebase 不回呼造成卡死
+        // ✅ 1. 超時保險：避免重開機時 Firebase 不回呼造成卡死
         autoRestoreTimeoutRunnable?.let { handler.removeCallbacks(it) }
         autoRestoreTimeoutRunnable = Runnable {
             if (autoRestoreFinished) return@Runnable
@@ -307,24 +307,24 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             Log.w(TAG, "自動登入超時（可能是剛開機網路未就緒），先進玩家模式避免卡死")
             ToastManager.show(this, "網路尚未就緒，先進入玩家模式")
 
-            // 先用「最小 user」進玩家（安全），不要進台主
             val fallbackUser = User().apply {
                 firebaseKey = userKey
-                account = ""          // 不重要
-                accountStatus = "ACTIVE" // 先假設，等網路好再確認
+                account = ""
+                accountStatus = "ACTIVE"
             }
-            onAutoRestoreSuccessToPlayer(fallbackUser)
+            // 🌟 因為離線不知道模式，先給預設的 Mode.PLAYER
+            onAutoRestoreSuccessToPlayer(fallbackUser, Mode.PLAYER)
 
-            // 背景重試撈 user（網路起來後補掛監聽、補同步、確認停用）
+            // 背景重試撈 user
             retryFetchUserAfterEnteredPlayer(userKey, attempt = 1)
         }
         handler.postDelayed(autoRestoreTimeoutRunnable!!, AUTO_RESTORE_TIMEOUT_MS)
 
-        // ✅ 直接用 userKey 把 user 撈回來
+        // ✅ 2. 直接用 userKey 把 user 撈回來
         database.child("users").child(userKey)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    if (autoRestoreFinished) return  // 已經超時進玩家了，就不再走這裡切畫面
+                    if (autoRestoreFinished) return
 
                     autoRestoreFinished = true
                     autoRestoreTimeoutRunnable?.let { handler.removeCallbacks(it) }
@@ -345,8 +345,21 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         return
                     }
 
-                    // ✅ 成功：直接進玩家（不要進台主）
-                    onAutoRestoreSuccessToPlayer(user)
+                    // 🌟 核心修改：從 snapshot 檢查使用中的卡片是否為分割模式
+                    var targetMode = Mode.PLAYER
+                    for (child in snapshot.child("scratchCards").children) {
+                        val inUsed = child.child("inUsed").getValue(Boolean::class.java) ?: false
+                        if (inUsed) {
+                            val splitMode = child.child("splitMode").getValue(String::class.java)
+                            if (!splitMode.isNullOrEmpty()) {
+                                targetMode = Mode.PLAYER_SPLIT
+                            }
+                            break
+                        }
+                    }
+
+                    // ✅ 成功：依照剛剛判斷的 targetMode 進入對應的玩家畫面
+                    onAutoRestoreSuccessToPlayer(user, targetMode)
                 }
 
                 override fun onCancelled(error: DatabaseError) {
@@ -358,15 +371,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     Log.e(TAG, "自動登入失敗：${error.message}，先進玩家模式避免卡死")
                     ToastManager.show(this@MainActivity, "連線中，先進入玩家模式")
 
-                    // 一樣：安全起見，先進玩家，不回台主
                     val fallbackUser = User().apply {
                         firebaseKey = userKey
                         account = ""
                         accountStatus = "ACTIVE"
                     }
-                    onAutoRestoreSuccessToPlayer(fallbackUser)
+                    // 🌟 離線錯誤預設給 Mode.PLAYER
+                    onAutoRestoreSuccessToPlayer(fallbackUser, Mode.PLAYER)
 
-                    // 背景重試撈 user（網路好後補上）
+                    // 背景重試撈 user
                     retryFetchUserAfterEnteredPlayer(userKey, attempt = 1)
                 }
             })
@@ -402,6 +415,25 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                             return
                         }
 
+                        // 🌟 背景連線恢復後，檢查正確的版面模式
+                        var targetMode = Mode.PLAYER
+                        for (child in snapshot.child("scratchCards").children) {
+                            val inUsed = child.child("inUsed").getValue(Boolean::class.java) ?: false
+                            if (inUsed) {
+                                val splitMode = child.child("splitMode").getValue(String::class.java)
+                                if (!splitMode.isNullOrEmpty()) {
+                                    targetMode = Mode.PLAYER_SPLIT
+                                }
+                                break
+                            }
+                        }
+
+                        // 🌟 如果原本因為斷線預設進了 PLAYER，但網路恢復後發現應該是 PLAYER_SPLIT，我們就自動幫他切過去！
+                        if (mode != targetMode) {
+                            Log.d(TAG, "網路恢復，重新校正玩家模式為: $targetMode")
+                            render(targetMode)
+                        }
+
                         setupForceLogoutWatcher()
                         setupAccountStatusWatcher()
                         performScratchTempSync()
@@ -420,7 +452,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }, 3000L)
     }
 
-    private fun onAutoRestoreSuccessToPlayer(user: User) {
+    // 🌟 修改這裡：加入 targetMode 參數
+    private fun onAutoRestoreSuccessToPlayer(user: User, targetMode: Mode) {
         // 這條路徑是「重開 APP 自動還原」才會走到
         currentUser = user
         hasHandledSuspension = false
@@ -433,10 +466,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         Log.d(TAG, "【自動還原登入】執行防弊檢查")
         performScratchTempSync()
 
-        // ✅ 關鍵：直接進玩家模式（避免進台主頁）
-        render(Mode.PLAYER)
+        // ✅ 關鍵：根據拿到的資料，動態進入單版面或分割版面
+        render(targetMode)
 
-        // 可選：自動還原專用提示（render 裡已經會 Toast「已切換至玩家頁面」）
+        // 可選：自動還原專用提示
         ToastManager.show(this, "已自動進入玩家模式")
     }
 
@@ -755,7 +788,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun initPlayerSplitViews() {
         currentTimeTextViewPlayerSplit = findViewById(R.id.current_time_text_view_player_split)
         buttonNextVersionPlayerSplit = findViewById(R.id.button_next_version_player_split)
-        homeButtonPlayerSplit = findViewById(R.id.home_button_player_split)
+        logoSplit = findViewById(R.id.logo_split)
 
         slidingMenuRoot = findViewById(R.id.sliding_menu_root)
         menuContentLayout = findViewById(R.id.menu_content_layout)
@@ -782,12 +815,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             }
         }
 
-        // 🌟 綁定按鈕事件 (直接共用原本寫好的對話框邏輯)
-        homeButtonPlayerSplit?.setOnClickListener {
-            Log.d(TAG, "分割玩家頁面 Home button clicked - 顯示登入對話框")
+        logoSplit?.setOnClickListener {
+            Log.d(TAG, "分割玩家頁面 LOGO clicked - 顯示登入對話框")
             showPlayerToMasterLoginDialog()
         }
 
+        // 下一版按鈕
         buttonNextVersionPlayerSplit?.setOnClickListener {
             Log.d(TAG, "分割玩家頁面 下一版 button clicked")
             showNextVersionPasswordInputDialog()
