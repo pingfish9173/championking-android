@@ -36,7 +36,7 @@ import com.champion.king.core.config.AppConfig
 class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvider {
 
     // ====== UI Mode ======
-    private enum class Mode { MASTER, PLAYER }
+    private enum class Mode { MASTER, PLAYER, PLAYER_SPLIT }
     private var mode: Mode = Mode.MASTER
     // ====== Master views ======
     private lateinit var currentTimeTextViewMaster: TextView
@@ -82,6 +82,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var connectionListener: ValueEventListener? = null
     private var playerLogoutClickCount = 0
     private var lastPlayerLogoutClickTime: Long = 0
+    // ====== Player Split views ======
+    private var currentTimeTextViewPlayerSplit: TextView? = null
+    private var buttonNextVersionPlayerSplit: Button? = null
+    private var homeButtonPlayerSplit: ImageView? = null
+    private var slidingMenuRoot: View? = null
+    private var menuContentLayout: View? = null
+    private var menuToggleButton: View? = null
+    private var menuToggleIcon: ImageView? = null
+    private var isMenuOpen = false
 
     private fun setupFirebaseConnectionMonitor() {
         // 監聽 Firebase 內建的 .info/connected 節點
@@ -501,6 +510,20 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 Log.d(TAG, "已切換至玩家頁面。")
                 lockAppToScreen()
             }
+
+            Mode.PLAYER_SPLIT -> {
+                setContentView(R.layout.player_split_main)
+                initPlayerSplitViews()
+                updateCurrentTime()
+                enableImmersiveMode()
+
+                // 載入未來的 Fragment 邏輯
+                loadFragment(ScratchCardSplitPlayerFragment(), containerIdFor(Mode.PLAYER_SPLIT))
+
+                ToastManager.show(this, "已切換至分割玩家頁面")
+                Log.d(TAG, "已切換至分割玩家頁面。")
+                lockAppToScreen()
+            }
         }
     }
 
@@ -595,6 +618,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         buttonMasterPlayerSwitchMaster.setOnClickListener {
             if (!ensureLoggedIn()) return@setOnClickListener
             showPlayerModeConfirmationDialog()
+
         }
 
         // 顯示區塊
@@ -628,13 +652,66 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .setTitle("切換至玩家頁面")
             .setMessage("確定要切換至玩家頁面嗎？")
             .setPositiveButton("確定") { dialog, _ ->
-                render(Mode.PLAYER)
+                // 🌟 點擊確定後，先進入我們寫好的分流檢查站，確認版面狀態
+                checkAndEnterPlayerMode()
                 dialog.dismiss()
             }
             .setNegativeButton("取消") { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
+    }
+
+    private fun checkAndEnterPlayerMode() {
+        val userKey = currentUser?.firebaseKey ?: return
+
+        // 顯示 Loading (避免網路慢時玩家狂點按鈕)
+        ToastManager.show(this, "正在確認版面狀態...")
+
+        database.child("users").child(userKey).child("scratchCards")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val inUseCards = mutableListOf<ScratchCard>()
+                    for (child in snapshot.children) {
+                        val card = child.getValue(ScratchCard::class.java)
+                        if (card != null && card.inUsed == true) {
+                            inUseCards.add(card)
+                        }
+                    }
+
+                    // 核心分流邏輯
+                    when {
+                        inUseCards.size > 1 -> {
+                            // 異常防呆：超過 1 張啟用
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle("資料異常")
+                                .setMessage("系統偵測到多張使用中的刮板，請聯繫台主協助處理。")
+                                .setPositiveButton("確定") { d, _ -> d.dismiss() }
+                                .show()
+                        }
+                        inUseCards.isEmpty() -> {
+                            // 沒卡片：進入舊版，讓原 Fragment 顯示「目前沒有可用的刮刮卡」
+                            render(Mode.PLAYER)
+                        }
+                        else -> {
+                            // 剛好 1 張：檢查是否為分割模式
+                            val currentCard = inUseCards.first()
+                            if (currentCard.splitMode.isNullOrEmpty()) {
+                                Log.d(TAG, "進入單版面模式")
+                                render(Mode.PLAYER)
+                            } else {
+                                Log.d(TAG, "進入分割版面模式: ${currentCard.splitMode}")
+                                render(Mode.PLAYER_SPLIT)
+                            }
+                        }
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e(TAG, "檢查版面狀態失敗: ${error.message}")
+                    ToastManager.show(this@MainActivity, "網路異常，無法切換頁面")
+                }
+            })
     }
 
     private fun initPlayerViews() {
@@ -675,8 +752,53 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         buttonNextVersionPlayer?.setOnClickListener { showNextVersionPasswordInputDialog() }
     }
 
-    private fun containerIdFor(target: Mode): Int =
-        if (target == Mode.MASTER) R.id.fragment_container_master else R.id.main_content_container_player
+    private fun initPlayerSplitViews() {
+        currentTimeTextViewPlayerSplit = findViewById(R.id.current_time_text_view_player_split)
+        buttonNextVersionPlayerSplit = findViewById(R.id.button_next_version_player_split)
+        homeButtonPlayerSplit = findViewById(R.id.home_button_player_split)
+
+        slidingMenuRoot = findViewById(R.id.sliding_menu_root)
+        menuContentLayout = findViewById(R.id.menu_content_layout)
+        menuToggleButton = findViewById(R.id.menu_toggle_button)
+        menuToggleIcon = findViewById(R.id.menu_toggle_icon)
+
+        // 🌟 設定側邊選單動畫
+        isMenuOpen = false
+        slidingMenuRoot?.post {
+            val hideDistance = -(menuContentLayout?.width?.toFloat() ?: 0f)
+            slidingMenuRoot?.translationX = hideDistance
+
+            menuToggleButton?.setOnClickListener {
+                if (isMenuOpen) {
+                    // 縮回
+                    slidingMenuRoot?.animate()?.translationX(hideDistance)?.setDuration(300)?.start()
+                    menuToggleIcon?.animate()?.rotation(0f)?.setDuration(300)?.start()
+                } else {
+                    // 彈出
+                    slidingMenuRoot?.animate()?.translationX(0f)?.setDuration(300)?.start()
+                    menuToggleIcon?.animate()?.rotation(180f)?.setDuration(300)?.start()
+                }
+                isMenuOpen = !isMenuOpen
+            }
+        }
+
+        // 🌟 綁定按鈕事件 (直接共用原本寫好的對話框邏輯)
+        homeButtonPlayerSplit?.setOnClickListener {
+            Log.d(TAG, "分割玩家頁面 Home button clicked - 顯示登入對話框")
+            showPlayerToMasterLoginDialog()
+        }
+
+        buttonNextVersionPlayerSplit?.setOnClickListener {
+            Log.d(TAG, "分割玩家頁面 下一版 button clicked")
+            showNextVersionPasswordInputDialog()
+        }
+    }
+
+    private fun containerIdFor(target: Mode): Int = when (target) {
+        Mode.MASTER -> R.id.fragment_container_master
+        Mode.PLAYER -> R.id.main_content_container_player
+        Mode.PLAYER_SPLIT -> R.id.main_content_container_player_split // 對應 player_split_main.xml 裡的主畫面容器
+    }
 
     private fun containerIdForCurrent(): Int = containerIdFor(mode)
 
@@ -760,8 +882,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             Mode.MASTER -> if (::currentTimeTextViewMaster.isInitialized) {
                 currentTimeTextViewMaster.text = text
             }
-
             Mode.PLAYER -> currentTimeTextViewPlayer?.text = text
+            Mode.PLAYER_SPLIT -> currentTimeTextViewPlayerSplit?.text = text
         }
     }
 
