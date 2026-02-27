@@ -126,18 +126,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         cellViews.clear()
         scratchingCells.clear()
 
-        val splitMode = masterCard.splitMode ?: return
+        val splitMode = masterCard.splitMode ?: return // 預期拿到 "20x4"
         val layoutName = "scratch_card_split_${splitMode.replace("x", "_x")}"
         val layoutResId = resources.getIdentifier(layoutName, "layout", requireContext().packageName)
 
         if (layoutResId == 0) {
-            val placeholder = TextView(requireContext()).apply {
-                text = "待開發\n(找不到版型: $layoutName.xml)"
-                textSize = 32f
-                setTextColor(android.graphics.Color.GRAY)
-                gravity = android.view.Gravity.CENTER
-            }
-            mainContentContainer.addView(placeholder)
+            Log.e(TAG, "找不到外殼版型: $layoutName.xml")
             return
         }
 
@@ -146,7 +140,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             val splitView = LayoutInflater.from(requireContext()).inflate(layoutResId, mainContentContainer, false)
             mainContentContainer.addView(splitView)
 
-            // 2. 建立 panel 對照表
+            // 🌟 建立這 4 個畫框的對照表
             val panels = mapOf(
                 "A" to splitView.findViewById<FrameLayout>(R.id.panelA),
                 "B" to splitView.findViewById<FrameLayout>(R.id.panelB),
@@ -154,25 +148,60 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 "D" to splitView.findViewById<FrameLayout>(R.id.panelD)
             )
 
-            // 3. 拿出母卡裡面的 boards，把子版一個一個畫上去
-            val boardsMap = masterCard.boards ?: return
+            val boardsMap = masterCard.boards ?: emptyMap()
 
-            for ((boardId, board) in boardsMap) {
-                val panel = panels[boardId] ?: continue
+            // 🌟 遍歷 4 個「畫框」
+            for ((panelId, panel) in panels) {
+                if (panel == null) continue
+
+                val board = boardsMap[panelId]
+
+                // 無論有沒有資料，先把預設的白色字體清空！
                 panel.removeAllViews()
 
-                // 假設每個子版都是 20 刮，我們去抓 scratch_card_20.xml
-                val cellsCount = board.numberConfigurations?.size ?: 20
-                val cardLayoutResId = resources.getIdentifier("scratch_card_$cellsCount", "layout", requireContext().packageName)
+                if (board == null) {
+                    // 🚨 如果資料庫缺少這個版的資料，直接在畫面上顯示紅色警告！
+                    val errorText = TextView(requireContext()).apply {
+                        text = "$panelId 區\n(資料庫無資料)"
+                        setTextColor(android.graphics.Color.RED)
+                        textSize = 24f
+                        gravity = android.view.Gravity.CENTER
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                    panel.addView(errorText)
+                    Log.w(TAG, "Firebase 缺少 $panelId 區的資料！")
+                    continue
+                }
+
+                // 🌟 關鍵修正：改為根據 splitMode 動態尋找「專屬的子版 XML」
+                // 例如 splitMode 是 "20x4"，就會去尋找 "scratch_card_sub_20_x4"
+                val splitModeSuffix = masterCard.splitMode?.replace("x", "_x") ?: "20_x4"
+                val subLayoutName = "scratch_card_sub_$splitModeSuffix"
+                val cardLayoutResId = resources.getIdentifier(subLayoutName, "layout", requireContext().packageName)
 
                 if (cardLayoutResId != 0) {
                     val cardView = LayoutInflater.from(requireContext()).inflate(cardLayoutResId, panel, false)
                     panel.addView(cardView)
 
-                    // 👉 呼叫專屬的方法來綁定這個子版的所有格子
+                    // 呼叫綁定格子與點擊事件的方法
                     setupBoard(cardView, masterCard.serialNumber ?: "", board)
                 } else {
-                    Log.w(TAG, "找不到子版佈局: scratch_card_$cellsCount")
+                    // 如果還沒建好專屬子版，印出警告
+                    Log.w(TAG, "找不到專屬子版佈局: $subLayoutName.xml")
+
+                    val errorText = TextView(requireContext()).apply {
+                        text = "子版待開發\n($subLayoutName)"
+                        setTextColor(android.graphics.Color.YELLOW)
+                        gravity = android.view.Gravity.CENTER
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                    panel.addView(errorText)
                 }
             }
 
@@ -183,10 +212,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
     // 針對單一子版（A, B, C 或 D）進行綁定
     private fun setupBoard(containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
-        val gridLayout = containerView.findViewById<androidx.gridlayout.widget.GridLayout>(R.id.gridLayout) ?: containerView.findViewById<android.widget.GridLayout>(R.id.gridLayout)
+
+        // 🌟 關鍵修正：將型別改為最通用的 ViewGroup，完美避開 ClassCastException 閃退地雷！
+        val gridLayout = containerView.findViewById<android.view.ViewGroup>(R.id.gridLayout)
 
         if (gridLayout == null) {
-            Log.e(TAG, "找不到 GridLayout (Board ${board.id})")
+            Log.e(TAG, "在 Board ${board.id} 中找不到 GridLayout")
             return
         }
 
@@ -199,42 +230,79 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             val frameLayout = gridLayout.getChildAt(i) as? FrameLayout ?: continue
             val cellView = if (frameLayout.childCount > 0) frameLayout.getChildAt(0) else continue
 
-            // 🌟 關鍵：合成唯一的 Key，例如 "A_1"
+            // 🌟 關鍵：合成唯一的 Key，例如 "A_1", "B_15"
             val cellKey = "${board.id}_$cellNumber"
             cellViews[cellKey] = cellView
 
             val config = board.numberConfigurations?.find { it.id == cellNumber }
 
-            // TODO: 更新畫面狀態 (我們稍後把原本的 updateCellDisplay 搬過來改)
-            // updateBoardCellDisplay(cellView, cellKey, config?.scratched == true, config?.number, board)
+            // 更新畫面為刮卡黑底狀態
+            updateBoardCellDisplay(cellView, cellKey, config?.scratched == true, config?.number, board)
 
-            // 🌟 點擊事件：處理刮卡邏輯
+            // 🌟 點擊測試
             cellView.setOnClickListener {
-                // 防呆：確認還沒刮開
-                val refreshedConfig = currentMasterCard?.boards?.get(board.id)?.numberConfigurations?.find { it.id == cellNumber }
-                if (refreshedConfig?.scratched == true) return@setOnClickListener
+                Log.d(TAG, "你點擊了 ${board.id} 區 的第 $cellNumber 格！")
+                activity?.let { ToastManager.show(it, "這是 ${board.id} 區的第 $cellNumber 格") }
 
-                Log.d(TAG, "點擊了子版 ${board.id} 的第 $cellNumber 格")
-
-                // TODO: 這裡放入你原本的「主動敲門測試 (Ping)」與呼叫 ScratchDialog 的邏輯
-                // 記得 ScratchDialog 成功後，呼叫的寫入路徑要是：
-                // database.child("users").child(uid).child("scratchCards").child(serialNumber).child("boards").child(board.id).child("numberConfigurations").child(index.toString())
+                // TODO: 之後會把主動敲門 (Ping) 測試跟彈出 ScratchDialog 的邏輯寫在這裡
             }
             cellNumber++
         }
     }
 
-    private fun updateSplitBoards(masterCard: ScratchCard) {
-        val boardsMap = masterCard.boards ?: return
+    private fun updateBoardCellDisplay(cellView: View, cellKey: String, isScratched: Boolean, number: Int?, board: com.champion.king.model.Board) {
+        val isScratching = scratchingCells.contains(cellKey)
 
-        for ((boardId, board) in boardsMap) {
-            board.numberConfigurations?.forEach { config ->
-                val cellKey = "${boardId}_${config.id}"
-                val cellView = cellViews[cellKey] ?: return@forEach
+        // 將子版獨立的獎項字串轉為 List
+        val specialPrizeList = board.specialPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
+        val grandPrizeList = board.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
 
-                // TODO: 呼叫更新畫面的方法
-                // updateBoardCellDisplay(cellView, cellKey, config.scratched == true, config.number, board)
+        val isSpecial = number != null && specialPrizeList.contains(number)
+        val isGrand = number != null && grandPrizeList.contains(number)
+
+        if (isScratched && number != null) {
+            // 已刮開的狀態 (顯示數字、判斷金/綠/白底)
+            scratchingCells.remove(cellKey)
+
+            val fillColorRes = when {
+                isSpecial -> R.color.scratch_card_gold
+                isGrand -> R.color.scratch_card_green
+                else -> R.color.scratch_card_white
             }
+
+            val strokeColorRes = when {
+                isSpecial -> R.color.scratch_card_gold
+                isGrand -> R.color.scratch_card_green
+                else -> R.color.scratch_card_light_gray
+            }
+
+            val strokeWidth = if (isSpecial || isGrand) 4 else 2
+
+            val drawable = androidx.core.content.ContextCompat.getDrawable(requireContext(), R.drawable.circle_cell_normal_background)?.mutate()
+            if (drawable is android.graphics.drawable.GradientDrawable) {
+                drawable.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), fillColorRes))
+                drawable.setStroke(strokeWidth, androidx.core.content.ContextCompat.getColor(requireContext(), strokeColorRes))
+            }
+            cellView.background = drawable
+
+            val textColorRes = if (isSpecial || isGrand) android.R.color.white else R.color.black
+            if (cellView is TextView) {
+                cellView.text = number.toString()
+                cellView.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), textColorRes))
+            }
+        } else if (isScratching && !isScratched) {
+            // TODO: 之後可以補上漩渦動畫，先把文字清空
+            if (cellView is TextView) cellView.text = ""
+        } else {
+            // 尚未刮開的狀態 (黑底)
+            val drawable = androidx.core.content.ContextCompat.getDrawable(requireContext(), R.drawable.circle_cell_background_black)?.mutate()
+            if (drawable is android.graphics.drawable.GradientDrawable) {
+                drawable.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_dark_gray))
+                drawable.setStroke(2, androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_light_gray))
+            }
+            cellView.background = drawable
+
+            if (cellView is TextView) cellView.text = ""
         }
     }
 

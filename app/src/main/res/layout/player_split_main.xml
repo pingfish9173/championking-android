@@ -13,12 +13,12 @@
         <FrameLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.3"
+            android:layout_weight="0.2"
             android:background="#1A1A1A" /> <FrameLayout
         android:id="@+id/main_content_container_player_split"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="9.7">
+        android:layout_weight="9.8">
 
         <TextView
             android:layout_width="wrap_content"
@@ -75,12 +75,11 @@
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#4CAF50" />
-
         </LinearLayout>
 
         <FrameLayout
             android:id="@+id/menu_toggle_button"
-            android:layout_width="35dp"
+            android:layout_width="20dp"
             android:layout_height="80dp"
             android:layout_gravity="center_vertical"
             android:background="#80333333">
