@@ -12,6 +12,8 @@ import androidx.fragment.app.Fragment
 import com.champion.king.model.ScratchCard
 import com.champion.king.util.ToastManager
 import com.google.firebase.database.*
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 
 class ScratchCardSplitPlayerFragment : Fragment() {
 
@@ -31,6 +33,10 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     private val cellViews = mutableMapOf<String, View>()
     private val scratchingCells = mutableSetOf<String>()
     private var isScratchDialogShowing: Boolean = false  // 防止多指同時開啟多個刮卡視窗
+
+    // 🌟 新增：儲存漩渦View和動畫 (使用 String 型別的 cellKey，例如 "A_1")
+    private val swirlViews = mutableMapOf<String, View>()
+    private val cellAnimators = mutableMapOf<String, List<ObjectAnimator>>()
 
     // 🌟 修改：用來記錄「夾X送X」連點次數的變數 (改為重新鎖定)
     private var relockTapCount = 0
@@ -231,7 +237,8 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         }
     }
 
-    private fun setupBoard(containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
+    private fun setupBoard(
+        containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
 
         populateBoardHeader(containerView, board)
 
@@ -357,10 +364,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         }
     }
 
-    private fun updateBoardCellDisplay(cellView: View, cellKey: String, isScratched: Boolean, number: Int?, board: com.champion.king.model.Board) {
+    // ====== 渲染格子狀態 ======
+    private fun updateBoardCellDisplay(
+        cellView: View, cellKey: String,
+        isScratched: Boolean, number: Int?, board: com.champion.king.model.Board) {
         val isScratching = scratchingCells.contains(cellKey)
 
-        // 將子版獨立的獎項字串轉為 List
         val specialPrizeList = board.specialPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
         val grandPrizeList = board.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
 
@@ -368,8 +377,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         val isGrand = number != null && grandPrizeList.contains(number)
 
         if (isScratched && number != null) {
-            // 已刮開的狀態 (顯示數字、判斷金/綠/白底)
+            // ✅ 狀態 1：已刮開 (金/綠/白底)
             scratchingCells.remove(cellKey)
+            stopCellAnimation(cellKey) // 🌟 清除動畫
 
             val fillColorRes = when {
                 isSpecial -> R.color.scratch_card_gold
@@ -398,9 +408,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 cellView.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), textColorRes))
             }
         } else if (isScratching && !isScratched) {
-            if (cellView is TextView) cellView.text = ""
+            // 🌟 狀態 2：正在刮卡中 (敲門 Ping 中) - 啟動漩渦動畫
+            startSwirlAnimation(cellView, cellKey)
         } else {
-            // 尚未刮開的狀態 (黑底)
+            // ⬛ 狀態 3：尚未刮開 (黑底蓋板)
+            stopCellAnimation(cellKey) // 🌟 清除動畫
+
             val drawable = androidx.core.content.ContextCompat.getDrawable(requireContext(), R.drawable.circle_cell_background_black)?.mutate()
             if (drawable is android.graphics.drawable.GradientDrawable) {
                 drawable.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_dark_gray))
@@ -409,10 +422,71 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             cellView.background = drawable
 
             if (cellView is TextView) {
-                // 🌟 恢復為空白，玩家在刮開之前絕對看不到數字
                 cellView.text = ""
             }
         }
+    }
+
+    // ====== 漩渦動畫邏輯 ======
+    private fun startSwirlAnimation(cellView: View, cellKey: String) {
+        // 先停止之前的動畫
+        stopCellAnimation(cellKey)
+
+        // 確保 cellView 的父容器是 FrameLayout
+        val parent = cellView.parent as? FrameLayout ?: return
+
+        // 創建漩渦View (引用既有的 SwirlView)
+        val swirlView = SwirlView(requireContext()).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // 將漩渦View添加到父容器的最底層（在原本黑格子的下方）
+        parent.addView(swirlView, 0)
+        swirlViews[cellKey] = swirlView
+
+        // 隱藏原本的 cellView 背景，讓底下的漩渦透出來
+        cellView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        if (cellView is TextView) {
+            cellView.text = ""
+        }
+
+        // 添加脈動效果 - 只作用於漩渦View
+        val scaleXAnimator = ObjectAnimator.ofFloat(swirlView, "scaleX", 1.0f, 1.08f, 1.0f).apply {
+            duration = 1500
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        }
+
+        val scaleYAnimator = ObjectAnimator.ofFloat(swirlView, "scaleY", 1.0f, 1.08f, 1.0f).apply {
+            duration = 1500
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        }
+
+        // 啟動動畫
+        scaleXAnimator.start()
+        scaleYAnimator.start()
+
+        // 保存動畫引用以便後續清除
+        cellAnimators[cellKey] = listOf(scaleXAnimator, scaleYAnimator)
+    }
+
+    private fun stopCellAnimation(cellKey: String) {
+        // 停止並移除動畫
+        cellAnimators[cellKey]?.forEach { animator ->
+            animator.cancel()
+            animator.removeAllListeners()
+        }
+        cellAnimators.remove(cellKey)
+
+        // 移除漩渦View
+        swirlViews[cellKey]?.let { swirlView ->
+            (swirlView.parent as? ViewGroup)?.removeView(swirlView)
+        }
+        swirlViews.remove(cellKey)
     }
 
     // 渲染子版頂部資訊列
@@ -654,5 +728,10 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         scratchCardsListener?.let { scratchCardsRef?.removeEventListener(it) }
+
+        // 🌟 清理所有動畫，避免記憶體洩漏或崩潰
+        cellAnimators.keys.toList().forEach { cellKey ->
+            stopCellAnimation(cellKey)
+        }
     }
 }
