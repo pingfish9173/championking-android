@@ -213,7 +213,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     // 針對單一子版（A, B, C 或 D）進行綁定
     private fun setupBoard(containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
 
-        // 🌟 關鍵修正：將型別改為最通用的 ViewGroup，完美避開 ClassCastException 閃退地雷！
+        // 🌟 呼叫剛寫好的 Function，動態填入頂部的獎項與規則！
+        populateBoardHeader(containerView, board)
+
         val gridLayout = containerView.findViewById<android.view.ViewGroup>(R.id.gridLayout)
 
         if (gridLayout == null) {
@@ -291,7 +293,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 cellView.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), textColorRes))
             }
         } else if (isScratching && !isScratched) {
-            // TODO: 之後可以補上漩渦動畫，先把文字清空
             if (cellView is TextView) cellView.text = ""
         } else {
             // 尚未刮開的狀態 (黑底)
@@ -302,7 +303,92 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             }
             cellView.background = drawable
 
-            if (cellView is TextView) cellView.text = ""
+            if (cellView is TextView) {
+                // 🌟 恢復為空白，玩家在刮開之前絕對看不到數字
+                cellView.text = ""
+            }
+        }
+    }
+
+    // 渲染子版頂部資訊列
+    private fun populateBoardHeader(containerView: View, board: com.champion.king.model.Board) {
+        val tvBoardName = containerView.findViewById<TextView>(R.id.tv_board_name)
+        val tvSpecialPrize = containerView.findViewById<TextView>(R.id.tv_special_prize)
+        val llGrandPrizes = containerView.findViewById<android.widget.LinearLayout>(R.id.ll_grand_prizes)
+        val tvPitchRule = containerView.findViewById<TextView>(R.id.tv_pitch_rule)
+
+        // 1. 設定版名 (例如: A板)
+        tvBoardName?.text = "${board.id}板"
+
+        // 2. 設定特獎 (黃底白字)
+        if (tvSpecialPrize != null) {
+            val specialPrizeStr = board.specialPrize
+            if (specialPrizeStr.isNullOrBlank() || specialPrizeStr == "無") {
+                tvSpecialPrize.text = "無"
+                tvSpecialPrize.background = null
+            } else {
+                tvSpecialPrize.text = specialPrizeStr
+                val gold = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_gold)
+                tvSpecialPrize.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(gold)
+                    setStroke(2, gold)
+                }
+            }
+        }
+
+        // 3. 設定大獎 (綠底白字)
+        if (llGrandPrizes != null) {
+            llGrandPrizes.removeAllViews()
+            val grandPrizeStr = board.grandPrize
+            if (grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無") {
+                val tv = TextView(requireContext()).apply {
+                    text = "無"
+                    setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white))
+                    textSize = 10f // 配合縮小
+                    gravity = android.view.Gravity.CENTER
+                }
+                llGrandPrizes.addView(tv)
+            } else {
+                val allNumbers = grandPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }
+                val green = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_green)
+                val whiteText = androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white)
+
+                // 🌟 配合 XML，將綠圈的大小縮小到 22dp
+                val sizePx = (22 * resources.displayMetrics.density).toInt()
+                val marginPx = (2 * resources.displayMetrics.density).toInt()
+
+                for (num in allNumbers) {
+                    val tv = TextView(requireContext()).apply {
+                        text = num.toString()
+                        textSize = 10f
+                        setTextColor(whiteText)
+                        gravity = android.view.Gravity.CENTER
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.OVAL
+                            setColor(green)
+                            setStroke(2, green)
+                        }
+                        layoutParams = android.widget.LinearLayout.LayoutParams(sizePx, sizePx).apply {
+                            marginEnd = marginPx
+                        }
+                    }
+                    llGrandPrizes.addView(tv)
+                }
+            }
+        }
+
+        // 4. 設定夾送規則 (黃色字體)
+        if (tvPitchRule != null) {
+            val pitchType = board.pitchType ?: "scratch"
+            val claws = board.clawsCount ?: 0
+            val giveaway = board.giveawayCount ?: 0
+
+            if (pitchType == "shopping") {
+                tvPitchRule.text = "消費${claws}送${giveaway}"
+            } else {
+                tvPitchRule.text = "夾${claws}送${giveaway}"
+            }
         }
     }
 
