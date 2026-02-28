@@ -28,7 +28,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:gravity="center"
-                android:text="準備中..."
+                android:text=""
                 android:textColor="#555555"
                 android:textSize="32sp"
                 android:textStyle="bold" />

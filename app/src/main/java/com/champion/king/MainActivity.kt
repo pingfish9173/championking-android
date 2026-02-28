@@ -1738,25 +1738,38 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             }
     }
     // ====== Player: 下一版密碼、切換邏輯 ======
-    private fun checkHasNextVersion(userFirebaseKey: String, onResult: (Boolean) -> Unit) {
+    private fun checkHasNextVersion(userFirebaseKey: String, onResult: (Boolean, Int) -> Unit) {
         database.child("users").child(userFirebaseKey).child("scratchCards")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     var validCardCount = 0
+                    var inUseCount = 0
+
                     for (child in snapshot.children) {
                         val card = child.getValue(ScratchCard::class.java)
-                        // 計算有多少張已設定 order 順序的卡片
                         if (card != null && card.order != null) {
                             validCardCount++
+                            if (card.inUsed == true) {
+                                inUseCount++
+                            }
                         }
                     }
-                    // 只要大於 1 張，就代表有下一版可以切換
-                    onResult(validCardCount > 1)
+
+                    if (validCardCount == 0) {
+                        // 0 張卡：無版可切
+                        onResult(false, 0)
+                    } else if (validCardCount == 1) {
+                        // 1 張卡：如果它還沒被啟用，就可以切換去啟用它
+                        onResult(inUseCount == 0, 1)
+                    } else {
+                        // 大於 1 張卡：絕對可以切換
+                        onResult(true, validCardCount)
+                    }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "檢查版位數量失敗: ${error.message}")
-                    onResult(false)
+                    onResult(false, 0)
                 }
             })
     }
@@ -1767,15 +1780,19 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             return
         }
 
-        // 🌟 1. 點擊當下立刻去資料庫算有幾張卡
-        checkHasNextVersion(key) { hasNext ->
+        // 🌟 接收回傳的 (是否可切換, 卡片總數)
+        checkHasNextVersion(key) { hasNext, cardCount ->
             if (!hasNext) {
-                // 🌟 2. 如果只有一版，直接阻擋並提示，不跳密碼框！
-                ToastManager.show(this@MainActivity, "目前只有一個版面，沒有下一版可切換")
+                // 🌟 根據卡片總數給出最精準的提示
+                if (cardCount == 0) {
+                    ToastManager.show(this@MainActivity, "目前無可用刮板")
+                } else {
+                    ToastManager.show(this@MainActivity, "目前只有一個版面，沒有下一版可切換")
+                }
                 return@checkHasNextVersion
             }
 
-            // 🌟 3. 確認有下一版，才顯示密碼輸入框
+            // 確認有下一版，才顯示密碼輸入框
             val input = EditText(this).apply {
                 hint = "請輸入換版密碼"
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or
@@ -1840,8 +1857,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         }
                     }
 
-                    if (allCards.size <= 1) {
-                        ToastManager.show(this@MainActivity, "沒有其他可用的刮刮卡版位")
+                    if (allCards.isEmpty()) {
+                        ToastManager.show(this@MainActivity, "沒有可用的刮刮卡版位")
                         return
                     }
 
@@ -1849,14 +1866,22 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     allCards.sortBy { it.second.order }
 
                     val currentInUseIndex = allCards.indexOfFirst { it.second.inUsed == true }
-                    // 如果跑到最後一版，就 % 取餘數回到第 0 索引 (第一版)
+
+                    // 防呆：如果只有 1 張且已經在使用中，不執行切換
+                    if (allCards.size == 1 && currentInUseIndex != -1) {
+                        ToastManager.show(this@MainActivity, "目前只有一個版面，沒有下一版可切換")
+                        return
+                    }
+
+                    // 🌟 修正：如果沒有任何版面使用中 (index = -1)，預設啟用排序第 1 張 (index = 0)
+                    // 如果跑到最後一版，就 % 取餘數回到第 0 索引
                     val nextIndex = if (currentInUseIndex == -1) 0 else (currentInUseIndex + 1) % allCards.size
 
                     val nextCard = allCards[nextIndex]
                     val nextSerialNumber = nextCard.first
                     val nextOrder = nextCard.second.order
 
-                    // 🌟 批次更新 Firebase：將目標卡片設為 true，其他全部設為 false
+                    // 批次更新 Firebase：將目標卡片設為 true，其他全部設為 false
                     val updates = mutableMapOf<String, Any>()
                     for (card in allCards) {
                         updates["${card.first}/inUsed"] = (card.first == nextSerialNumber)
@@ -1868,9 +1893,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                             ToastManager.show(this@MainActivity, "已切換至版位 $nextOrder")
                             Log.d(TAG, "成功切換至下一版：版位 $nextOrder (序號: $nextSerialNumber)")
 
-                            // 🌟🌟🌟 最核心的魔法：
-                            // 更新完資料庫後，直接呼叫我們寫好的分流檢查站！
-                            // 它會自動去判斷下一版是單一版面還是分割版面，然後平滑地重繪整個 UI 介面並載入對應的 Fragment！
+                            // 更新完資料庫後，呼叫分流檢查站，搭配過場動畫滑順切換！
                             checkAndEnterPlayerMode()
                         }
                         .addOnFailureListener { e ->
