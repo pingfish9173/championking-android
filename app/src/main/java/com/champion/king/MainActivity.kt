@@ -96,6 +96,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var splitTimeTapCount = 0
     private var lastSplitTimeTapAt = 0L
 
+    // 🌟 新增：抽屜選單閒置計時器 (60秒)
+    private val splitMenuIdleHandler = Handler(Looper.getMainLooper())
+    private val SPLIT_MENU_IDLE_TIMEOUT_MS = 60_000L
+    private val splitMenuIdleRunnable = Runnable {
+        if (isMenuOpen) {
+            closeSplitMenu()
+        }
+    }
+
     private fun setupFirebaseConnectionMonitor() {
         // 監聽 Firebase 內建的 .info/connected 節點
         val connectedRef = FirebaseDatabase.getInstance(DB_URL).getReference(".info/connected")
@@ -799,7 +808,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         menuToggleButton = findViewById(R.id.menu_toggle_button)
         menuToggleIcon = findViewById(R.id.menu_toggle_icon)
 
-        // 設定側邊選單動畫
+        // 🌟 設定側邊選單動畫與自動收合
         isMenuOpen = false
         slidingMenuRoot?.post {
             val hideDistance = -(menuContentLayout?.width?.toFloat() ?: 0f)
@@ -808,14 +817,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             menuToggleButton?.setOnClickListener {
                 if (isMenuOpen) {
                     // 縮回
-                    slidingMenuRoot?.animate()?.translationX(hideDistance)?.setDuration(300)?.start()
-                    menuToggleIcon?.animate()?.rotation(0f)?.setDuration(300)?.start()
+                    closeSplitMenu()
+                    splitMenuIdleHandler.removeCallbacks(splitMenuIdleRunnable)
                 } else {
                     // 彈出
                     slidingMenuRoot?.animate()?.translationX(0f)?.setDuration(300)?.start()
                     menuToggleIcon?.animate()?.rotation(180f)?.setDuration(300)?.start()
+                    isMenuOpen = true
+                    resetSplitMenuIdleTimer() // 🌟 展開時啟動閒置倒數
                 }
-                isMenuOpen = !isMenuOpen
             }
         }
 
@@ -829,10 +839,8 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             showNextVersionPasswordInputDialog()
         }
 
-        // 🌟 新增：時間區域連點 7 下跳出登出視窗
         currentTimeTextViewPlayerSplit?.setOnClickListener {
             val now = android.os.SystemClock.elapsedRealtime()
-            // 如果點擊間隔超過 1.2 秒，就重新計算
             if (now - lastSplitTimeTapAt > 1200) {
                 splitTimeTapCount = 0
             }
@@ -845,6 +853,21 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 showLogoutConfirmationDialog()
             }
         }
+    }
+
+    // ====== 分割版面：自動收合選單邏輯 ======
+    private fun closeSplitMenu() {
+        if (!isMenuOpen) return
+        val hideDistance = -(menuContentLayout?.width?.toFloat() ?: 0f)
+        slidingMenuRoot?.animate()?.translationX(hideDistance)?.setDuration(300)?.start()
+        menuToggleIcon?.animate()?.rotation(0f)?.setDuration(300)?.start()
+        isMenuOpen = false
+        Log.d(TAG, "閒置 1 分鐘，自動收合分割版面抽屜選單")
+    }
+
+    private fun resetSplitMenuIdleTimer() {
+        splitMenuIdleHandler.removeCallbacks(splitMenuIdleRunnable)
+        splitMenuIdleHandler.postDelayed(splitMenuIdleRunnable, SPLIT_MENU_IDLE_TIMEOUT_MS)
     }
 
     private fun containerIdFor(target: Mode): Int = when (target) {
@@ -2163,6 +2186,11 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
         lastInteractionTime = System.currentTimeMillis()
         resetIdleTimer()
+
+        // 🌟 新增：如果分割版面的抽屜選單是開著的，玩家只要有碰到螢幕任何地方，就重新倒數 1 分鐘
+        if (isMenuOpen) {
+            resetSplitMenuIdleTimer()
+        }
 
         // ✅ 使用者有操作就刷新 lastSeenAt → 持續玩3天也不會被登出
         markSessionSeen()
