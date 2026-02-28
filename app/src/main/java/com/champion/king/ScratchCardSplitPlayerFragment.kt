@@ -32,6 +32,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     private val scratchingCells = mutableSetOf<String>()
     private var isScratchDialogShowing: Boolean = false  // 防止多指同時開啟多個刮卡視窗
 
+    // 🌟 修改：用來記錄「夾X送X」連點次數的變數 (改為重新鎖定)
+    private var relockTapCount = 0
+    private var lastRelockTapAt = 0L
     companion object {
         private const val TAG = "ScratchCardSplitPlayer"
     }
@@ -419,7 +422,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         val llGrandPrizes = containerView.findViewById<android.widget.LinearLayout>(R.id.ll_grand_prizes)
         val tvPitchRule = containerView.findViewById<TextView>(R.id.tv_pitch_rule)
 
-        // 1. 設定版名 (例如: A板)
+        // 1. 設定版名
         tvBoardName?.text = "${board.id}板"
 
         // 2. 設定特獎 (黃底白字)
@@ -447,7 +450,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 val tv = TextView(requireContext()).apply {
                     text = "無"
                     setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white))
-                    textSize = 10f // 配合縮小
+                    textSize = 10f
                     gravity = android.view.Gravity.CENTER
                 }
                 llGrandPrizes.addView(tv)
@@ -456,7 +459,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 val green = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_green)
                 val whiteText = androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white)
 
-                // 🌟 配合 XML，將綠圈的大小縮小到 22dp
                 val sizePx = (22 * resources.displayMetrics.density).toInt()
                 val marginPx = (2 * resources.displayMetrics.density).toInt()
 
@@ -490,6 +492,24 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 tvPitchRule.text = "消費${claws}送${giveaway}"
             } else {
                 tvPitchRule.text = "夾${claws}送${giveaway}"
+            }
+
+            // 🌟 修正：點擊夾送規則連點 7 下「重新鎖定螢幕」
+            tvPitchRule.setOnClickListener {
+                val now = android.os.SystemClock.elapsedRealtime()
+                // 如果點擊間隔超過 1.2 秒，就重新計算
+                if (now - lastRelockTapAt > 1200) {
+                    relockTapCount = 0
+                }
+                lastRelockTapAt = now
+                relockTapCount++
+
+                if (relockTapCount >= 7) {
+                    relockTapCount = 0
+                    Log.d(TAG, "夾送規則連點7次，觸發重新鎖定螢幕")
+                    (activity as? MainActivity)?.relockFromPlayerGesture()
+                    activity?.let { ToastManager.show(it, "已重新啟用鎖定模式") }
+                }
             }
         }
     }

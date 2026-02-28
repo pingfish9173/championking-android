@@ -92,6 +92,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private var menuToggleIcon: ImageView? = null
     private var isMenuOpen = false
 
+    // 🌟 新增：用來記錄時間連點次數的變數
+    private var splitTimeTapCount = 0
+    private var lastSplitTimeTapAt = 0L
+
     private fun setupFirebaseConnectionMonitor() {
         // 監聽 Firebase 內建的 .info/connected 節點
         val connectedRef = FirebaseDatabase.getInstance(DB_URL).getReference(".info/connected")
@@ -795,7 +799,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         menuToggleButton = findViewById(R.id.menu_toggle_button)
         menuToggleIcon = findViewById(R.id.menu_toggle_icon)
 
-        // 🌟 設定側邊選單動畫
+        // 設定側邊選單動畫
         isMenuOpen = false
         slidingMenuRoot?.post {
             val hideDistance = -(menuContentLayout?.width?.toFloat() ?: 0f)
@@ -820,10 +824,26 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             showPlayerToMasterLoginDialog()
         }
 
-        // 下一版按鈕
         buttonNextVersionPlayerSplit?.setOnClickListener {
             Log.d(TAG, "分割玩家頁面 下一版 button clicked")
             showNextVersionPasswordInputDialog()
+        }
+
+        // 🌟 新增：時間區域連點 7 下跳出登出視窗
+        currentTimeTextViewPlayerSplit?.setOnClickListener {
+            val now = android.os.SystemClock.elapsedRealtime()
+            // 如果點擊間隔超過 1.2 秒，就重新計算
+            if (now - lastSplitTimeTapAt > 1200) {
+                splitTimeTapCount = 0
+            }
+            lastSplitTimeTapAt = now
+            splitTimeTapCount++
+
+            if (splitTimeTapCount >= 7) {
+                splitTimeTapCount = 0
+                Log.d(TAG, "時間區域連點7次，觸發登出確認視窗")
+                showLogoutConfirmationDialog()
+            }
         }
     }
 
@@ -2313,12 +2333,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     }
 
     fun relockFromPlayerGesture() {
-        if (mode != Mode.PLAYER) return
+        // 🌟 修改：讓單一玩家版面與分割玩家版面都能呼叫重新鎖定
+        if (mode != Mode.PLAYER && mode != Mode.PLAYER_SPLIT) return
         enableImmersiveMode()
         lockAppToScreen()
     }
 
-    private fun unlockAppFromScreen() {
+    fun unlockAppFromScreen() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
