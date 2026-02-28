@@ -105,14 +105,19 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         val uid = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
         if (!isNetworkAvailable()) {
-            noCardTextView.text = "目前未連線網路，請檢查連線狀態"
-            noCardTextView.visibility = View.VISIBLE
+            displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+            return
         }
 
         scratchCardsRef = database.child("users").child(uid).child("scratchCards")
         scratchCardsListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!isAdded) return
+
+                if (!isNetworkAvailable()) {
+                    displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+                    return
+                }
 
                 var targetCard: ScratchCard? = null
                 var targetSerial = ""
@@ -128,19 +133,15 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
                 if (targetCard == null || targetCard.splitMode.isNullOrEmpty()) {
                     Log.w(TAG, "找不到使用中的分割版面母卡")
-                    // 🌟 清空畫面並顯示提示
-                    mainContentContainer.removeAllViews()
-                    mainContentContainer.addView(noCardTextView)
-                    noCardTextView.text = "目前沒有可用的分割版面刮刮卡"
-                    noCardTextView.visibility = View.VISIBLE
+                    // 🌟 呼叫完美防護 Function
+                    displayNoCardMessage("目前沒有可用的分割版面刮刮卡")
                     return
                 }
 
-                // 🌟 成功載入，隱藏提示文字
+                // 成功載入，隱藏提示文字
                 noCardTextView.visibility = View.GONE
                 targetCard.serialNumber = targetSerial
 
-                // 因為我們可能把提示文字加進了 container，所以重建判斷要稍微修改
                 val needRebuild = currentMasterCard?.serialNumber != targetSerial || mainContentContainer.childCount <= 1
 
                 currentMasterCard = targetCard
@@ -156,8 +157,11 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "載入失敗: ${error.message}")
-                noCardTextView.text = "載入失敗，請稍後再試"
-                noCardTextView.visibility = View.VISIBLE
+                if (!isNetworkAvailable()) {
+                    displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
+                } else {
+                    displayNoCardMessage("載入失敗，請稍後再試")
+                }
             }
         }
         scratchCardsRef?.addValueEventListener(scratchCardsListener!!)
@@ -637,6 +641,33 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         }
     }
 
+    // ====== 顯示無卡片或斷線提示 (完美復刻舊版防護) ======
+    private fun displayNoCardMessage(message: String) {
+        if (!isAdded) return
+
+        // 1. 清空所有舊版面
+        mainContentContainer.removeAllViews()
+
+        // 2. 把提示文字「加回」畫面上
+        if (noCardTextView.parent == null) {
+            mainContentContainer.addView(noCardTextView)
+        }
+
+        // 3. 更新文字並顯示
+        noCardTextView.text = message
+        noCardTextView.visibility = View.VISIBLE
+
+        // 4. 清空狀態，避免記憶體洩漏與舊資料殘留
+        cellViews.clear()
+        currentMasterCard = null
+        scratchingCells.clear()
+
+        // 5. 清理所有動畫
+        cellAnimators.keys.toList().forEach { cellKey ->
+            stopCellAnimation(cellKey)
+        }
+    }
+
     // ====== 網路狀態檢查 ======
     private fun isNetworkAvailable(): Boolean {
         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -789,9 +820,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
                 val online = isNetworkAvailable()
                 if (!online) {
-                    if (mainContentContainer.childCount <= 1) { // 代表卡片還沒載入成功
-                        noCardTextView.text = "目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。"
-                        noCardTextView.visibility = View.VISIBLE
+                    // 如果沒有卡片，或者卡片已經被清空，就持續顯示斷線提示
+                    if (mainContentContainer.childCount <= 1 && currentMasterCard == null) {
+                        displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
                     }
                     networkHandler.postDelayed(this, 1500)
                     return
