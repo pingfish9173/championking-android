@@ -41,6 +41,11 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     // 🌟 修改：用來記錄「夾X送X」連點次數的變數 (改為重新鎖定)
     private var relockTapCount = 0
     private var lastRelockTapAt = 0L
+
+    // 🌟 新增：網路自動重試輪詢
+    private val networkHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var networkLoopStarted = false
+
     companion object {
         private const val TAG = "ScratchCardSplitPlayer"
     }
@@ -91,6 +96,8 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         mainContentContainer = view as FrameLayout
+
+        startNetworkHintLoop() // 🌟 啟動自動恢復機制
         loadSplitScratchCard()
     }
 
@@ -767,11 +774,48 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         })
     }
 
+    // ====== 網路斷線自動恢復機制 ======
+    private fun canSafelyUpdateUi(): Boolean =
+        isAdded && view != null &&
+                viewLifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+
+    private fun startNetworkHintLoop() {
+        if (networkLoopStarted) return
+        networkLoopStarted = true
+
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!isAdded) return
+
+                val online = isNetworkAvailable()
+                if (!online) {
+                    if (mainContentContainer.childCount <= 1) { // 代表卡片還沒載入成功
+                        noCardTextView.text = "目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。"
+                        noCardTextView.visibility = View.VISIBLE
+                    }
+                    networkHandler.postDelayed(this, 1500)
+                    return
+                }
+
+                // 網路恢復了，如果卡片還沒載入，就自動幫忙載入
+                if (mainContentContainer.childCount <= 1 && currentMasterCard == null) {
+                    loadSplitScratchCard()
+                }
+                networkHandler.postDelayed(this, 3000)
+            }
+        }
+        networkHandler.post(runnable)
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         scratchCardsListener?.let { scratchCardsRef?.removeEventListener(it) }
 
-        // 🌟 清理所有動畫，避免記憶體洩漏或崩潰
+        // 🌟 停止網路 loop
+        networkHandler.removeCallbacksAndMessages(null)
+        networkLoopStarted = false
+
+        // 清理所有動畫
         cellAnimators.keys.toList().forEach { cellKey ->
             stopCellAnimation(cellKey)
         }

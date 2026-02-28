@@ -1118,7 +1118,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     /**
      * 將 scratchCardsTemp 中的紀錄同步到正式 scratchCards
-     * 並清空 scratchCardsTemp
      */
     private fun performScratchTempSync() {
         val userKey = currentUser?.firebaseKey ?: return
@@ -1137,51 +1136,47 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     return
                 }
 
-                val updates = mutableListOf<Pair<String, Int>>()
+                // 🌟 改為 Triple: 卡號, 子版ID(可為null), 格子號碼
+                val updates = mutableListOf<Triple<String, String?, Int>>()
                 for (child in snapshot.children) {
                     val cardId = child.child("cardId").getValue(String::class.java)
+                    val boardId = child.child("boardId").getValue(String::class.java) // 舊版沒這個欄位會是 null
                     val cellNumber = child.child("cellNumber").getValue(Int::class.java)
                     if (cardId != null && cellNumber != null) {
-                        updates.add(cardId to cellNumber)
+                        updates.add(Triple(cardId, boardId, cellNumber))
                     }
                 }
 
-                if (updates.isEmpty()) {
-                    Log.d(TAG, "【同步 scratchCardsTemp】沒有有效的紀錄可同步。")
-                    return
-                }
-
+                if (updates.isEmpty()) return
                 Log.d(TAG, "【同步 scratchCardsTemp】共 ${updates.size} 筆要更新")
 
-                for ((cardId, cellNumber) in updates) {
-                    val targetRef = userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                for ((cardId, boardId, cellNumber) in updates) {
+                    // 🌟 智慧判斷路徑
+                    val targetRef = if (boardId != null) {
+                        userRef.child("scratchCards").child(cardId).child("boards").child(boardId).child("numberConfigurations")
+                    } else {
+                        userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                    }
+
                     targetRef.addListenerForSingleValueEvent(object : ValueEventListener {
                         override fun onDataChange(configSnapshot: DataSnapshot) {
                             for ((index, config) in configSnapshot.children.withIndex()) {
                                 val id = config.child("id").getValue(Int::class.java)
                                 if (id == cellNumber) {
                                     targetRef.child(index.toString()).child("scratched").setValue(true)
-                                    Log.d(TAG, "【同步 scratchCardsTemp】已補寫 scratched=true: 卡=$cardId, 格=$cellNumber")
+                                    Log.d(TAG, "【同步 scratchCardsTemp】已補寫 scratched=true: 卡=$cardId, 板=${boardId ?: "單一版"}, 格=$cellNumber")
                                     break
                                 }
                             }
                         }
-
-                        override fun onCancelled(error: DatabaseError) {
-                            Log.e(TAG, "【同步 scratchCardsTemp】讀取格子失敗: ${error.message}")
-                        }
+                        override fun onCancelled(error: DatabaseError) {}
                     })
                 }
 
                 // 全部同步後清空暫存表
                 tempRef.removeValue()
-                    .addOnSuccessListener { Log.d(TAG, "【同步 scratchCardsTemp】已清空暫存紀錄") }
-                    .addOnFailureListener { e -> Log.e(TAG, "【同步 scratchCardsTemp】清空失敗: ${e.message}") }
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e(TAG, "【同步 scratchCardsTemp】讀取失敗: ${error.message}", error.toException())
-            }
+            override fun onCancelled(error: DatabaseError) {}
         })
     }
 
@@ -2480,23 +2475,27 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         val sp = getSharedPreferences("LocalPendingScratches_$userKey", MODE_PRIVATE)
         val pendingSet = sp.getStringSet("pending_scratches", emptySet()) ?: emptySet()
 
-        if (pendingSet.isEmpty()) {
-            Log.d(TAG, "【本地硬碟防弊】沒有斷線遺留的本地紀錄。")
-            return
-        }
+        if (pendingSet.isEmpty()) return
 
         Log.d(TAG, "🚨 【本地硬碟防弊】發現 ${pendingSet.size} 筆斷線且APP被關閉的遺失紀錄，啟動強制回補！")
-
         val userRef = database.child("users").child(userKey)
 
         pendingSet.forEach { entry ->
             val parts = entry.split(":")
-            if (parts.size == 2) {
+            // 🌟 支援舊版 (長度2) 與 新版分割 (長度3)
+            if (parts.size == 2 || parts.size == 3) {
                 val cardId = parts[0]
-                val cellNumber = parts[1].toIntOrNull()
+                val boardId = if (parts.size == 3) parts[1] else null
+                val cellNumber = if (parts.size == 3) parts[2].toIntOrNull() else parts[1].toIntOrNull()
 
                 if (cellNumber != null) {
-                    val targetRef = userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                    // 🌟 智慧判斷路徑
+                    val targetRef = if (boardId != null) {
+                        userRef.child("scratchCards").child(cardId).child("boards").child(boardId).child("numberConfigurations")
+                    } else {
+                        userRef.child("scratchCards").child(cardId).child("numberConfigurations")
+                    }
+
                     targetRef.addListenerForSingleValueEvent(object : ValueEventListener {
                         override fun onDataChange(configSnapshot: DataSnapshot) {
                             for ((index, config) in configSnapshot.children.withIndex()) {
@@ -2505,9 +2504,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                                     // 執行回補
                                     targetRef.child(index.toString()).child("scratched").setValue(true)
                                     targetRef.child(index.toString()).child("scratchedAt").setValue(ServerValue.TIMESTAMP)
-                                    Log.d(TAG, "✅ 【本地硬碟防弊】成功回補遺失紀錄: 卡=$cardId, 格=$cellNumber")
+                                    Log.d(TAG, "✅ 【本地硬碟防弊】成功回補遺失紀錄: 卡=$cardId, 板=${boardId ?: "單一版"}, 格=$cellNumber")
 
-                                    // 回補成功後，從本地 SharedPreferences 移除
+                                    // 回補成功後移除
                                     val currentSp = getSharedPreferences("LocalPendingScratches_$userKey", MODE_PRIVATE)
                                     val currentSet = currentSp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
                                     currentSet.remove(entry)
@@ -2516,9 +2515,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                                 }
                             }
                         }
-                        override fun onCancelled(error: DatabaseError) {
-                            Log.e(TAG, "【本地硬碟防弊】回補失敗: ${error.message}")
-                        }
+                        override fun onCancelled(error: DatabaseError) {}
                     })
                 }
             }
