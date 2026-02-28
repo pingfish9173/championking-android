@@ -131,14 +131,14 @@ class ScratchCardPlayerFragment : Fragment() {
      * 檢查網路連線狀態
      */
     private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        // 🌟 修正：安全取用 context
+        val ctx = context ?: return false
+        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
 
-            // 🌟 關鍵升級：不只要有 Wi-Fi/行動網路，還必須有「真實網際網路存取能力(INTERNET)」
-            // 並且經過系統驗證確實能通外網 (VALIDATED)
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                     capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         } else {
@@ -292,9 +292,11 @@ class ScratchCardPlayerFragment : Fragment() {
             }
 
             override fun onCancelled(error: DatabaseError) {
+                // 🌟 修正：確保 Fragment 存活才處理錯誤
+                if (!isAdded) return
+
                 Log.e(TAG, "載入刮刮卡資料失敗: ${error.message}", error.toException())
 
-                // ✅ 若是網路問題，給玩家看得懂的提示
                 if (!isNetworkAvailable()) {
                     displayNoScratchCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
                     return

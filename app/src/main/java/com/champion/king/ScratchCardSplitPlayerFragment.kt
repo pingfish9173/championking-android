@@ -156,6 +156,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             }
 
             override fun onCancelled(error: DatabaseError) {
+                // 🌟 修正：如果 Fragment 已經被拔除 (例如正在登出)，直接終止，不要去更新 UI
+                if (!isAdded) return
+
                 Log.e(TAG, "載入失敗: ${error.message}")
                 if (!isNetworkAvailable()) {
                     displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
@@ -670,7 +673,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
     // ====== 網路狀態檢查 ======
     private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        // 🌟 修正：使用安全的 context 取代 requireContext()，避免 Fragment 拔除時閃退
+        val ctx = context ?: return false
+        val connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false

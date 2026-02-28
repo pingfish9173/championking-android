@@ -598,9 +598,9 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         findViewById<ImageView>(R.id.home_button_master).setOnClickListener {
             Log.d(TAG, "台主頁面 Home button clicked - 回到首頁")
             supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
-            refreshMessageBadge()  // 🌟 新增這一行：每次點擊回到首頁時，重新拉取未讀訊息數量並更新紅點
+            refreshMessageBadge()
             if (currentUser != null) {
-                loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+                routeToMasterDisplay()
             } else {
                 loadFragment(LoginFragment(), containerIdFor(Mode.MASTER))
             }
@@ -706,6 +706,44 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 dialog.dismiss()
             }
             .show()
+    }
+
+    // ====== 台主畫面分流站 ======
+    private fun routeToMasterDisplay() {
+        val userKey = currentUser?.firebaseKey ?: return
+
+        database.child("users").child(userKey).child("scratchCards")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    var isSplitMode = false
+
+                    // 尋找目前 inUsed = true 的卡片
+                    for (child in snapshot.children) {
+                        val card = child.getValue(ScratchCard::class.java)
+                        if (card != null && card.inUsed == true) {
+                            if (!card.splitMode.isNullOrEmpty()) {
+                                isSplitMode = true
+                            }
+                            break
+                        }
+                    }
+
+                    // 根據判斷結果載入對應的 Fragment
+                    if (isSplitMode) {
+                        Log.d(TAG, "台主頁面載入：分割版面顯示器")
+                        loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER)) // 🌟 注意：這裡要等我下面解釋
+                        loadFragment(ScratchCardSplitDisplayFragment(), containerIdFor(Mode.MASTER))
+                    } else {
+                        Log.d(TAG, "台主頁面載入：單一版面顯示器")
+                        loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    // 若網路異常或錯誤，預設退回舊版
+                    loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+                }
+            })
     }
 
     private fun checkAndEnterPlayerMode() {
@@ -1053,7 +1091,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         Log.d(TAG, "【登入成功】執行防弊檢查")
         performScratchTempSync()
 
-        loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+        routeToMasterDisplay()
 
         triggerAutoUpdateCheck(reason = "login_success")
         ToastManager.show(this, "歡迎回來，${loggedInUser.account}！")
@@ -2011,7 +2049,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     saveLoginSession(user)
                     render(Mode.MASTER)
                     performScratchTempSync()
-                    loadFragment(ScratchCardDisplayFragment(), containerIdFor(Mode.MASTER))
+                    routeToMasterDisplay()
                     ToastManager.show(this@MainActivity,"已切換至台主頁面！")
 
                     // 觸發條件 3：玩家頁面輸入帳密成功切回台主首頁時檢查更新
