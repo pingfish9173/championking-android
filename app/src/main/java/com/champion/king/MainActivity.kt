@@ -710,10 +710,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
     private fun checkAndEnterPlayerMode() {
         val userKey = currentUser?.firebaseKey ?: return
-
-        // 顯示 Loading (避免網路慢時玩家狂點按鈕)
-        ToastManager.show(this, "正在確認版面狀態...")
-
         database.child("users").child(userKey).child("scratchCards")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
@@ -1741,71 +1737,92 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 Log.e(TAG, "更新用戶 $key 換版密碼失敗: ${e.message}", e)
             }
     }
+    // ====== Player: 下一版密碼、切換邏輯 ======
+    private fun checkHasNextVersion(userFirebaseKey: String, onResult: (Boolean) -> Unit) {
+        database.child("users").child(userFirebaseKey).child("scratchCards")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    var validCardCount = 0
+                    for (child in snapshot.children) {
+                        val card = child.getValue(ScratchCard::class.java)
+                        // 計算有多少張已設定 order 順序的卡片
+                        if (card != null && card.order != null) {
+                            validCardCount++
+                        }
+                    }
+                    // 只要大於 1 張，就代表有下一版可以切換
+                    onResult(validCardCount > 1)
+                }
 
-    // ====== Player: 下一版密碼、切回台主 ======
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e(TAG, "檢查版位數量失敗: ${error.message}")
+                    onResult(false)
+                }
+            })
+    }
+
     private fun showNextVersionPasswordInputDialog() {
         val key = currentUser?.firebaseKey ?: run {
             ToastManager.show(this, "驗證失敗：未找到用戶。")
             return
         }
 
-        checkCanSwitchToNextVersion(key) { canSwitch, message ->
-            if (canSwitch) {
-                val input = EditText(this).apply {
-                    hint = "請輸入換版密碼"
-                    inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-
-                val dialog = AlertDialog.Builder(this)
-                    .setTitle("換版密碼")
-                    .setMessage("請輸入換版密碼：")
-                    .setView(input)
-                    .setPositiveButton("確定") { d, _ ->
-                        val pwd = input.text.toString().trim()
-                        if (pwd.isNotEmpty()) verifySwitchVersionPassword(pwd)
-                        else ToastManager.show(this, "密碼不能為空！")
-                        d.dismiss()
-                    }
-                    .setNegativeButton("取消") { d, _ -> d.dismiss() }
-                    .create()
-
-                // 🌟 呼叫小幫手
-                val timeoutHelper = DialogTimeoutHelper(dialog, input)
-
-                dialog.setOnShowListener { timeoutHelper.startTimer() } // 🌟 啟動
-                dialog.setOnDismissListener { timeoutHelper.stopTimer() } // 🌟 關閉
-
-                dialog.show()
-            } else {
-                showCannotSwitchDialog(message ?: "不允許切換到下一版")
+        // 🌟 1. 點擊當下立刻去資料庫算有幾張卡
+        checkHasNextVersion(key) { hasNext ->
+            if (!hasNext) {
+                // 🌟 2. 如果只有一版，直接阻擋並提示，不跳密碼框！
+                ToastManager.show(this@MainActivity, "目前只有一個版面，沒有下一版可切換")
+                return@checkHasNextVersion
             }
+
+            // 🌟 3. 確認有下一版，才顯示密碼輸入框
+            val input = EditText(this).apply {
+                hint = "請輸入換版密碼"
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                        android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+
+            val dialog = AlertDialog.Builder(this)
+                .setTitle("換版密碼")
+                .setMessage("請輸入換版密碼：")
+                .setView(input)
+                .setPositiveButton("確定") { d, _ ->
+                    val pwd = input.text.toString().trim()
+                    if (pwd.isNotEmpty()) verifySwitchVersionPassword(pwd)
+                    else ToastManager.show(this, "密碼不能為空！")
+                    d.dismiss()
+                }
+                .setNegativeButton("取消") { d, _ -> d.dismiss() }
+                .create()
+
+            val timeoutHelper = DialogTimeoutHelper(dialog, input)
+
+            dialog.setOnShowListener { timeoutHelper.startTimer() }
+            dialog.setOnDismissListener { timeoutHelper.stopTimer() }
+
+            dialog.show()
         }
     }
 
     private fun verifySwitchVersionPassword(enteredPassword: String) {
-        val key = currentUser?.firebaseKey ?: run {
-            ToastManager.show(this, "驗證失敗：未找到用戶。")
-            Log.e(TAG, "驗證換版密碼失敗：currentUserFirebaseKey 為空。")
-            return
-        }
+        val key = currentUser?.firebaseKey ?: return
 
         database.child("users").child(key).child("switchScratchCardPassword")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(s: DataSnapshot) {
                     val stored = s.getValue(String::class.java)
                     if (stored != null && enteredPassword == stored) {
-                        // 密碼正確，切換到下一版
-                        switchToNextVersion(key)
+                        // 🌟 密碼正確，呼叫過場動畫，把切換邏輯包進去
+                        executeWithTransitionOverlay {
+                            switchToNextVersion(key)
+                        }
                     } else {
                         ToastManager.show(this@MainActivity, "換版密碼錯誤，請重新輸入！")
-                        Log.d(TAG, "換版密碼驗證失敗，輸入:$enteredPassword, 儲存:$stored")
                     }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
                     ToastManager.show(this@MainActivity, "驗證失敗：${error.message}")
-                    Log.e(TAG, "讀取換版密碼失敗: ${error.message}", error.toException())
                 }
             })
     }
@@ -1814,7 +1831,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         database.child("users").child(userFirebaseKey).child("scratchCards")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    // 收集所有刮刮卡並按 order 排序
                     val allCards = mutableListOf<Pair<String, ScratchCard>>()
                     for (child in snapshot.children) {
                         val serialNumber = child.key ?: continue
@@ -1824,42 +1840,102 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                         }
                     }
 
-                    if (allCards.isEmpty()) {
-                        ToastManager.show(this@MainActivity,"沒有可用的刮刮卡版位")
+                    if (allCards.size <= 1) {
+                        ToastManager.show(this@MainActivity, "沒有其他可用的刮刮卡版位")
                         return
                     }
 
-                    // 按 order 排序
+                    // 嚴格按照 order 排序
                     allCards.sortBy { it.second.order }
 
-                    // 找到目前使用中的版位
                     val currentInUseIndex = allCards.indexOfFirst { it.second.inUsed == true }
-
-                    // 計算下一個版位
-                    val nextIndex = if (currentInUseIndex == -1) {
-                        // 沒有使用中的卡片，使用第一個
-                        0
-                    } else {
-                        // 循環到下一個版位
-                        (currentInUseIndex + 1) % allCards.size
-                    }
+                    // 如果跑到最後一版，就 % 取餘數回到第 0 索引 (第一版)
+                    val nextIndex = if (currentInUseIndex == -1) 0 else (currentInUseIndex + 1) % allCards.size
 
                     val nextCard = allCards[nextIndex]
                     val nextSerialNumber = nextCard.first
                     val nextOrder = nextCard.second.order
 
-                    // 執行切換：將所有卡片設為未使用，然後將目標卡片設為使用中
-                    setCurrentlyInUseScratchCard(userFirebaseKey, nextSerialNumber)
+                    // 🌟 批次更新 Firebase：將目標卡片設為 true，其他全部設為 false
+                    val updates = mutableMapOf<String, Any>()
+                    for (card in allCards) {
+                        updates["${card.first}/inUsed"] = (card.first == nextSerialNumber)
+                    }
 
-                    ToastManager.show(this@MainActivity,"已切換至版位 $nextOrder")
-                    Log.d(TAG, "成功切換至下一版：版位 $nextOrder (序號: $nextSerialNumber)")
+                    database.child("users").child(userFirebaseKey).child("scratchCards")
+                        .updateChildren(updates)
+                        .addOnSuccessListener {
+                            ToastManager.show(this@MainActivity, "已切換至版位 $nextOrder")
+                            Log.d(TAG, "成功切換至下一版：版位 $nextOrder (序號: $nextSerialNumber)")
+
+                            // 🌟🌟🌟 最核心的魔法：
+                            // 更新完資料庫後，直接呼叫我們寫好的分流檢查站！
+                            // 它會自動去判斷下一版是單一版面還是分割版面，然後平滑地重繪整個 UI 介面並載入對應的 Fragment！
+                            checkAndEnterPlayerMode()
+                        }
+                        .addOnFailureListener { e ->
+                            ToastManager.show(this@MainActivity, "切換版位失敗")
+                            Log.e(TAG, "更新 inUsed 失敗", e)
+                        }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
                     ToastManager.show(this@MainActivity, "切換版位失敗：${error.message}")
-                    Log.e(TAG, "讀取刮刮卡以切換版位失敗: ${error.message}", error.toException())
                 }
             })
+    }
+
+    // ====== 版面切換過場動畫 ======
+    private fun executeWithTransitionOverlay(action: () -> Unit) {
+        val decorView = window.decorView as FrameLayout
+
+        // 如果已經有過場動畫在跑，先移除舊的避免重複
+        decorView.findViewWithTag<View>("transition_overlay")?.let { decorView.removeView(it) }
+
+        val transitionView = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(android.graphics.Color.BLACK)
+            alpha = 0f
+            tag = "transition_overlay"
+
+            val textView = TextView(this@MainActivity).apply {
+                text = "載入版面中..."
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 24f
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            }
+            addView(textView)
+        }
+
+        decorView.addView(transitionView)
+
+        // 1. 淡入黑畫面 (250毫秒)
+        transitionView.animate()
+            .alpha(1f)
+            .setDuration(250)
+            .withEndAction {
+                // 2. 畫面全黑後，執行實際的切換邏輯 (此時背後的 Fragment 怎麼亂閃玩家都看不到)
+                action.invoke()
+
+                // 3. 延遲 1 秒等待 Firebase 抓本地快取與 Fragment 渲染，然後淡出黑畫面
+                Handler(Looper.getMainLooper()).postDelayed({
+                    transitionView.animate()
+                        .alpha(0f)
+                        .setDuration(350)
+                        .withEndAction {
+                            decorView.removeView(transitionView)
+                        }
+                        .start()
+                }, 1000)
+            }
+            .start()
     }
 
     private fun showPlayerToMasterLoginDialog() {

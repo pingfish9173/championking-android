@@ -18,7 +18,7 @@ import android.animation.ValueAnimator
 class ScratchCardSplitPlayerFragment : Fragment() {
 
     private lateinit var mainContentContainer: FrameLayout
-
+    private lateinit var noCardTextView: TextView // 🌟 新增這行用來顯示無卡片或斷線的提示
     private lateinit var database: DatabaseReference
     private var userSessionProvider: UserSessionProvider? = null
 
@@ -63,28 +63,44 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // 🌟 關鍵修改：不再載入 player_split_main.xml
-        // 直接產生一個乾淨的空 FrameLayout，用來裝載未來的田字型刮板 (A/B/C/D)
-        return FrameLayout(requireContext()).apply {
+        val rootLayout = FrameLayout(requireContext()).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
+
+        // 🌟 建立提示文字元件
+        noCardTextView = TextView(requireContext()).apply {
+            text = "載入中..."
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 32f
+            gravity = android.view.Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER
+            )
+            visibility = View.VISIBLE
+        }
+
+        rootLayout.addView(noCardTextView)
+        return rootLayout
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // 1. 這個 view 就是我們剛剛在 onCreateView 建好的空 FrameLayout
         mainContentContainer = view as FrameLayout
-
-        // 2. 直接開始載入 Firebase 資料，專心處理刮板邏輯！
         loadSplitScratchCard()
     }
 
     private fun loadSplitScratchCard() {
         val uid = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        if (!isNetworkAvailable()) {
+            noCardTextView.text = "目前未連線網路，請檢查連線狀態"
+            noCardTextView.visibility = View.VISIBLE
+        }
 
         scratchCardsRef = database.child("users").child(uid).child("scratchCards")
         scratchCardsListener = object : ValueEventListener {
@@ -94,7 +110,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 var targetCard: ScratchCard? = null
                 var targetSerial = ""
 
-                // 找尋 inUsed == true 的母卡
                 for (child in snapshot.children) {
                     val card = child.getValue(ScratchCard::class.java)
                     if (card != null && card.inUsed == true) {
@@ -106,13 +121,20 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
                 if (targetCard == null || targetCard.splitMode.isNullOrEmpty()) {
                     Log.w(TAG, "找不到使用中的分割版面母卡")
+                    // 🌟 清空畫面並顯示提示
+                    mainContentContainer.removeAllViews()
+                    mainContentContainer.addView(noCardTextView)
+                    noCardTextView.text = "目前沒有可用的分割版面刮刮卡"
+                    noCardTextView.visibility = View.VISIBLE
                     return
                 }
 
+                // 🌟 成功載入，隱藏提示文字
+                noCardTextView.visibility = View.GONE
                 targetCard.serialNumber = targetSerial
 
-                // 判斷是否需要重新建立整個田字型 XML
-                val needRebuild = currentMasterCard?.serialNumber != targetSerial || mainContentContainer.childCount == 0
+                // 因為我們可能把提示文字加進了 container，所以重建判斷要稍微修改
+                val needRebuild = currentMasterCard?.serialNumber != targetSerial || mainContentContainer.childCount <= 1
 
                 currentMasterCard = targetCard
 
@@ -120,7 +142,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                     Log.d(TAG, "重新建立分割版面 (needRebuild = true)")
                     buildSplitLayout(targetCard)
                 } else {
-                    // 🌟 關鍵解印：資料庫改變時，只更新格子狀態，不再重建畫面！
                     Log.d(TAG, "更新分割版面格子狀態 (needRebuild = false)")
                     updateSplitBoards(targetCard)
                 }
@@ -128,6 +149,8 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "載入失敗: ${error.message}")
+                noCardTextView.text = "載入失敗，請稍後再試"
+                noCardTextView.visibility = View.VISIBLE
             }
         }
         scratchCardsRef?.addValueEventListener(scratchCardsListener!!)
