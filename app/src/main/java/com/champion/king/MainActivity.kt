@@ -526,11 +526,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     currentUser!!.firebaseKey?.let { fetchAndDisplayPrizeInfo(it, isMaster = true) }
                 } else {
                     userNamePointsTextViewMaster.text = "請登入/註冊"
-                    updatePrizeInfo(
-                        specialPrizeTextViewMaster,
-                        grandPrizeTextViewMaster,
-                        null, null
-                    )
+                    updatePrizeInfoSeparate(null, null, null, true)
                 }
                 unlockAppFromScreen()
             }
@@ -545,9 +541,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     fetchAndDisplayClawsGiveawayInfo(key, giveawayCountTextViewPlayer)
                 } ?: run {
                     // 未登入時清空顯示
-                    specialPrizeTextViewPlayer?.let {
-                        updatePrizeInfo(it, grandPrizeTextViewPlayer ?: it, null, null)
-                    }
+                    updatePrizeInfoSeparate(null, null, null, false)
                     updateClawsGiveawayInfo("scratch",0, 0, giveawayCountTextViewPlayer)
                 }
                 // 切玩家頁面即載入顯示頁
@@ -1286,6 +1280,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     private fun updatePrizeInfoSeparate(
         specialPrize: String?,
         grandPrize: String?,
+        splitMode: String?,
         isMaster: Boolean
     ) {
         val (specialPrizeTv, grandPrizeTv) = if (isMaster) {
@@ -1294,7 +1289,52 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             specialPrizeTextViewPlayer to grandPrizeTextViewPlayer
         }
 
-        // === 特獎 ===
+        // 🌟 核心修改：如果是台主頁面，且版面是分割版面
+        if (isMaster && !splitMode.isNullOrEmpty()) {
+            // 隱藏原本的特獎與大獎相關元件
+            for (i in 0 until prizeInfoContainerMaster.childCount) {
+                val child = prizeInfoContainerMaster.getChildAt(i)
+                if (child.tag != "split_mode_label") {
+                    child.visibility = View.GONE
+                }
+            }
+
+            // 動態加入或更新「版型字樣」
+            var splitLabelTv = prizeInfoContainerMaster.findViewWithTag<TextView>("split_mode_label")
+            if (splitLabelTv == null) {
+                splitLabelTv = TextView(this@MainActivity).apply {
+                    tag = "split_mode_label"
+                    textSize = 28f
+                    setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    gravity = android.view.Gravity.CENTER // 🌟 讓文字內容置中
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, // 🌟 寬度設為 MATCH_PARENT 確保完美置中
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        topMargin = (24 * resources.displayMetrics.density).toInt()
+                    }
+                }
+                prizeInfoContainerMaster.addView(splitLabelTv)
+            }
+            splitLabelTv.text = "${splitMode}版型"
+            splitLabelTv.visibility = View.VISIBLE
+
+            return // 分割版面不需要繼續渲染下面的單一版面獎項，直接結束
+
+        } else if (isMaster) {
+            // 🌟 恢復單一版面的正常顯示：隱藏版型字樣，顯示特獎大獎
+            for (i in 0 until prizeInfoContainerMaster.childCount) {
+                val child = prizeInfoContainerMaster.getChildAt(i)
+                if (child.tag == "split_mode_label") {
+                    child.visibility = View.GONE
+                } else {
+                    child.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // === 特獎 (單一版面邏輯維持不變) ===
         specialPrizeTv?.apply {
             val noPrize = specialPrize.isNullOrBlank() || specialPrize == "無"
 
@@ -1332,7 +1372,7 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             }
         }
 
-        // === 大獎（master 通常是 LinearLayout 容器）===
+        // === 大獎 ===
         if (grandPrizeTv is LinearLayout) {
             displayGrandPrizes(grandPrizeTv, grandPrize)
         }
@@ -1472,15 +1512,19 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 override fun onDataChange(snapshot: DataSnapshot) {
                     var specialPrize: String? = null
                     var grandPrize: String? = null
+                    var splitMode: String? = null // 🌟 新增讀取版型
+
                     for (child in snapshot.children) {
                         val card = child.getValue(ScratchCard::class.java)
                         if (card != null && card.inUsed) {
                             specialPrize = card.specialPrize
                             grandPrize = card.grandPrize
+                            splitMode = card.splitMode // 🌟 取得分割版面屬性
                             break
                         }
                     }
-                    updatePrizeInfoSeparate(specialPrize, grandPrize, isMaster)
+                    // 將 splitMode 傳給 UI 渲染函數
+                    updatePrizeInfoSeparate(specialPrize, grandPrize, splitMode, isMaster)
                 }
 
                 override fun onCancelled(error: DatabaseError) {
@@ -1488,12 +1532,12 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
                     // ❗❗ 若使用者已登出 → 強制回歸預設 UI「無」
                     if (currentUser == null) {
-                        updatePrizeInfoSeparate(null, null, isMaster)
+                        updatePrizeInfoSeparate(null, null, null, isMaster)
                         return
                     }
 
                     // 其它錯誤再顯示載入失敗
-                    updatePrizeInfoSeparate("無", "無", isMaster)
+                    updatePrizeInfoSeparate("無", "無", null, isMaster)
                 }
             })
     }
