@@ -30,6 +30,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     // ====== 紀錄格子視圖與動畫狀態 (使用 "BoardID_CellID" 作為 Key，例如 "A_1") ======
     private val cellViews = mutableMapOf<String, View>()
     private val scratchingCells = mutableSetOf<String>()
+    private var isScratchDialogShowing: Boolean = false  // 防止多指同時開啟多個刮卡視窗
 
     companion object {
         private const val TAG = "ScratchCardSplitPlayer"
@@ -100,17 +101,19 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 }
 
                 targetCard.serialNumber = targetSerial
-                
-                // 判斷是否需要重新建立整個田字型 XML (例如第一次載入，或台主換了不同的版型)
+
+                // 判斷是否需要重新建立整個田字型 XML
                 val needRebuild = currentMasterCard?.serialNumber != targetSerial || mainContentContainer.childCount == 0
 
                 currentMasterCard = targetCard
 
                 if (needRebuild) {
+                    Log.d(TAG, "重新建立分割版面 (needRebuild = true)")
                     buildSplitLayout(targetCard)
                 } else {
-                    // TODO: 只更新格子狀態 (下一個步驟實作)
-                    // updateSplitBoards(targetCard)
+                    // 🌟 關鍵解印：資料庫改變時，只更新格子狀態，不再重建畫面！
+                    Log.d(TAG, "更新分割版面格子狀態 (needRebuild = false)")
+                    updateSplitBoards(targetCard)
                 }
             }
 
@@ -119,6 +122,21 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             }
         }
         scratchCardsRef?.addValueEventListener(scratchCardsListener!!)
+    }
+
+    // 🌟 新增：這就是負責把刮開後的數字和顏色畫出來的關鍵 Function！
+    private fun updateSplitBoards(masterCard: ScratchCard) {
+        val boardsMap = masterCard.boards ?: return
+
+        for ((boardId, board) in boardsMap) {
+            board.numberConfigurations?.forEach { config ->
+                val cellKey = "${boardId}_${config.id}"
+                val cellView = cellViews[cellKey] ?: return@forEach
+
+                // 呼叫更新畫面的方法
+                updateBoardCellDisplay(cellView, cellKey, config.scratched == true, config.number, board)
+            }
+        }
     }
 
     private fun buildSplitLayout(masterCard: ScratchCard) {
@@ -210,10 +228,8 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         }
     }
 
-    // 針對單一子版（A, B, C 或 D）進行綁定
     private fun setupBoard(containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
 
-        // 🌟 呼叫剛寫好的 Function，動態填入頂部的獎項與規則！
         populateBoardHeader(containerView, board)
 
         val gridLayout = containerView.findViewById<android.view.ViewGroup>(R.id.gridLayout)
@@ -232,21 +248,107 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             val frameLayout = gridLayout.getChildAt(i) as? FrameLayout ?: continue
             val cellView = if (frameLayout.childCount > 0) frameLayout.getChildAt(0) else continue
 
-            // 🌟 關鍵：合成唯一的 Key，例如 "A_1", "B_15"
-            val cellKey = "${board.id}_$cellNumber"
+            // 🌟 關鍵修復：把當前的格子號碼「鎖」在常數裡，解決閉包永遠抓到 21 格的 Bug！
+            val currentCellNumber = cellNumber
+            val cellKey = "${board.id}_$currentCellNumber"
+
             cellViews[cellKey] = cellView
+            val config = board.numberConfigurations?.find { it.id == currentCellNumber }
 
-            val config = board.numberConfigurations?.find { it.id == cellNumber }
-
-            // 更新畫面為刮卡黑底狀態
             updateBoardCellDisplay(cellView, cellKey, config?.scratched == true, config?.number, board)
 
-            // 🌟 點擊測試
-            cellView.setOnClickListener {
-                Log.d(TAG, "你點擊了 ${board.id} 區 的第 $cellNumber 格！")
-                activity?.let { ToastManager.show(it, "這是 ${board.id} 區的第 $cellNumber 格") }
+            frameLayout.setOnClickListener {
+                if (isScratchDialogShowing) return@setOnClickListener
 
-                // TODO: 之後會把主動敲門 (Ping) 測試跟彈出 ScratchDialog 的邏輯寫在這裡
+                // 重新取得最新狀態，確認還沒被刮開
+                val refreshedConfig = currentMasterCard?.boards?.get(board.id)?.numberConfigurations?.find { it.id == currentCellNumber }
+                if (refreshedConfig?.scratched == true) return@setOnClickListener
+
+                if (!isNetworkAvailable()) {
+                    activity?.let { ToastManager.show(it, "偵測到網路異常，請檢查連線") }
+                    return@setOnClickListener
+                }
+
+                val isReallyConnected = (activity as? MainActivity)?.isFirebaseConnected ?: false
+                if (!isReallyConnected) {
+                    activity?.let { ToastManager.show(it, "資料庫連線中斷，請確認網路狀態") }
+                    return@setOnClickListener
+                }
+
+                val number = refreshedConfig?.number
+                if (number != null) {
+                    val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return@setOnClickListener
+
+                    frameLayout.isEnabled = false
+                    var isAcknowledged = false
+                    var isTimedOut = false
+
+                    val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                    val timeoutRunnable = Runnable {
+                        if (!isAcknowledged) {
+                            isTimedOut = true
+                            frameLayout.isEnabled = true
+                            activity?.let { ToastManager.show(it, "網路不穩定，無法開啟刮卡") }
+                        }
+                    }
+
+                    timeoutHandler.postDelayed(timeoutRunnable, 1500)
+
+                    database.child("users").child(userKey).child("ping")
+                        .setValue(ServerValue.TIMESTAMP).addOnCompleteListener { task ->
+                            isAcknowledged = true
+                            timeoutHandler.removeCallbacks(timeoutRunnable)
+
+                            if (isTimedOut) return@addOnCompleteListener
+                            frameLayout.isEnabled = true
+
+                            if (task.isSuccessful) {
+                                // 🌟 敲門成功！正式呼叫刮卡小視窗
+                                isScratchDialogShowing = true
+                                scratchingCells.add(cellKey)
+                                updateBoardCellDisplay(cellView, cellKey, false, number, board)
+
+                                val isSecondToLast = isSecondToLastScratch(board)
+                                val hasUnscatchedPrizes = hasUnscatchedPrizes(board)
+                                (activity as? MainActivity)?.enableImmersiveMode()
+
+                                val dialog = ScratchDialog(
+                                    requireContext(),
+                                    number,
+                                    isSpecialPrize(number, board),
+                                    isGrandPrize(number, board),
+                                    isSecondToLast,
+                                    hasUnscatchedPrizes,
+                                    onScratchStart = {
+                                        Log.d(TAG, "開始刮卡：$cellKey")
+                                        writeTempScratch(serialNumber, board.id, currentCellNumber)
+                                    },
+                                    onScratchComplete = {
+                                        Log.d(TAG, "刮卡完成：$cellKey")
+                                        scratchCell(serialNumber, board.id, currentCellNumber, cellKey, cellView)
+                                    },
+                                    onTimeoutForceReveal = {
+                                        Log.d(TAG, "逾時強制刮開：$cellKey")
+                                        scratchCell(serialNumber, board.id, currentCellNumber, cellKey, cellView)
+                                    }
+                                )
+
+                                dialog.setOnDismissListener {
+                                    isScratchDialogShowing = false
+                                    val hasStartedScratching = dialog.hasStartedScratching()
+                                    if (!hasStartedScratching) {
+                                        scratchingCells.remove(cellKey)
+                                        updateBoardCellDisplay(cellView, cellKey, false, number, board)
+                                    }
+                                    (activity as? MainActivity)?.enableImmersiveMode()
+                                }
+                                dialog.show()
+
+                            } else {
+                                activity?.let { ToastManager.show(it, "網路異常，請重試") }
+                            }
+                        }
+                }
             }
             cellNumber++
         }
@@ -390,6 +492,143 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 tvPitchRule.text = "夾${claws}送${giveaway}"
             }
         }
+    }
+
+    // ====== 網路狀態檢查 ======
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } else {
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            networkInfo != null && networkInfo.isConnected
+        }
+    }
+
+    // ==========================================
+    // 🌟 分割版面專用：獎項判斷與寫入資料庫邏輯
+    // ==========================================
+
+    private fun isSpecialPrize(number: Int, board: com.champion.king.model.Board): Boolean {
+        val specialPrizeStr = board.specialPrize
+        return if (specialPrizeStr.isNullOrEmpty()) false
+        else specialPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(number)
+    }
+
+    private fun isGrandPrize(number: Int, board: com.champion.king.model.Board): Boolean {
+        val grandPrizeStr = board.grandPrize
+        return if (grandPrizeStr.isNullOrEmpty()) false
+        else grandPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(number)
+    }
+
+    private fun isSecondToLastScratch(board: com.champion.king.model.Board): Boolean {
+        val remaining = board.numberConfigurations?.count { it.scratched == false } ?: 0
+        return remaining == 2
+    }
+
+    private fun hasUnscatchedPrizes(board: com.champion.king.model.Board): Boolean {
+        val unscratchedNumbers = board.numberConfigurations
+            ?.filter { it.scratched == false }
+            ?.mapNotNull { it.number } ?: emptyList()
+        return unscratchedNumbers.any { isSpecialPrize(it, board) || isGrandPrize(it, board) }
+    }
+
+    // ✅ 寫入 scratchCardsTemp 防弊暫存 (加入 boardId)
+    private fun writeTempScratch(serialNumber: String, boardId: String, cellNumber: Int) {
+        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        // 🌟 寫入本地硬碟 (加入 boardId: A_15)
+        val sp = requireContext().getSharedPreferences("LocalPendingScratches_$userKey", Context.MODE_PRIVATE)
+        val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        pendingSet.add("$serialNumber:$boardId:$cellNumber")
+        sp.edit().putStringSet("pending_scratches", pendingSet).apply()
+
+        try {
+            val db = FirebaseDatabase.getInstance().reference
+            val tempRef = db.child("users").child(userKey).child("scratchCardsTemp").push()
+
+            val data = mapOf(
+                "cardId" to serialNumber,
+                "boardId" to boardId,
+                "cellNumber" to cellNumber,
+                "createdAt" to ServerValue.TIMESTAMP
+            )
+            tempRef.setValue(data)
+                .addOnSuccessListener { Log.d(TAG, "✅ 已寫入暫存: $boardId 板, 第 $cellNumber 格") }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ writeTempScratch() 失敗: ${e.message}")
+        }
+    }
+
+    // ✅ 正式刮開寫入 Firebase (增強 Log 版本)
+    private fun scratchCell(serialNumber: String, boardId: String, cellNumber: Int, cellKey: String, cellView: View) {
+        val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        Log.d(TAG, "準備寫入 Firebase -> user:$userKey, serial:$serialNumber, board:$boardId, cell:$cellNumber")
+
+        // 🌟 路徑：users/uid/scratchCards/serial/boards/boardId/numberConfigurations
+        val targetRef = database.child("users").child(userKey).child("scratchCards")
+            .child(serialNumber).child("boards").child(boardId).child("numberConfigurations")
+
+        targetRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    Log.e(TAG, "❌ Firebase 找不到對應的 numberConfigurations (路徑可能錯誤)")
+                    return
+                }
+
+                var found = false
+                for ((index, child) in snapshot.children.withIndex()) {
+                    val id = child.child("id").getValue(Int::class.java)
+                    if (id == cellNumber) {
+                        found = true
+                        val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
+                        if (alreadyScratched) {
+                            scratchingCells.remove(cellKey)
+                            Log.d(TAG, "⚠️ 格子 $cellKey 已經是刮開狀態，略過重複寫入")
+                            return
+                        }
+
+                        val updates = mapOf<String, Any>(
+                            "scratched" to true,
+                            "scratchedAt" to ServerValue.TIMESTAMP
+                        )
+
+                        targetRef.child(index.toString()).updateChildren(updates)
+                            .addOnSuccessListener {
+                                Log.d(TAG, "✅ 成功寫入 Firebase: $cellKey 刮開")
+
+                                // 解除本地硬碟防弊鎖
+                                val sp = requireContext().getSharedPreferences("LocalPendingScratches_$userKey", Context.MODE_PRIVATE)
+                                val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                                pendingSet.remove("$serialNumber:$boardId:$cellNumber")
+                                sp.edit().putStringSet("pending_scratches", pendingSet).apply()
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e(TAG, "❌ 寫入 Firebase 失敗: ${e.message}")
+                                scratchingCells.remove(cellKey)
+                                val board = currentMasterCard?.boards?.get(boardId)
+                                if (board != null) updateBoardCellDisplay(cellView, cellKey, false, null, board)
+                            }
+                        break
+                    }
+                }
+
+                if (!found) {
+                    Log.e(TAG, "❌ 在 snapshot 中找不到 id == $cellNumber 的格子！")
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "❌ 讀取資料庫失敗: ${error.message}")
+                scratchingCells.remove(cellKey)
+            }
+        })
     }
 
     override fun onDestroyView() {
