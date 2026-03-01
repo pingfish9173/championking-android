@@ -1356,7 +1356,6 @@ class SettingsFragment : Fragment() {
         binding.textParametersTitle.text = title
     }
 
-    // 🌟 修改點 14：改接收字串版
     private fun displayScratchBoardPreview(
         scratchTypeStr: String,
         existingConfigs: List<NumberConfiguration>?
@@ -1368,6 +1367,19 @@ class SettingsFragment : Fragment() {
                     .commitNowAllowingStateLoss()
             }
 
+            // 🌟 攔截點：只要包含 "x" (例如 20x4)，就切換到分割版面預覽
+            if (scratchTypeStr.contains("x")) {
+                val splitNumbers = mapOf(
+                    "A" to (1..20).toList(),
+                    "B" to (1..20).toList(),
+                    "C" to (1..20).toList(),
+                    "D" to (1..20).toList()
+                )
+                buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
+                return@safeExecute // 執行完畢，直接中斷，不跑下面的舊版邏輯
+            }
+
+            // --- 以下為單一版面原有邏輯 ---
             val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
@@ -2380,6 +2392,140 @@ class SettingsFragment : Fragment() {
 
         val give = (card.giveawayCount ?: 1).coerceIn(1, 5)
         setSpinnerSelection(binding.spinnerGiveawayCount, give)
+    }
+
+    private fun buildAllSplitPreviews(mainContainer: ViewGroup, boardNumbers: Map<String, List<Int>>) {
+        mainContainer.removeAllViews()
+
+        val context = mainContainer.context
+
+        // 🌟 核心修正：建立一個垂直的外層容器，避免 row1 和 row2 在 FrameLayout 中重疊
+        val verticalWrapper = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            weightSum = 2f // 上下各佔一半
+        }
+
+        // 建立第一排 (A板, B板)
+        val row1 = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+            weightSum = 2f
+        }
+
+        // 建立第二排 (C板, D板)
+        val row2 = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            ).apply {
+                topMargin = (4 * context.resources.displayMetrics.density).toInt()
+            }
+            weightSum = 2f
+        }
+
+        val defaultNumbers = (1..20).toList()
+
+        row1.addView(createSingleBoardPreview(context, "A", boardNumbers["A"] ?: defaultNumbers))
+        row1.addView(createSingleBoardPreview(context, "B", boardNumbers["B"] ?: defaultNumbers))
+        row2.addView(createSingleBoardPreview(context, "C", boardNumbers["C"] ?: defaultNumbers))
+        row2.addView(createSingleBoardPreview(context, "D", boardNumbers["D"] ?: defaultNumbers))
+
+        verticalWrapper.addView(row1)
+        verticalWrapper.addView(row2)
+        mainContainer.addView(verticalWrapper)
+    }
+
+    private fun createSingleBoardPreview(context: android.content.Context, boardName: String, numbers: List<Int>): View {
+        // 1. 外層容器：黑色背景
+        val boardLayout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                setMargins(4, 4, 4, 4)
+            }
+            setBackgroundColor(Color.BLACK)
+            setPadding(8, 8, 8, 8)
+        }
+
+        // 2. 標題：靠左對齊
+        val titleView = TextView(context).apply {
+            text = "${boardName}板"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            setPadding(4, 0, 0, 8)
+        }
+        boardLayout.addView(titleView)
+
+        // 3. 數字區域：黑色底色的 GridLayout
+        val gridLayout = GridLayout(context).apply {
+            rowCount = 4
+            columnCount = 5
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.BLACK)
+        }
+
+        val density = context.resources.displayMetrics.density
+        val cellMargin = (1 * density).toInt()
+
+        // 🌟 定義正圓的固定尺寸 (例如 36dp)
+        val circleSize = (36 * density).toInt()
+
+        // 4. 產生 20 個格子 (白底外框 + 黑色正圓蓋板)
+        for (i in 0 until 20) {
+            // 用 FrameLayout 包裝，之後點選這個 FrameLayout
+            val cellFrame = FrameLayout(context).apply {
+                setBackgroundColor(Color.WHITE)
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = 0
+                    // 格子本身依然平均分配寬高
+                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    setMargins(cellMargin, cellMargin, cellMargin, cellMargin)
+                }
+
+                // 預留：將來選取特獎與大獎的點擊監聽器
+                isClickable = true
+                setOnClickListener {
+                    android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 ${numbers.getOrNull(i)} 號碼")
+                }
+            }
+
+            // 🌟 修正：黑色正圓蓋板
+            val circleView = TextView(context).apply {
+                text = numbers.getOrNull(i)?.toString() ?: ""
+                setTextColor(Color.GRAY)
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER // 數字在圓內居中
+                background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+
+                // 🌟 核心修正：設定固定寬高，並且在 FrameLayout 中置中 (Gravity.CENTER)
+                layoutParams = FrameLayout.LayoutParams(circleSize, circleSize).apply {
+                    gravity = Gravity.CENTER
+                }
+            }
+
+            cellFrame.addView(circleView)
+            gridLayout.addView(cellFrame)
+        }
+
+        boardLayout.addView(gridLayout)
+        return boardLayout
     }
 
 }
