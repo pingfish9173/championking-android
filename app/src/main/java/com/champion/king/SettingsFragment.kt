@@ -84,9 +84,9 @@ class SettingsFragment : Fragment() {
 
     private var currentFocusTarget: FocusTarget? = null
 
-    // 資料類別
+    // 🌟 修改點 1：將原本的 Int 轉為 String，適配分割版面字串
     private data class ScratchTypeItem(
-        val type: Int,
+        val typeStr: String,
         val stock: Int,
         val isPlaceholder: Boolean = false,
         /** RENTAL 吃到飽：不顯示庫存字樣 */
@@ -96,16 +96,17 @@ class SettingsFragment : Fragment() {
     ) {
         override fun toString(): String = when {
             isPlaceholder -> "請選擇"
-            !showStockInfo -> "${type}刮"
-            stock > 0 -> "${type}刮 (剩${stock})"
-            else -> "${type}刮 (無庫存)"
+            !showStockInfo -> "${typeStr}刮"
+            stock > 0 -> "${typeStr}刮 (剩${stock})"
+            else -> "${typeStr}刮 (無庫存)"
         }
 
-        fun getScratchType(): Int? = if (isPlaceholder) null else type
+        fun getScratchTypeString(): String? = if (isPlaceholder) null else typeStr
     }
 
-    // 常數和狀態變數
-    private val scratchOrder = listOf(10, 20, 25, 30, 40, 50, 60, 80, 100, 120, 160, 200, 240)
+    // 🌟 修改點 2：加入分割版面清單
+    private val scratchOrder = listOf("10", "20", "25", "30", "40", "50", "60", "80", "100", "120", "160", "200", "240", "20x4", "20x6", "25x4", "25x6", "30x4", "30x6")
+
     private var backpackListener: ValueEventListener? = null
     private var userReference: DatabaseReference? = null
     private var currentPreviewFragment: ScratchBoardPreviewFragment? = null
@@ -358,24 +359,20 @@ class SettingsFragment : Fragment() {
                     val selectedItem =
                         binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem ?: return
 
-                    val scratchType = selectedItem.getScratchType()
+                    // 🌟 修改點 3：改用取得字串版的方法
+                    val scratchTypeStr = selectedItem.getScratchTypeString()
 
                     // ✅ 第 0 個「請選擇」＝未設置
-                    if (scratchType == null) {
-                        // showUnsetShelfState() 內部應該會呼叫 hideRightPanel()
-                        // 並且顯示預覽「未設置」與清除參數區的內容
+                    if (scratchTypeStr == null) {
                         showUnsetShelfState()
                         return
                     }
 
-                    Log.d(
-                        "SettingsFragment",
-                        "用戶選擇了刮數: ${scratchType}刮, 庫存: ${selectedItem.stock}"
-                    )
+                    Log.d("SettingsFragment", "用戶選擇了刮數: ${scratchTypeStr}刮, 庫存: ${selectedItem.stock}")
 
                     // ✅ POINT 才需要檢查庫存；RENTAL 吃到飽完全跳過庫存驗證
                     if (currentBillingMode != "RENTAL" && selectedItem.stock <= 0) {
-                        showToast("${scratchType}刮 無庫存，無法選擇")
+                        showToast("${scratchTypeStr}刮 無庫存，無法選擇")
                         return
                     }
 
@@ -386,7 +383,7 @@ class SettingsFragment : Fragment() {
                     val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
                     if (selectedCard == null) {
                         isShowingUnsetState = false
-                        updatePreviewForScratchType(scratchType)
+                        updatePreviewForScratchType(scratchTypeStr)
                     }
                 }
 
@@ -428,19 +425,10 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    /**
-     * 在「設置介面」左側面板底部的 TextView 顯示：
-     * - 依目前選取的版位（selectedShelfOrder）顯示該版位的「剩餘/總數」
-     * - 若該版位未設置或資料異常 → 清空並隱藏
-     *
-     * 注意：玩家頁面/台主首頁要顯示「使用中版位」的剩餘刮數，請由各自首頁的邏輯處理；
-     *       此函式只負責「設置介面」的顯示規則。
-     */
     private fun updateRemainingScratchesInfo(cards: Map<Int, ScratchCard>) {
         val activity = activity as? MainActivity ?: return
         val remainingView = activity.findViewById<TextView>(R.id.remaining_scratches_text_view) ?: return
 
-        // ✅ 設置頁：以「目前選取的版位」為準
         val selectedOrder = shelfManager.selectedShelfOrder
         val card = cards[selectedOrder]
 
@@ -468,14 +456,12 @@ class SettingsFragment : Fragment() {
     // Focus聚焦相關方法
     // ===========================================
 
-    // 進出聚焦模式
     private fun updateFocusMode(enabled: Boolean, target: FocusTarget?) {
         isFocusMode = enabled
         currentFocusTarget = target
         applyFocusMode()
     }
 
-    // 實作聚焦效果（只允許預覽區 + 目標按鈕）
     private fun applyFocusMode() {
         if (!isAdded || _binding == null) return
 
@@ -490,16 +476,12 @@ class SettingsFragment : Fragment() {
         ).apply {
             allowedButton?.let { btn ->
                 add(btn)
-                (btn.parent as? View)?.let { add(it) }  // 該按鈕所在那一行（label + 欄位）
+                (btn.parent as? View)?.let { add(it) }
             }
         }
 
-        // 1. 先全部恢復互動性
         restoreAllInteractive()
 
-        // =================================================================
-        // 退出聚焦模式時：根據當前卡片狀態「校正」按鈕權限
-        // =================================================================
         if (!isFocusMode) {
             val order = shelfManager.selectedShelfOrder
             val card = viewModel.cards.value[order]
@@ -527,15 +509,9 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // =================================================================
-        // 進入聚焦模式邏輯
-        // =================================================================
-
-        // 1) 禁用 + 降低透明度：上方架上列表整區
         setEnabledRecursively(binding.onShelfListContainer, false)
         binding.onShelfListContainer.alpha = 0.35f
 
-        // 2) 參數設定區：除了「目標按鈕所在那行」以外，全部禁用 + dim
         val params = binding.settingParametersContainer
         for (i in 0 until params.childCount) {
             val child = params.getChildAt(i)
@@ -547,10 +523,8 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 3) 預覽區保持可用並高亮
         binding.scratchBoardArea.alpha = 1f
 
-        // ✅ 3.5) ☆☆☆ 關鍵修正：聚焦時強制禁用「另一組」特/大獎控制元件（避免同列 parent 放行造成兩顆都能點）
         fun disableView(v: View) {
             v.isEnabled = false
             v.alpha = 0.35f
@@ -558,13 +532,11 @@ class SettingsFragment : Fragment() {
 
         when (currentFocusTarget) {
             FocusTarget.SPECIAL -> {
-                // 只允許特獎那組，禁用大獎那組
                 disableView(binding.buttonPickGrandPrize)
                 disableView(binding.buttonGrandPrizeKeyboard)
                 disableView(binding.editTextGrandPrize)
             }
             FocusTarget.GRAND -> {
-                // 只允許大獎那組，禁用特獎那組
                 disableView(binding.buttonPickSpecialPrize)
                 disableView(binding.buttonSpecialPrizeKeyboard)
                 disableView(binding.editTextSpecialPrize)
@@ -572,7 +544,6 @@ class SettingsFragment : Fragment() {
             else -> {}
         }
 
-        // 4) 其他零散按鈕雙保險（Save / InUse / AutoScratch / Return / Delete）
         listOf(
             binding.buttonSaveSettings,
             binding.buttonToggleInuse,
@@ -587,7 +558,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 將整個畫面互動性恢復
     private fun restoreAllInteractive() {
         fun restore(v: View) {
             v.isEnabled = true
@@ -599,7 +569,6 @@ class SettingsFragment : Fragment() {
         restore(binding.root)
     }
 
-    // 工具：非遞禁用樹
     private fun setEnabledRecursively(view: View, enabled: Boolean) {
         view.isEnabled = enabled
         if (view is ViewGroup) {
@@ -609,7 +578,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 工具：某個容器是否包含 allowed 視圖（含其後代）
     private fun View.containsAnyOf(targets: Set<View>): Boolean {
         if (this in targets) return true
         if (this is ViewGroup) {
@@ -624,9 +592,7 @@ class SettingsFragment : Fragment() {
     // 特獎挑選模式
     // ===========================================
 
-    // 特獎：進入挑選（✅ 互斥：同一時間只能特獎/大獎擇一）
     private fun enterSpecialPrizePickMode() {
-        // ✅ 若大獎模式正在選取，先退出（保險：避免兩個狀態同時 true）
         if (isPickingGrandPrize) {
             exitGrandPrizePickMode()
         }
@@ -639,24 +605,19 @@ class SettingsFragment : Fragment() {
         currentPreviewFragment?.setSinglePickEnabled(true)
         currentPreviewFragment?.setMultiPickEnabled(false)
 
-        // ☆ 只允許「預覽區 + 特獎按鈕」
         updateFocusMode(true, FocusTarget.SPECIAL)
     }
 
-    // 特獎：退出挑選
     private fun exitSpecialPrizePickMode() {
         isPickingSpecialPrize = false
         binding.buttonPickSpecialPrize.isPressed = false
         binding.buttonPickSpecialPrize.text = "特獎"
         currentPreviewFragment?.setSinglePickEnabled(false)
 
-        // ☆ 解除聚焦
         updateFocusMode(false, null)
     }
 
-    // 大獎：進入多選（✅ 互斥：同一時間只能特獎/大獎擇一）
     private fun enterGrandPrizePickMode() {
-        // ✅ 若特獎模式正在選取，先退出（保險：避免兩個狀態同時 true）
         if (isPickingSpecialPrize) {
             exitSpecialPrizePickMode()
         }
@@ -669,26 +630,18 @@ class SettingsFragment : Fragment() {
         currentPreviewFragment?.setMultiPickEnabled(true)
         currentPreviewFragment?.setSinglePickEnabled(false)
 
-        // ☆ 只允許「預覽區 + 大獎按鈕」
         updateFocusMode(true, FocusTarget.GRAND)
     }
 
-    // 大獎：退出多選
     private fun exitGrandPrizePickMode() {
         isPickingGrandPrize = false
         binding.buttonPickGrandPrize.isPressed = false
         binding.buttonPickGrandPrize.text = "大獎"
         currentPreviewFragment?.setMultiPickEnabled(false)
 
-        // ☆ 解除聚焦
         updateFocusMode(false, null)
     }
 
-    /**
-     * 監聽預覽區回傳被點選的數字：
-     * 請在 ScratchBoardPreviewFragment 內於使用者點擊某個數字時觸發：
-     *   setFragmentResult("scratch_number_selected", bundleOf("number" to 選到的數字))
-     */
     private fun setupNumberPickResultListener() {
         childFragmentManager.setFragmentResultListener(
             "scratch_number_selected",
@@ -701,7 +654,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 新增：多選大獎監聽
         childFragmentManager.setFragmentResultListener(
             "grand_numbers_changed",
             viewLifecycleOwner
@@ -716,7 +668,6 @@ class SettingsFragment : Fragment() {
                 setHorizontallyScrolling(false)
                 isSingleLine = false
                 maxLines = 3
-                // ✅ Android 6 以上都有：設定高品質換行策略
                 breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
                 hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
                 movementMethod = ScrollingMovementMethod.getInstance()
@@ -724,12 +675,9 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    /** 儲存前的完整驗證：通過回傳 true，否則顯示原因並回傳 false */
     private fun validateBeforeSave(data: SaveData): Boolean {
-        // 盤面範圍（從預覽區取得格子總數；拿不到時就不做範圍驗證）
         val totalCells = currentPreviewFragment?.getGeneratedNumberConfigurations()?.size ?: 0
 
-        // --- 特獎：必填 + 單一 + 數字 + 範圍 ---
         val spStr = data.specialPrize?.trim() ?: ""
         if (spStr.isEmpty()) {
             showToast("請先選擇特獎（必填）")
@@ -745,7 +693,6 @@ class SettingsFragment : Fragment() {
             return false
         }
 
-        // --- 大獎：0/1/多個，逗號分隔、數字、不可重複、範圍 ---
         val gpStr = data.grandPrize?.trim().orEmpty()
         val gpList: List<Int> =
             if (gpStr.isEmpty()) emptyList()
@@ -775,10 +722,8 @@ class SettingsFragment : Fragment() {
                 nums
             }
 
-        // --- 互斥：特獎不可同時為大獎 ---
         if (gpList.contains(sp)) {
             showToast("無法儲存：特獎不可同時為大獎，請調整選取")
-            // 視覺上保留現況（雙保險）
             currentPreviewFragment?.setSelectedNumber(sp)
             currentPreviewFragment?.setGrandSelectedNumbers(gpList)
             return false
@@ -791,13 +736,11 @@ class SettingsFragment : Fragment() {
     // 狀態管理相關方法
     // ===========================================
 
-    /** 顯示未設置狀態的預覽與按鈕狀態 **/
     private fun showUnsetShelfState() {
         val order = shelfManager.selectedShelfOrder
         val draft = viewModel.getDraft(order)
         updateParametersTitle(order)
 
-        // ✅ 未設置就是未設置：不要因為有草稿就改成 false
         isShowingUnsetState = true
 
         showEditableFields()
@@ -806,55 +749,46 @@ class SettingsFragment : Fragment() {
         if (draft != null && draft.scratchType != null) {
             showRightPanel()
 
-            // ✅ 有草稿：直接還原草稿（不要先清掉預覽）
-            setScratchTypeSpinnerSelection(draft.scratchType)
+            // 🌟 修改點 4：傳入字串給 spinner 選擇器
+            setScratchTypeSpinnerSelection(draft.scratchType.toString())
 
-            // 先建預覽（草稿有 configs 就帶入）
-            displayScratchBoardPreview(draft.scratchType, draft.numberConfigurations)
+            // 🌟 修改點 5：傳入字串產生預覽
+            displayScratchBoardPreview(draft.scratchType.toString(), draft.numberConfigurations)
             setPrizeControlsEnabled(true)
 
-            // 還原文字
             binding.editTextSpecialPrize.setText(draft.specialPrize.orEmpty())
             binding.editTextGrandPrize.setText(draft.grandPrize.orEmpty())
 
-            // ✅ 還原規則 UI（scratch / shopping）
             val isShopping = (draft.pitchType == "shopping")
             if (isShopping) {
                 binding.radioPitchShopping.isChecked = true
                 applyPitchTypeUi(isShopping = true, syncValues = false)
 
-                // shopping：claws 當「消費門檻（元）」
                 val spend = draft.claws ?: 0
                 binding.editClawsCount.setText(spend.toString())
             } else {
                 binding.radioPitchScratch.isChecked = true
                 applyPitchTypeUi(isShopping = false, syncValues = false)
 
-                // scratch：claws 當「夾出門檻（1~5）」
                 val catchCount = (draft.claws ?: 1).coerceIn(1, 5)
                 setSpinnerSelection(binding.spinnerClawsCount, catchCount)
             }
 
-            // ✅ giveaway 永遠是 spinner（1~5）
             val give = (draft.giveaway ?: 1).coerceIn(1, 5)
             setSpinnerSelection(binding.spinnerGiveawayCount, give)
 
-            // 預覽同步顯示選取（特獎/大獎）
             currentPreviewFragment?.setSelectedNumber(draft.specialPrize?.toIntOrNull())
             val gp = draft.grandPrize
                 ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
             currentPreviewFragment?.setGrandSelectedNumbers(gp)
         } else {
-
             hideRightPanel()
 
-            // ✅ 沒草稿：才真的顯示「未設置」畫面並清空欄位
             showPreviewUnset()
             clearTextFieldsOnly()
             clearSpinnerSelection()
             setPrizeControlsEnabled(false)
 
-            // ✅ 同時把規則 UI 回到預設（避免上一個板位的 shopping 狀態殘留）
             binding.radioPitchScratch.isChecked = true
             applyPitchTypeUi(isShopping = false, syncValues = false)
         }
@@ -865,16 +799,12 @@ class SettingsFragment : Fragment() {
         updateRefreshButtonVisibility()
     }
 
-    /** 🔘 根據目前狀態顯示／隱藏重新整理圖示 **/
     private fun updateRefreshButtonVisibility() {
         val order = shelfManager.selectedShelfOrder
         val hasCard = viewModel.cards.value[order] != null
-
-        // ✅ 沒設置卡片（未設置狀態）就顯示刷新按鈕；有卡片就隱藏
         binding.buttonRefreshScratch.visibility = if (hasCard) View.GONE else View.VISIBLE
     }
 
-    // 檢查刮板是否已被刮過（1刮含以上）
     private fun hasBeenScratched(card: ScratchCard): Boolean {
         val configurations = card.numberConfigurations
         if (configurations.isNullOrEmpty()) {
@@ -894,17 +824,13 @@ class SettingsFragment : Fragment() {
         restorePreviewContainer()
         updateParametersTitle(shelfManager.selectedShelfOrder)
 
-        // 檢查是否應該顯示只讀模式：使用中 OR 已被刮過
         val shouldShowReadonly = selectedCard.inUsed || hasBeenScratched(selectedCard)
 
         if (shouldShowReadonly) {
             displayScratchCardDetailsReadonly(selectedCard)
-            // 根據不同狀態設置按鈕權限
             if (selectedCard.inUsed) {
-                // 使用中：不允許保存、返回、刪除，但可以切換使用狀態、自動刮開
                 setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
             } else {
-                // 已被刮過但非使用中：不允許保存、返回，刪除需要額外檢查，可以自動刮開
                 setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = true)
             }
         } else {
@@ -912,7 +838,8 @@ class SettingsFragment : Fragment() {
             setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
         }
 
-        showScratchTypeLabel(selectedCard.scratchesType)
+        // 🌟 修改點 6：傳入字串
+        showScratchTypeLabel(selectedCard.scratchesType.toString())
         uiManager.updateInUseButtonUI(selectedCard)
         uiManager.updateActionButtonsUI(selectedCard)
         updateRefreshButtonVisibility()
@@ -935,22 +862,21 @@ class SettingsFragment : Fragment() {
         val selectedOrder = shelfManager.selectedShelfOrder
         val selectedCard = viewModel.cards.value[selectedOrder]
 
-        // ✅ 雙保險：就算 UI 哪裡把按鈕誤開，這裡也不允許儲存
         if (selectedCard != null && (selectedCard.inUsed || hasBeenScratched(selectedCard))) {
             showToast("此板位已使用中或已刮開，無法儲存參數")
             return
         }
 
-        val scratchType = if (selectedCard != null) {
-            selectedCard.scratchesType
+        // 🌟 修改點 7：取得字串版的 scratchTypeStr
+        val scratchTypeStr = if (selectedCard != null) {
+            selectedCard.scratchesType.toString()
         } else {
             val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
-            selectedItem?.getScratchType() ?: return
+            selectedItem?.getScratchTypeString() ?: return
         }
 
-        val saveData = extractSaveData(scratchType)
+        val saveData = extractSaveData(scratchTypeStr)
 
-        // ☆☆☆ 先把目前輸入的特獎數字標到預覽（立刻可見）
         currentPreviewFragment?.setSelectedNumber(
             binding.editTextSpecialPrize.text?.toString()?.toIntOrNull()
         )
@@ -962,31 +888,27 @@ class SettingsFragment : Fragment() {
         handleSaveSettings(saveData)
     }
 
-    private fun extractSaveData(scratchType: Int): SaveData {
+    // 🌟 修改點 8：接收字串並轉為 Int 存入 data 類 (因為 SaveData 目前維持 Int)
+    private fun extractSaveData(scratchTypeStr: String): SaveData {
         val isShopping = binding.radioPitchShopping.isChecked
         val pitchType = if (isShopping) "shopping" else "scratch"
 
-        // ✅ claws 的來源依模式決定：
-        // - scratch：spinner 1~5
-        // - shopping：editClawsCount（0以上整數，空視為0）
         val clawsValue: Int? = if (isShopping) {
             val t = binding.editClawsCount.text?.toString()?.trim().orEmpty()
-            if (t.isEmpty()) 0 else t.toIntOrNull()  // 若不是數字，先回 null，後面存檔前可再擋
+            if (t.isEmpty()) 0 else t.toIntOrNull()
         } else {
             binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull()
         }
 
         return SaveData(
             order = shelfManager.selectedShelfOrder,
-            scratchType = scratchType,
+            scratchType = scratchTypeStr.toIntOrNull() ?: 0, // 分割版面會先轉成 0，這是漸進式過渡
             specialPrize = binding.editTextSpecialPrize.text?.toString()?.trim()
                 ?.takeIf { it.isNotEmpty() },
             grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()
                 ?.takeIf { it.isNotEmpty() },
-
             pitchType = pitchType,
             claws = clawsValue,
-
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
             numberConfigurations = currentPreviewFragment?.getGeneratedNumberConfigurations(),
             currentCards = viewModel.cards.value
@@ -998,9 +920,7 @@ class SettingsFragment : Fragment() {
         val scratchType: Int,
         val specialPrize: String?,
         val grandPrize: String?,
-
-        val pitchType: String,   // ✅ 新增
-
+        val pitchType: String,
         val claws: Int?,
         val giveaway: Int?,
         val numberConfigurations: List<NumberConfiguration>?,
@@ -1036,7 +956,6 @@ class SettingsFragment : Fragment() {
 
         Log.d("SettingsFragment", "準備儲存: isNewCard=$isNewCard, scratchType=${data.scratchType}, billingMode=$currentBillingMode")
 
-        // ✅ 共用：儲存完成後手動更新 UI（避免重複碼）
         fun finishAndRefreshUI() {
             viewLifecycleOwner.lifecycleScope.launch {
                 kotlinx.coroutines.delay(500)
@@ -1044,7 +963,6 @@ class SettingsFragment : Fragment() {
 
                 val updatedCard = viewModel.cards.value[data.order]
                 if (updatedCard != null) {
-                    // ✅ 儲存成功 → 清掉該板位草稿
                     viewModel.clearDraft(data.order)
 
                     Log.d("SettingsFragment", "儲存完成，手動更新 UI")
@@ -1059,7 +977,6 @@ class SettingsFragment : Fragment() {
         if (isNewCard) {
             Log.d("SettingsFragment", "新建版位流程")
 
-            // ✅ RENTAL：吃到飽 → 完全不使用背包庫存、不扣庫存，直接創建
             if (currentBillingMode == "RENTAL") {
                 Log.d("SettingsFragment", "RENTAL 模式：跳過扣庫存，直接創建卡片")
                 upsertCardWithData(data, existingCard)
@@ -1067,7 +984,6 @@ class SettingsFragment : Fragment() {
                 return
             }
 
-            // ✅ POINT：維持原本邏輯，要扣減庫存
             Log.d("SettingsFragment", "POINT 模式：準備扣減庫存")
             deductScratchTypeStock(data.scratchType) { success ->
                 if (success) {
@@ -1097,7 +1013,7 @@ class SettingsFragment : Fragment() {
             numberConfigurations = data.numberConfigurations!!,
             existingSerial = existingCard?.serialNumber,
             keepInUsed = existingCard?.inUsed ?: false,
-            pitchType = data.pitchType // ✅ 新增
+            pitchType = data.pitchType
         )
     }
 
@@ -1106,7 +1022,6 @@ class SettingsFragment : Fragment() {
     }
 
     private fun handleReturnClick() {
-        // ✅ 租賃制：不允許返回（按鈕應該已是 disabled，這裡再加一道保險）
         if (currentBillingMode == "RENTAL") {
             return
         }
@@ -1115,14 +1030,10 @@ class SettingsFragment : Fragment() {
 
     private fun handleDeleteClick() {
         val order = shelfManager.selectedShelfOrder
-
-        // ✅ 刪除前先清掉草稿（保險：避免 UI 還原草稿造成誤判）
         viewModel.clearDraft(order)
-
         actionHandler.handleDelete(order, viewModel.cards.value)
     }
 
-    /** 🔄 刮數重新整理按鈕邏輯 **/
     private fun handleRefreshScratchClick() {
         val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
         if (selectedItem == null) {
@@ -1130,8 +1041,9 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        val scratchType = selectedItem.getScratchType()
-        if (scratchType == null) {
+        // 🌟 修改點 9：使用字串
+        val scratchTypeStr = selectedItem.getScratchTypeString()
+        if (scratchTypeStr == null) {
             showToast("請先選擇刮數")
             return
         }
@@ -1142,44 +1054,36 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        showToast("重新生成 ${scratchType}刮 配置中…")
+        showToast("重新生成 ${scratchTypeStr}刮 配置中…")
 
-        // 重新建立新的隨機預覽板
         currentPreviewFragment = ScratchBoardPreviewFragment.newInstance(
-            "${scratchType}刮 (${getScratchDimensions(scratchType)})"
+            "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
         )
 
-        // 更新預覽區域
         childFragmentManager.beginTransaction()
             .replace(binding.scratchBoardArea.id, currentPreviewFragment!!)
             .commitAllowingStateLoss()
 
-        // 清空特獎與大獎欄位
         binding.editTextSpecialPrize.text?.clear()
         binding.editTextGrandPrize.text?.clear()
 
         setPrizeControlsEnabled(true)
-        // ✅ 刷新後立刻把新配置寫進草稿，避免回來又用舊的
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
     }
 
-    /** 統一設定特獎、大獎按鈕與鍵盤按鈕的啟用 / 透明度 **/
     private fun setPrizeControlsEnabled(enabled: Boolean) {
         val alpha = if (enabled) 1.0f else 0.5f
 
-        // 特獎 & 大獎主按鈕
         binding.buttonPickSpecialPrize.isEnabled = enabled
         binding.buttonPickGrandPrize.isEnabled = enabled
         binding.buttonPickSpecialPrize.alpha = alpha
         binding.buttonPickGrandPrize.alpha = alpha
 
-        // 鉛筆（鍵盤）按鈕
         binding.buttonSpecialPrizeKeyboard.isEnabled = enabled
         binding.buttonGrandPrizeKeyboard.isEnabled = enabled
         binding.buttonSpecialPrizeKeyboard.alpha = alpha
         binding.buttonGrandPrizeKeyboard.alpha = alpha
 
-        // 編輯框（只有未設置時才 disable，因此跟隨 enabled）
         binding.editTextSpecialPrize.isEnabled = enabled
         binding.editTextGrandPrize.isEnabled = enabled
     }
@@ -1189,22 +1093,18 @@ class SettingsFragment : Fragment() {
     // UI 顯示相關方法
     // ===========================================
 
-    // 原有的顯示方法（非使用中版位用）
     private fun displayScratchCardDetails(card: ScratchCard) {
         safeExecute("顯示可編輯卡片詳情") {
-            // 顯示可編輯的輸入框
             showEditableFields()
 
             binding.editTextSpecialPrize.setText(card.specialPrize ?: "")
             binding.editTextGrandPrize.setText(card.grandPrize ?: "")
 
-            // ✅ 關鍵：由 pitchType 決定 claws 門檻要套到 spinner 還是 editText
-            // ✅ giveaway 永遠套到 spinner
             applySavedPitchRule(card)
 
-            displayScratchBoardPreview(card.scratchesType, card.numberConfigurations)
+            // 🌟 修改點 10：轉為字串
+            displayScratchBoardPreview(card.scratchesType.toString(), card.numberConfigurations)
 
-            // 預覽建立後，依卡片的特獎數字加上金色標記
             currentPreviewFragment?.setSelectedNumber(card.specialPrize?.toIntOrNull())
 
             val grandList = card.grandPrize?.split(",")
@@ -1213,68 +1113,47 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 新增：使用中版位的只讀顯示方法
     private fun displayScratchCardDetailsReadonly(card: ScratchCard) {
         safeExecute("顯示只讀卡片詳情") {
-            // ✅ 顯示只讀的標籤（特獎/大獎）
             showReadonlyFields(card)
 
-            // 預覽區保持顯示
-            displayScratchBoardPreview(card.scratchesType, card.numberConfigurations)
+            // 🌟 修改點 11：轉為字串
+            displayScratchBoardPreview(card.scratchesType.toString(), card.numberConfigurations)
 
-            // 預覽建立後，顯示當前的特獎和大獎標記
             currentPreviewFragment?.setSelectedNumber(card.specialPrize?.toIntOrNull())
             val grandList = card.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() }
             currentPreviewFragment?.setGrandSelectedNumbers(grandList)
         }
     }
 
-    // 顯示可編輯欄位
     private fun showEditableFields() {
-        // 移除只讀標籤（特獎/大獎那塊）
         removeReadonlyLabels()
-
-        // ✅ 回到可編輯時，把 pitch readonly 文案隱藏
         hidePitchRuleReadonly()
-
-        // 顯示原有的編輯容器
         showEditableContainers()
 
-        // ✅ 保持你目前 radio 切換的 UI 狀態（spinner / edit）
         val isShopping = binding.radioPitchShopping.isChecked
         applyPitchTypeUi(isShopping = isShopping, syncValues = false)
     }
 
-    // 顯示可編輯的容器
     private fun showEditableContainers() {
-        // 找到特獎和大獎的整個容器並顯示
         val specialPrizeContainer = findViewContaining(binding.buttonPickSpecialPrize)
         val grandPrizeContainer = findViewContaining(binding.buttonPickGrandPrize)
 
         specialPrizeContainer?.visibility = View.VISIBLE
         grandPrizeContainer?.visibility = View.VISIBLE
 
-        // 確保按鈕和編輯框是可用狀態
         setPrizeControlsEnabled(true)
         binding.editTextSpecialPrize.visibility = View.VISIBLE
         binding.editTextGrandPrize.visibility = View.VISIBLE
     }
 
-    // 顯示只讀欄位
     private fun showReadonlyFields(card: ScratchCard) {
-        // 完全隱藏特獎/大獎的可編輯容器
         hideEditableContainers()
-
-        // 創建並顯示只讀標籤（特獎/大獎那塊）
         createReadonlyLabels(card)
-
-        // ✅ 顯示 pitch 規則 readonly（這就是你現在跑位的那段，改用 XML 佔位顯示）
         showPitchRuleReadonly(card)
     }
 
-    // 隱藏可編輯的容器
     private fun hideEditableContainers() {
-        // 找到特獎和大獎的整個容器並隱藏
         val specialPrizeContainer = findViewContaining(binding.buttonPickSpecialPrize)
         val grandPrizeContainer = findViewContaining(binding.buttonPickGrandPrize)
 
@@ -1282,13 +1161,11 @@ class SettingsFragment : Fragment() {
         grandPrizeContainer?.visibility = View.GONE
     }
 
-    // 創建只讀標籤
     private fun createReadonlyLabels(card: ScratchCard) {
-        removeReadonlyLabels() // 先清除舊的
+        removeReadonlyLabels()
 
         val context = requireContext()
 
-        // 創建特獎標籤容器
         val specialPrizeContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1300,7 +1177,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 特獎標題
         val specialPrizeTitle = TextView(context).apply {
             text = "特獎："
             textSize = 14f
@@ -1309,7 +1185,6 @@ class SettingsFragment : Fragment() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // 特獎值標籤
         specialPrizeLabel = TextView(context).apply {
             text = card.specialPrize ?: "未設定"
             textSize = 14f
@@ -1331,7 +1206,6 @@ class SettingsFragment : Fragment() {
         specialPrizeContainer.addView(specialPrizeTitle)
         specialPrizeContainer.addView(specialPrizeLabel)
 
-        // 創建大獎標籤容器
         val grandPrizeContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1343,7 +1217,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 大獎標題
         val grandPrizeTitle = TextView(context).apply {
             text = "大獎："
             textSize = 14f
@@ -1352,7 +1225,6 @@ class SettingsFragment : Fragment() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // 大獎值標籤
         grandPrizeLabel = TextView(context).apply {
             text = card.grandPrize ?: "未設定"
             textSize = 14f
@@ -1373,19 +1245,15 @@ class SettingsFragment : Fragment() {
         grandPrizeContainer.addView(grandPrizeTitle)
         grandPrizeContainer.addView(grandPrizeLabel)
 
-        // 將容器插入到設定區域
         insertReadonlyContainers(specialPrizeContainer, grandPrizeContainer)
     }
 
-    // 插入只讀容器到布局中
     private fun insertReadonlyContainers(specialContainer: LinearLayout, grandContainer: LinearLayout) {
         val settingsContainer = binding.rightPanelContainer
 
-        // 找到原本特獎和大獎容器的位置
         val originalSpecialContainer = findViewContaining(binding.buttonPickSpecialPrize)
         val originalGrandContainer = findViewContaining(binding.buttonPickGrandPrize)
 
-        // 在原本特獎容器位置插入只讀特獎容器
         originalSpecialContainer?.let { container ->
             val index = settingsContainer.indexOfChild(container)
             if (index != -1) {
@@ -1393,10 +1261,8 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 在原本大獎容器位置插入只讀大獎容器
         originalGrandContainer?.let { container ->
             val index = settingsContainer.indexOfChild(container)
-            // 需要考慮已經插入的特獎容器
             val adjustedIndex = if (specialContainer.parent != null) index + 1 else index
             if (adjustedIndex <= settingsContainer.childCount) {
                 settingsContainer.addView(grandContainer, adjustedIndex)
@@ -1404,8 +1270,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 找到包含指定View的父容器
-    // 找到「rightPanelContainer 之下」包含 targetView 的那個直接子容器（例如：特獎那列 / 大獎那列）
     private fun findViewContaining(targetView: View): ViewGroup? {
         val root = binding.rightPanelContainer
 
@@ -1417,20 +1281,16 @@ class SettingsFragment : Fragment() {
             parent = parent.parent as? ViewGroup
         }
 
-        // current 就是 root 的直接 child（也就是你要隱藏/插入 label 的那一列容器）
         return if (parent == root) current as? ViewGroup else null
     }
 
-    // 移除只讀標籤
     private fun removeReadonlyLabels() {
-        // 移除特獎標籤（現在是容器的一部分）
         specialPrizeLabel?.let { label ->
             val container = label.parent as? ViewGroup
             val parentContainer = container?.parent as? ViewGroup
             parentContainer?.removeView(container)
         }
 
-        // 移除大獎標籤（現在是容器的一部分）
         grandPrizeLabel?.let { label ->
             val container = label.parent as? ViewGroup
             val parentContainer = container?.parent as? ViewGroup
@@ -1453,7 +1313,8 @@ class SettingsFragment : Fragment() {
         scratchTypeLabel?.visibility = View.GONE
     }
 
-    private fun showScratchTypeLabel(scratchType: Int) {
+    // 🌟 修改點 12：接收字串並顯示
+    private fun showScratchTypeLabel(scratchTypeStr: String) {
         binding.spinnerScratchesCount.visibility = View.GONE
 
         if (scratchTypeLabel == null) {
@@ -1470,23 +1331,21 @@ class SettingsFragment : Fragment() {
             parent.addView(scratchTypeLabel, spinnerIndex + 1)
         }
 
-        scratchTypeLabel?.text = "${scratchType}刮"
+        scratchTypeLabel?.text = "${scratchTypeStr}刮"
         scratchTypeLabel?.visibility = View.VISIBLE
     }
 
-    private fun updatePreviewForScratchType(scratchType: Int) {
+    // 🌟 修改點 13：傳入字串
+    private fun updatePreviewForScratchType(scratchTypeStr: String) {
         val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
 
-        // ✅ 只有「未設置卡片」時才會改預覽（已設置卡片一律不動）
         if (selectedCard != null) return
 
-        Log.d("SettingsFragment", "未設置板位：立即更新預覽為 ${scratchType}刮")
+        Log.d("SettingsFragment", "未設置板位：立即更新預覽為 ${scratchTypeStr}刮")
 
-        // ✅ 這裡傳 null 代表「新生成」（符合你調刮數就要立刻看到的需求）
-        displayScratchBoardPreview(scratchType, null)
+        displayScratchBoardPreview(scratchTypeStr, null)
         setPrizeControlsEnabled(true)
 
-        // ✅ 立刻把新生成的 numberConfigurations 存進草稿，避免切換板位後被重置
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
     }
 
@@ -1499,9 +1358,9 @@ class SettingsFragment : Fragment() {
         binding.textParametersTitle.text = title
     }
 
-    // ② 顯示/重建預覽時，確保挑選模式狀態馬上套用
+    // 🌟 修改點 14：改接收字串版
     private fun displayScratchBoardPreview(
-        scratchType: Int,
+        scratchTypeStr: String,
         existingConfigs: List<NumberConfiguration>?
     ) {
         safeExecute("顯示刮板預覽") {
@@ -1511,7 +1370,7 @@ class SettingsFragment : Fragment() {
                     .commitNowAllowingStateLoss()
             }
 
-            val scratchesTypeString = "${scratchType}刮 (${getScratchDimensions(scratchType)})"
+            val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
                 ScratchBoardPreviewFragment.newInstance(scratchesTypeString, existingConfigs)
@@ -1519,7 +1378,6 @@ class SettingsFragment : Fragment() {
                 ScratchBoardPreviewFragment.newInstance(scratchesTypeString)
             }
 
-            // 維持挑選模式狀態（如有）
             currentPreviewFragment?.arguments?.putBoolean(
                 "enable_single_pick",
                 isPickingSpecialPrize
@@ -1529,18 +1387,14 @@ class SettingsFragment : Fragment() {
                 .replace(binding.scratchBoardArea.id, currentPreviewFragment!!)
                 .commitAllowingStateLoss()
 
-            // ☆ 立即同步挑選模式（原本就有）
             currentPreviewFragment?.setSinglePickEnabled(isPickingSpecialPrize)
             currentPreviewFragment?.setMultiPickEnabled(isPickingGrandPrize)
 
-            // ☆☆☆ 立即把「目前特獎數字」標回金色（重點）
-            childFragmentManager.executePendingTransactions() // 確保 view 都建好
+            childFragmentManager.executePendingTransactions()
 
-            // 特獎金色
             val pickedSpecial = binding.editTextSpecialPrize.text?.toString()?.toIntOrNull()
             currentPreviewFragment?.setSelectedNumber(pickedSpecial)
 
-            // 大獎綠色
             val grandList = binding.editTextGrandPrize.text?.toString()
                 ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
             currentPreviewFragment?.setGrandSelectedNumbers(grandList)
@@ -1576,7 +1430,6 @@ class SettingsFragment : Fragment() {
         val threshold = card.clawsCount ?: 0
         val giveaway = card.giveawayCount ?: 0
 
-        // ✅ 顯示 readonly 文字（固定顯示在 XML 的正確位置）
         binding.textPitchRuleReadonly.text = if (isShopping) {
             "消費 $threshold 刮 $giveaway"
         } else {
@@ -1584,16 +1437,10 @@ class SettingsFragment : Fragment() {
         }
         binding.textPitchRuleReadonly.visibility = View.VISIBLE
 
-        // ✅ readonly 規則：隱藏 radio 區塊
         binding.radioGroupPitchType.visibility = View.GONE
-
-        // ✅ readonly 規則：把可編輯 X（spinner/edit）都隱藏，避免誤會可修改
         binding.spinnerClawsCount.visibility = View.GONE
         binding.editClawsCount.visibility = View.GONE
         binding.spinnerGiveawayCount.visibility = View.GONE
-
-        // ✅ 另外：把「夾出/消費」「樣/元」「贈送」「刮」這些 label 也隱藏（避免留空）
-        // 注意：下面這幾個 id 你如果命名不同，請換成你實際的 binding 名稱
         binding.textClawsPrefix.visibility = View.GONE
         binding.textClawsUnit.visibility = View.GONE
         binding.textGiveawayPrefix.visibility = View.GONE
@@ -1603,7 +1450,6 @@ class SettingsFragment : Fragment() {
     private fun hidePitchRuleReadonly() {
         binding.textPitchRuleReadonly.visibility = View.GONE
 
-        // 回到可編輯狀態：label 先打開（接著 applyPitchTypeUi 會決定顯示 spinner 或 edit）
         binding.textClawsPrefix.visibility = View.VISIBLE
         binding.textClawsUnit.visibility = View.VISIBLE
         binding.textGiveawayPrefix.visibility = View.VISIBLE
@@ -1611,8 +1457,6 @@ class SettingsFragment : Fragment() {
 
         binding.radioGroupPitchType.visibility = View.VISIBLE
         binding.spinnerGiveawayCount.visibility = View.VISIBLE
-
-        // claws 的 spinner / edit 由你既有的 applyPitchTypeUi(isShopping=...) 控制
     }
 
     // ===========================================
@@ -1620,7 +1464,6 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun deductScratchTypeStock(scratchType: Int, onComplete: (Boolean) -> Unit) {
-        // ✅ RENTAL 吃到飽：完全不扣背包庫存
         if (currentBillingMode == "RENTAL") {
             onComplete(true)
             return
@@ -1679,6 +1522,7 @@ class SettingsFragment : Fragment() {
         userRef.addValueEventListener(backpackListener!!)
     }
 
+    // 🌟 修改點 15：利用 DataSnapshot 避免強依賴 User.kt
     private fun createBackpackValueEventListener(): ValueEventListener {
         return object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -1687,14 +1531,13 @@ class SettingsFragment : Fragment() {
 
                     val user = snapshot.getValue(User::class.java) ?: return@safeExecute
 
-                    // ✅ 記住目前帳號計費模式
                     currentBillingMode = user.billingMode ?: "POINT"
 
-                    // ✅ RENTAL：吃到飽刮數清單；POINT：用背包庫存清單
                     if (currentBillingMode == "RENTAL") {
                         updateSpinnerForRentalMode()
                     } else {
-                        updateSpinnerWithStockData(user)
+                        // 🌟 改傳 snapshot，而不是 user 實體
+                        updateSpinnerWithStockData(snapshot)
                     }
                 }
             }
@@ -1705,19 +1548,12 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    /**
-     * ✅ 租賃制（RENTAL）：吃到飽
-     * - 刮數下拉顯示「全部刮數」
-     * - 不顯示庫存資訊
-     * - 不因庫存為 0 而禁用項目
-     */
     private fun updateSpinnerForRentalMode() {
         val items = listOf(
-            ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true, showStockInfo = false)
+            ScratchTypeItem(typeStr = "", stock = 0, isPlaceholder = true, showStockInfo = false)
         ) + scratchOrder.map {
             ScratchTypeItem(
-                type = it,
-                // 給一個明確的「可用」值，避免任何舊邏輯誤判
+                typeStr = it,
                 stock = Int.MAX_VALUE,
                 isPlaceholder = false,
                 showStockInfo = false,
@@ -1744,9 +1580,10 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun updateSpinnerWithStockData(user: User) {
-        val stockMap = createStockMap(user)
-        val items = listOf(ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true)) +
+    // 🌟 修改點 16：接收 DataSnapshot 動態取值
+    private fun updateSpinnerWithStockData(snapshot: DataSnapshot) {
+        val stockMap = createStockMap(snapshot)
+        val items = listOf(ScratchTypeItem(typeStr = "", stock = 0, isPlaceholder = true)) +
                 scratchOrder.map { ScratchTypeItem(it, stockMap[it] ?: 0) }
         val currentSelection = binding.spinnerScratchesCount.selectedItemPosition
 
@@ -1758,31 +1595,20 @@ class SettingsFragment : Fragment() {
             binding.spinnerScratchesCount.setSelection(currentSelection)
         }
 
-        // ★ 延遲重置標記，確保 setSelection 的回調完成
         viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(100)
             isUpdatingSpinner = false
         }
     }
 
-
-
-    private fun createStockMap(user: User): Map<Int, Int> {
-        return mapOf(
-            10 to (user.scratchType_10 ?: 0),
-            20 to (user.scratchType_20 ?: 0),
-            25 to (user.scratchType_25 ?: 0),
-            30 to (user.scratchType_30 ?: 0),
-            40 to (user.scratchType_40 ?: 0),
-            50 to (user.scratchType_50 ?: 0),
-            60 to (user.scratchType_60 ?: 0),
-            80 to (user.scratchType_80 ?: 0),
-            100 to (user.scratchType_100 ?: 0),
-            120 to (user.scratchType_120 ?: 0),
-            160 to (user.scratchType_160 ?: 0),
-            200 to (user.scratchType_200 ?: 0),
-            240 to (user.scratchType_240 ?: 0)
-        )
+    // 🌟 修改點 17：動態讀取資料庫欄位，不受限於 User.kt
+    private fun createStockMap(snapshot: DataSnapshot): Map<String, Int> {
+        val map = mutableMapOf<String, Int>()
+        for (type in scratchOrder) {
+            val stock = snapshot.child("scratchType_$type").getValue(Int::class.java) ?: 0
+            map[type] = stock
+        }
+        return map
     }
 
     // ===========================================
@@ -1791,13 +1617,12 @@ class SettingsFragment : Fragment() {
 
     private fun initSpinnerWithPlaceholder() {
         safeExecute("初始化 Spinner") {
-            val items = listOf(ScratchTypeItem(type = 0, stock = 0, isPlaceholder = true)) +
+            val items = listOf(ScratchTypeItem(typeStr = "", stock = 0, isPlaceholder = true)) +
                     scratchOrder.map { ScratchTypeItem(it, stock = 1) }
 
             val adapter = buildStockAwareAdapter(items)
             binding.spinnerScratchesCount.adapter = adapter
 
-            // ✅ 預設就是「請選擇」
             suppressNextScratchTypeSelectionEvent = true
             binding.spinnerScratchesCount.setSelection(0)
         }
@@ -1817,8 +1642,8 @@ class SettingsFragment : Fragment() {
                 return try {
                     val item = getItem(position) ?: return false
                     if (item.isPlaceholder) return false
-                    if (item.selectableWithoutStock) return true   // ✅ RENTAL
-                    item.stock > 0                                 // ✅ POINT
+                    if (item.selectableWithoutStock) return true
+                    item.stock > 0
                 } catch (e: Exception) {
                     false
                 }
@@ -1840,7 +1665,6 @@ class SettingsFragment : Fragment() {
                 }
             }
 
-            /** 🔹 自訂每一行的文字樣式（縮小字體、防裁切） **/
             private fun createCustomTextView(
                 position: Int,
                 convertView: View?,
@@ -1851,10 +1675,10 @@ class SettingsFragment : Fragment() {
                     val view = defaultView() as TextView
                     val enabled = isEnabled(position)
                     view.setTextColor(if (enabled) Color.BLACK else Color.GRAY)
-                    view.textSize = 13f            // ✅ 調小字體
-                    view.setPadding(12, 6, 12, 6)  // ✅ 減少內邊距
-                    view.isSingleLine = true       // ✅ 單行顯示
-                    view.ellipsize = android.text.TextUtils.TruncateAt.END // ✅ 超出用…
+                    view.textSize = 13f
+                    view.setPadding(12, 6, 12, 6)
+                    view.isSingleLine = true
+                    view.ellipsize = android.text.TextUtils.TruncateAt.END
                     view
                 } catch (e: Exception) {
                     TextView(requireContext()).apply {
@@ -1871,31 +1695,31 @@ class SettingsFragment : Fragment() {
     // 工具方法
     // ===========================================
 
-    // ✅ 新增：處理特獎數字鍵盤點擊
     private fun handleSpecialPrizeKeyboardClick() {
-        val selectedScratchType = getCurrentScratchType()
-        if (selectedScratchType == null) {
+        val selectedScratchTypeStr = getCurrentScratchType()
+        if (selectedScratchTypeStr == null) {
             showToast("請先選擇刮數")
             return
         }
 
         val currentValue = binding.editTextSpecialPrize.text.toString()
 
+        // 🌟 轉為 Int 餵給 UIManager (如果是分割版面先塞 240 頂著，避免紅字)
+        val scratchTypeInt = selectedScratchTypeStr.toIntOrNull() ?: 240
+
         uiManager.showSpecialPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
-            currentScratchType = selectedScratchType,
+            currentScratchType = scratchTypeInt,
             onConfirm = { validatedInput ->
 
-                // 將特獎輸入去掉前導 0
                 val specialPrizeNumber = validatedInput.toIntOrNull()
                 if (specialPrizeNumber == null) {
                     showToast("無效的特獎數字")
                     return@showSpecialPrizeKeyboard
                 }
 
-                val cleaned = specialPrizeNumber.toString()  // 移除前導 0
+                val cleaned = specialPrizeNumber.toString()
 
-                // === ⭐ 驗證：特獎不可與大獎重複 ===
                 val grandText = binding.editTextGrandPrize.text.toString()
                 if (grandText.isNotEmpty()) {
                     val grandList = grandText.split(",")
@@ -1904,11 +1728,10 @@ class SettingsFragment : Fragment() {
 
                     if (grandList.contains(specialPrizeNumber)) {
                         showToast("特獎不能與大獎重複！")
-                        return@showSpecialPrizeKeyboard  // ❗ 重要：視窗不關閉，輸入不清空
+                        return@showSpecialPrizeKeyboard
                     }
                 }
 
-                // === 以上驗證全部通過才會執行以下更新 ===
                 binding.editTextSpecialPrize.setText(cleaned)
 
                 currentPreviewFragment?.setSelectedNumber(specialPrizeNumber)
@@ -1918,22 +1741,22 @@ class SettingsFragment : Fragment() {
         )
     }
 
-    // ✅ 新增：處理大獎數字鍵盤點擊
     private fun handleGrandPrizeKeyboardClick() {
-        val selectedScratchType = getCurrentScratchType()
-        if (selectedScratchType == null) {
+        val selectedScratchTypeStr = getCurrentScratchType()
+        if (selectedScratchTypeStr == null) {
             showToast("請先選擇刮數")
             return
         }
 
         val currentValue = binding.editTextGrandPrize.text.toString()
 
+        val scratchTypeInt = selectedScratchTypeStr.toIntOrNull() ?: 240
+
         uiManager.showGrandPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
-            currentScratchType = selectedScratchType,
+            currentScratchType = scratchTypeInt,
             onConfirm = { validatedInput ->
 
-                // === 清洗：拆分、去空白、移除前導零 ===
                 val cleanedList = validatedInput.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -1944,19 +1767,16 @@ class SettingsFragment : Fragment() {
                     return@showGrandPrizeKeyboard
                 }
 
-                // 轉成 Int 並排序
                 val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
 
-                // === ⭐ 驗證：大獎不可包含特獎 ===
                 val specialText = binding.editTextSpecialPrize.text.toString()
                 val specialNumber = specialText.toIntOrNull()
 
                 if (specialNumber != null && sortedList.contains(specialNumber)) {
                     showToast("大獎不能包含特獎數字！")
-                    return@showGrandPrizeKeyboard  // ❗ 重要：視窗不關閉，輸入不清空
+                    return@showGrandPrizeKeyboard
                 }
 
-                // === 全驗證通過 → 更新 ===
                 val sortedText = sortedList.joinToString(", ")
                 binding.editTextGrandPrize.setText(sortedText)
 
@@ -1968,7 +1788,7 @@ class SettingsFragment : Fragment() {
     }
 
     // ===========================================
-    // ✅ 自動刮開
+    // 自動刮開
     // ===========================================
 
     private fun handleAutoScratchClick() {
@@ -1985,7 +1805,6 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 計算可刮的最大數量（扣掉：已刮 + 特獎 + 大獎 的聯集）
         val maxX = calcAutoScratchMaxX(selectedCard)
         if (maxX <= 0) {
             showToast("沒有可刮開的格子（已刮/特獎/大獎皆已占滿）")
@@ -1999,10 +1818,6 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    /**
-     * ✅ X 上限規則：
-     * maxX = 可刮格子數量（排除：已刮 + 特獎 + 大獎 的聯集）
-     */
     private fun calcAutoScratchMaxX(card: ScratchCard): Int {
         val configs = card.numberConfigurations ?: return 0
 
@@ -2012,22 +1827,15 @@ class SettingsFragment : Fragment() {
             .mapNotNull { it.trim().toIntOrNull() }
             .toSet()
 
-        // 不可刮集合（聯集）：已刮 + 特獎 + 大獎
         val unavailableNumbers = mutableSetOf<Int>()
         configs.filter { it.scratched }.forEach { unavailableNumbers.add(it.number) }
         if (special != null) unavailableNumbers.add(special)
         unavailableNumbers.addAll(grandSet)
 
-        // ✅ 真正可刮的格子：尚未 scratched 且 number 不在 unavailableNumbers
         val eligible = configs.filter { !it.scratched && !unavailableNumbers.contains(it.number) }
         return eligible.size
     }
 
-    /**
-     * ✅ 參考商城的自訂數字鍵盤（dialog_quantity_input）
-     * - 輸入時允許 0 / 空字串（方便刪掉重打）
-     * - 按確定才檢查：必須在 1..maxX，否則 Toast 告警且不關閉 dialog
-     */
     private fun showAutoScratchInputDialog(
         maxX: Int,
         onConfirm: (Int) -> Unit
@@ -2053,20 +1861,14 @@ class SettingsFragment : Fragment() {
         val btn8 = dialogView.findViewById<Button>(R.id.dialog_btn_8)
         val btn9 = dialogView.findViewById<Button>(R.id.dialog_btn_9)
 
-        // ✅ 預設空白（你也可改成 "0"）
         edit.setText("")
         edit.setSelection(edit.text.length)
 
-        // ⭐ 修改點 1：徹底禁用系統鍵盤
-        // XML 中定義了 inputType="number"，這會導致某些平板忽略 showSoftInputOnFocus
-        // 所以這裡必須程式化覆寫為 TYPE_NULL
         edit.showSoftInputOnFocus = false
         edit.inputType = android.text.InputType.TYPE_NULL
 
-        // 保持游標可見 (有些設備設為 TYPE_NULL 會隱藏游標)
         edit.isCursorVisible = true
 
-        // ✅ 禁用系統鍵盤
         edit.showSoftInputOnFocus = false
 
         fun getText(): String = edit.text?.toString() ?: ""
@@ -2077,34 +1879,28 @@ class SettingsFragment : Fragment() {
 
         fun currentValue(): Int = getText().toIntOrNull() ?: 0
 
-        // ✅ 允許 0..maxX（編輯中不強迫最小=1）
         fun setValue(v: Int) {
             val value = v.coerceIn(0, maxX)
             setText(value.toString())
         }
 
-        // +/-：允許到 0
         btnMinus.setOnClickListener { setValue(currentValue() - 1) }
         btnPlus.setOnClickListener { setValue(currentValue() + 1) }
 
-        // 清除：清成空字串（完全可重打）
         btnClear.setOnClickListener {
             setText("")
         }
 
-        // 退格：允許刪到空
         btnDelete.setOnClickListener {
             val t = getText()
             val newText = if (t.isNotEmpty()) t.dropLast(1) else ""
             setText(newText)
         }
 
-        // 0~9：採「在尾端追加」模式（因為你禁用了系統鍵盤）
         val numberClickListener = View.OnClickListener { v ->
             val digit = (v as Button).text.toString()
             val current = getText()
 
-            // 讓輸入更順手：避免前導 0 一直堆疊（例如 0005 → 5）
             val merged = (current + digit)
             val normalized = merged.trimStart('0')
             val finalText = if (normalized.isEmpty()) "0" else normalized
@@ -2123,21 +1919,18 @@ class SettingsFragment : Fragment() {
         val dlg = AlertDialog.Builder(requireContext())
             .setTitle("自動刮開設定（0～$maxX）")
             .setView(dialogView)
-            .setPositiveButton("確定", null) // ✅ 攔截：不要自動關閉
+            .setPositiveButton("確定", null)
             .setNegativeButton("取消", null)
             .create()
 
-        // ⭐ 修改點 2：設定 Window 屬性強制隱藏鍵盤
         dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
 
         dlg.setOnShowListener {
-            // ✅ 修正：讓 Toast 顯示在「數字鍵盤 Dialog」層級上方
             ToastManager.setHostWindow(dlg.window)
 
             dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val x = currentValue()
 
-                // ✅ 按確定才防呆
                 if (x <= 0) {
                     showToast("請輸入 1～$maxX")
                     return@setOnClickListener
@@ -2152,7 +1945,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // ✅ Dialog 關閉後務必清掉 host window，避免影響其他頁面的 Toast 層級
         dlg.setOnDismissListener {
             ToastManager.clearHostWindow()
         }
@@ -2160,9 +1952,6 @@ class SettingsFragment : Fragment() {
         dlg.show()
     }
 
-    /**
-     * ✅ 二次確認視窗
-     */
     private fun showAutoScratchConfirmDialog(x: Int, onConfirm: () -> Unit) {
         AlertDialog.Builder(requireContext())
             .setTitle("確認刮開")
@@ -2175,13 +1964,6 @@ class SettingsFragment : Fragment() {
             .show()
     }
 
-    /**
-     * ✅ 真正執行自動刮開：
-     * 1) 隨機挑 eligible 的 X 格 → 設 scratched=true
-     * 2) 預覽區立即刷新
-     * 3) 寫回 Firebase（透過 viewModel.upsertCard）
-     * 4) ✅【新增】成功刮開 >=1 格後，立刻把右側參數區切換為唯讀模式
-     */
     private fun performAutoScratch(card: ScratchCard, x: Int) {
         val order = shelfManager.selectedShelfOrder
         val configs = card.numberConfigurations?.map { it.copy() }?.toMutableList() ?: run {
@@ -2218,13 +2000,11 @@ class SettingsFragment : Fragment() {
             scratchedNumbers.add(configs[idx].number)
         }
 
-        // ✅ 讓預覽區立刻顯示刮開
         currentPreviewFragment?.scratchNumbers(scratchedNumbers)
 
-        // ✅ 寫回資料（保留原本欄位）
         viewModel.upsertCard(
             order = order,
-            scratchesType = card.scratchesType ?: getCurrentScratchType() ?: 0,
+            scratchesType = card.scratchesType ?: getCurrentScratchType()?.toIntOrNull() ?: 0,
             specialPrize = card.specialPrize,
             grandPrize = card.grandPrize,
             clawsCount = card.clawsCount,
@@ -2234,40 +2014,33 @@ class SettingsFragment : Fragment() {
             keepInUsed = card.inUsed
         )
 
-        // ✅ 立即更新「剩餘刮數」顯示（不等 viewModel 回推）
         val updatedCard = card.copy(numberConfigurations = configs)
         val tempCards = viewModel.cards.value.toMutableMap()
         tempCards[order] = updatedCard
         updateRemainingScratchesInfo(tempCards)
 
-        // ✅【新增】自動刮開成功 >=1 格後，立即切換為唯讀模式
-        // 讓使用者當下就看到「不能再改參數」的狀態，不用等 Firebase 回推
         showSetShelfState(updatedCard)
 
         showToast("已自動刮開 ${eligibleIdx.size} 格")
     }
 
-    // ✅ 新增：獲取當前選擇的刮數
-    // ✅ 修正版：獲取當前刮數（優先用「目前板位卡片」的 scratchesType，避免 spinner 隱藏時讀到請選擇）
-    private fun getCurrentScratchType(): Int? {
+    // 🌟 修改點 18：取得字串，避免 Null 例外
+    private fun getCurrentScratchType(): String? {
         return try {
-            // 1) ✅ 若目前板位已設置卡片：直接用卡片的 scratchesType（最準）
             val order = shelfManager.selectedShelfOrder
             val cardType = viewModel.cards.value[order]?.scratchesType
-            if (cardType != null && cardType > 0) return cardType
+            if (cardType != null && cardType > 0) return cardType.toString()
 
-            // 2) ✅ 若未設置但有草稿：用草稿記錄的 scratchType
             val draftType = viewModel.getDraft(order)?.scratchType
-            if (draftType != null && draftType > 0) return draftType
+            if (draftType != null && draftType > 0) return draftType.toString()
 
-            // 3) 最後才讀 spinner（未設置狀態下才合理）
             val selectedItem = binding.spinnerScratchesCount.selectedItem
             when (selectedItem) {
-                is ScratchTypeItem -> selectedItem.getScratchType()
+                is ScratchTypeItem -> selectedItem.getScratchTypeString()
                 is String -> {
-                    val regex = Regex("(\\d+)刮")
+                    val regex = Regex("(\\d+(x\\d+)?)刮")
                     val match = regex.find(selectedItem)
-                    match?.groupValues?.get(1)?.toInt()
+                    match?.groupValues?.get(1)
                 }
                 else -> null
             }
@@ -2297,17 +2070,14 @@ class SettingsFragment : Fragment() {
         returnBtn: Boolean = true,
         delete: Boolean = true
     ) {
-        // 定義顏色
         val colorDisabled = android.graphics.Color.LTGRAY
-        val colorBlue = android.graphics.Color.parseColor("#2196F3") // 儲存鍵專用藍色
-        // Android 預設紫色 (Material Purple 500)，如果不夠準確可改為 #6750A4 (Material 3)
+        val colorBlue = android.graphics.Color.parseColor("#2196F3")
         val colorPurple = android.graphics.Color.parseColor("#6750A4")
 
         val disabledTint = android.content.res.ColorStateList.valueOf(colorDisabled)
         val blueTint = android.content.res.ColorStateList.valueOf(colorBlue)
         val purpleTint = android.content.res.ColorStateList.valueOf(colorPurple)
 
-        // ✅ 小工具：同時控制「能不能按」+「顏色切換」
         fun apply(button: View, enabled: Boolean) {
             button.isEnabled = enabled
             button.isClickable = enabled
@@ -2315,34 +2085,28 @@ class SettingsFragment : Fragment() {
 
             if (button is Button) {
                 if (enabled) {
-                    // 🟢 啟用狀態：根據按鈕 ID 決定顏色
                     if (button.id == R.id.button_save_settings) {
-                        button.backgroundTintList = blueTint // 儲存 -> 藍色
+                        button.backgroundTintList = blueTint
                     } else {
-                        button.backgroundTintList = purpleTint // 其他 -> 紫色
+                        button.backgroundTintList = purpleTint
                     }
                     button.alpha = 1.0f
                 } else {
-                    // 🛑 禁用狀態：統一設為灰色
                     button.backgroundTintList = disabledTint
                     button.alpha = 0.7f
                 }
             } else {
-                // 非 Button 的 View
                 button.alpha = if (enabled) 1.0f else 0.35f
             }
         }
 
-        // 判斷儲存按鈕是否須強制禁用 (使用中或已刮過)
         val order = shelfManager.selectedShelfOrder
         val card = viewModel.cards.value[order]
         val forceDisableSave = (card != null) && (card.inUsed || hasBeenScratched(card))
 
-        // 套用設定
         apply(binding.buttonSaveSettings, if (forceDisableSave) false else save)
         apply(binding.buttonToggleInuse, toggleInUse)
         apply(binding.buttonAutoScratch, autoScratch)
-        // ✅ 租賃制：禁用「返回」按鈕（不允許回收）
         val returnEnabled = returnBtn && (currentBillingMode != "RENTAL")
         apply(binding.buttonReturnSelected, returnEnabled)
         apply(binding.buttonDeleteSelected, delete)
@@ -2408,21 +2172,23 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun getScratchDimensions(scratchType: Int): String {
-        return when (scratchType) {
-            10 -> "2x5"
-            20 -> "4x5"
-            25 -> "5x5"
-            30 -> "5x6"
-            40 -> "5x8"
-            50 -> "5x10"
-            60 -> "6x10"
-            80 -> "8x10"
-            100 -> "10x10"
-            120 -> "10x12"
-            160 -> "10x16"
-            200 -> "10x20"
-            240 -> "12x20"
+    // 🌟 修改點 19：讓 getScratchDimensions 支援字串
+    private fun getScratchDimensions(scratchTypeStr: String): String {
+        return when (scratchTypeStr) {
+            "10" -> "2x5"
+            "20" -> "4x5"
+            "25" -> "5x5"
+            "30" -> "5x6"
+            "40" -> "5x8"
+            "50" -> "5x10"
+            "60" -> "6x10"
+            "80" -> "8x10"
+            "100" -> "10x10"
+            "120" -> "10x12"
+            "160" -> "10x16"
+            "200" -> "10x20"
+            "240" -> "12x20"
+            "20x4", "20x6", "25x4", "25x6", "30x4", "30x6" -> "分割預覽" // 暫時給定文字，不影響目前邏輯
             else -> "未知"
         }
     }
@@ -2444,28 +2210,21 @@ class SettingsFragment : Fragment() {
 
     override fun onStop() {
         super.onStop()
-        // ✅ 按 HOME / 多工鍵離開時：把目前板位草稿存起來
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
     }
 
-    // ✅ 只在「未設置狀態 / 尚未儲存」時保存草稿（避免覆蓋已設置卡片的正式資料）
     private fun saveDraftIfNeeded(order: Int) {
         val hasCard = viewModel.cards.value[order] != null
         if (hasCard) return
 
-        // ✅ 對應該板位的預覽：若剛好沒有 preview（例如尚未選刮數），configs 就留 null
         val configs = currentPreviewFragment?.getGeneratedNumberConfigurations()
 
         val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
-        val scratchType = selectedItem?.getScratchType()
+        val scratchTypeStr = selectedItem?.getScratchTypeString()
 
-        // ✅ 草稿也要記住目前規則
         val isShopping = binding.radioPitchShopping.isChecked
         val pitchType = if (isShopping) "shopping" else "scratch"
 
-        // ✅ claws 的來源依模式決定：
-        // - scratch：spinner 1~5
-        // - shopping：editClawsCount（0以上整數，空視為0）
         val clawsValue: Int? = if (isShopping) {
             val t = binding.editClawsCount.text?.toString()?.trim().orEmpty()
             if (t.isEmpty()) 0 else t.toIntOrNull()
@@ -2474,7 +2233,7 @@ class SettingsFragment : Fragment() {
         }
 
         val draft = SettingsViewModel.SettingsDraft(
-            scratchType = scratchType,
+            scratchType = scratchTypeStr?.toIntOrNull() ?: 0, // 分割版面草稿先存 0
             specialPrize = binding.editTextSpecialPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
             grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
             claws = clawsValue,
@@ -2486,8 +2245,8 @@ class SettingsFragment : Fragment() {
         viewModel.saveDraft(order, draft)
     }
 
-    // ✅ 依 scratchType（Int）把 spinner 指到對應項目（adapter 是 ScratchTypeItem）
-    private fun setScratchTypeSpinnerSelection(scratchType: Int) {
+    // 🌟 修改點 20：比對字串
+    private fun setScratchTypeSpinnerSelection(scratchTypeStr: String) {
         isUpdatingSpinner = true
         try {
             val adapter = binding.spinnerScratchesCount.adapter ?: return
@@ -2496,19 +2255,17 @@ class SettingsFragment : Fragment() {
             var targetPos: Int? = null
             for (i in 0 until adapter.count) {
                 val item = adapter.getItem(i) as? ScratchTypeItem ?: continue
-                if (item.getScratchType() == scratchType) {
+                if (item.getScratchTypeString() == scratchTypeStr) {
                     targetPos = i
                     break
                 }
             }
             if (targetPos == null) return
 
-            // ✅ 只有「真的會變更選擇」才 suppress 下一次事件
             if (targetPos != currentPos) {
                 suppressNextScratchTypeSelectionEvent = true
                 binding.spinnerScratchesCount.setSelection(targetPos)
             } else {
-                // 同一個 selection，不要 suppress，避免卡住下一次使用者操作
                 suppressNextScratchTypeSelectionEvent = false
             }
         } finally {
@@ -2517,34 +2274,26 @@ class SettingsFragment : Fragment() {
     }
 
     private fun applyPitchTypeUi(isShopping: Boolean, syncValues: Boolean = true) {
-
-        // ✅ 文字切換：夾出/樣 ↔ 消費/元
         binding.textClawsPrefix.text = if (isShopping) "消費" else "夾出"
         binding.textClawsUnit.text = if (isShopping) "元" else "樣"
 
         if (isShopping) {
-            // shopping：只切換「觸發門檻」(claws)
             binding.spinnerClawsCount.visibility = View.GONE
             binding.editClawsCount.visibility = View.VISIBLE
 
-            // 贈送永遠用 spinner（不切換）
             binding.spinnerGiveawayCount.visibility = View.VISIBLE
 
             if (syncValues) {
-                // spinner -> input（只同步 claws）
                 val claws = binding.spinnerClawsCount.selectedItem?.toString()?.toIntOrNull() ?: 1
                 binding.editClawsCount.setText(claws.toString())
             }
         } else {
-            // scratch：只切換「觸發門檻」(claws)
             binding.spinnerClawsCount.visibility = View.VISIBLE
             binding.editClawsCount.visibility = View.GONE
 
-            // 贈送永遠用 spinner（不切換）
             binding.spinnerGiveawayCount.visibility = View.VISIBLE
 
             if (syncValues) {
-                // input -> spinner（spinner 只有 1-5，所以壓回 1..5）
                 val claws = binding.editClawsCount.text?.toString()?.toIntOrNull() ?: 1
                 setSpinnerSelection(binding.spinnerClawsCount, claws.coerceIn(1, 5))
             }
@@ -2552,7 +2301,6 @@ class SettingsFragment : Fragment() {
     }
 
     private fun applySavedPitchRule(card: ScratchCard?) {
-        // 沒卡片/沒資料：維持預設（夾出贈送 + spinner）
         if (card == null) {
             binding.radioPitchScratch.isChecked = true
             applyPitchTypeUi(isShopping = false, syncValues = false)
@@ -2564,19 +2312,16 @@ class SettingsFragment : Fragment() {
             binding.radioPitchShopping.isChecked = true
             applyPitchTypeUi(isShopping = true, syncValues = false)
 
-            // clawsCount 在 shopping 模式代表「消費門檻（元）」
             val v = card.clawsCount ?: 0
             binding.editClawsCount.setText(v.toString())
         } else {
             binding.radioPitchScratch.isChecked = true
             applyPitchTypeUi(isShopping = false, syncValues = false)
 
-            // clawsCount 在 scratch 模式代表「夾出門檻（1-5）」
             val v = (card.clawsCount ?: 1).coerceIn(1, 5)
             setSpinnerSelection(binding.spinnerClawsCount, v)
         }
 
-        // giveaway 永遠是 spinner（1-5）
         val give = (card.giveawayCount ?: 1).coerceIn(1, 5)
         setSpinnerSelection(binding.spinnerGiveawayCount, give)
     }
