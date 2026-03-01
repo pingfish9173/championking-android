@@ -145,10 +145,10 @@ class ScratchBoardPreviewFragment : Fragment() {
 
         val type = scratchesType ?: "25刮 (5x5)"
 
-        // 根據刮數類型載入對應的設置介面專用布局
-        val scratchCount = extractScratchCount(type)
-        if (scratchCount > 0) {
-            setupPreviewWithXml(scratchCount)
+        // 🌟 修改點 1：取得完整的字串 (例如 "25" 或 "20x4")
+        val typeStr = extractScratchTypeStr(type)
+        if (typeStr.isNotEmpty()) {
+            setupPreviewWithXml(typeStr)
         } else {
             // 降級：使用原本的動態生成方式
             setupGridLayout(type)
@@ -166,21 +166,25 @@ class ScratchBoardPreviewFragment : Fragment() {
         }
     }
 
-    // 從類型字串中提取刮數
-    private fun extractScratchCount(type: String): Int {
+    // 🌟 修改點 2：從字串中精準萃取版型字串 (過濾掉 "刮" 之後的字)
+    private fun extractScratchTypeStr(type: String): String {
         return try {
-            val regex = Regex("(\\d+)刮")
+            val regex = Regex("([^\\s刮]+)")
             val match = regex.find(type)
-            match?.groupValues?.get(1)?.toInt() ?: 0
+            match?.groupValues?.get(1)?.trim() ?: ""
         } catch (e: Exception) {
-            Log.e(TAG, "無法從類型中提取刮數: $type", e)
-            0
+            Log.e(TAG, "無法從類型中提取刮數字串: $type", e)
+            ""
         }
     }
 
-    // 根據刮數返回對應的設置介面專用布局資源ID
-    private fun getSettingsPreviewLayoutResource(scratchCount: Int): Int {
-        val resourceName = "settings_preview_$scratchCount"
+    // 🌟 修改點 3：支援解析分割版面的 XML 名稱 (例如 20x4 -> split_20_x4)
+    private fun getSettingsPreviewLayoutResource(typeStr: String): Int {
+        val resourceName = if (typeStr.contains("x")) {
+            "settings_preview_split_${typeStr.replace("x", "_x")}"
+        } else {
+            "settings_preview_$typeStr"
+        }
         return try {
             resources.getIdentifier(resourceName, "layout", requireContext().packageName)
         } catch (e: Exception) {
@@ -189,40 +193,46 @@ class ScratchBoardPreviewFragment : Fragment() {
         }
     }
 
-    private fun setupPreviewWithXml(scratchCount: Int) {
+    // 🌟 修改點 4：依據字串載入 XML，並讓分割版面跳過格子繪製
+    private fun setupPreviewWithXml(typeStr: String) {
         try {
-            val layoutResId = getSettingsPreviewLayoutResource(scratchCount)
+            val layoutResId = getSettingsPreviewLayoutResource(typeStr)
 
             if (layoutResId != 0) {
                 grid.removeAllViews()
-                val configs = getOrGenerateConfigs(scratchCount)
+                val isSplit = typeStr.contains("x")
 
                 val view = LayoutInflater.from(requireContext())
                     .inflate(layoutResId, grid, false)
 
                 grid.addView(view)
 
-                // 設置每個格子
-                setupCellsFromXml(view, configs)
-                generatedNumberConfigurations = ArrayList(configs)
+                if (!isSplit) {
+                    val scratchCount = typeStr.toIntOrNull() ?: 25
+                    val configs = getOrGenerateConfigs(scratchCount)
+                    setupCellsFromXml(view, configs)
+                    generatedNumberConfigurations = ArrayList(configs)
+                    applyModesAndMarkers()
+                } else {
+                    // 分割版面階段一：單純顯示 ABCD 外殼，暫不配置格子
+                    generatedNumberConfigurations = null
+                    Log.d(TAG, "載入分割版面 $typeStr 外殼成功")
+                }
 
-                // 初始套用模式與標記
-                applyModesAndMarkers()
-
-                Log.d(TAG, "成功載入${scratchCount}刮版型預覽(XML版本)")
+                Log.d(TAG, "成功載入${typeStr}刮版型預覽(XML版本)")
             } else {
-                Log.w(TAG, "找不到 settings_preview_${scratchCount}.xml,使用動態生成")
-                fallbackToDynamicLayout(scratchCount)
+                Log.w(TAG, "找不到 XML 資源，使用動態生成")
+                fallbackToDynamicLayout(typeStr)
             }
         } catch (e: Exception) {
             Log.e(TAG, "載入XML佈局失敗: ${e.message}", e)
-            fallbackToDynamicLayout(scratchCount)
+            fallbackToDynamicLayout(typeStr)
         }
     }
 
     private fun setupCellsFromXml(containerView: View, configs: List<NumberConfiguration>) {
         cellViews.clear()
-        textViews.clear()  // ← 新增
+        textViews.clear()
 
         val gridLayout = containerView.findViewById<ViewGroup>(R.id.gridLayout)
         if (gridLayout == null) {
@@ -247,7 +257,7 @@ class ScratchBoardPreviewFragment : Fragment() {
 
                 cellViews[cellNumber] = cellView
                 if (textView != null) {
-                    textViews[cellNumber] = textView  // ← 保存引用
+                    textViews[cellNumber] = textView
                 }
                 setupCellForSettings(cellView, textView, cellNumber, configs)
             } else {
@@ -259,7 +269,7 @@ class ScratchBoardPreviewFragment : Fragment() {
                 val textView = cellView as? TextView
                 cellViews[cellNumber] = cellView
                 if (textView != null) {
-                    textViews[cellNumber] = textView  // ← 保存引用
+                    textViews[cellNumber] = textView
                 }
                 setupCellForSettings(cellView, textView, cellNumber, configs)
             }
@@ -321,10 +331,10 @@ class ScratchBoardPreviewFragment : Fragment() {
             if (grandSelectedNumbers.contains(number)) {
                 grandSelectedNumbers.remove(number)
             } else {
-                // ★ 新增：依刮數類型限制大獎數量
                 val limit = getGrandLimitByScratchType()
                 if (limit > 0 && grandSelectedNumbers.size >= limit) {
-                    val currentCount = extractScratchCount(scratchesType ?: "")
+                    // 🌟 修改點 5：對應新的字串擷取
+                    val currentCount = extractScratchTypeStr(scratchesType ?: "")
                     activity?.let {
                         ToastManager.show(it, "${currentCount}刮的大獎數量限制為 ${limit} 個")
                     }
@@ -412,7 +422,7 @@ class ScratchBoardPreviewFragment : Fragment() {
                 numberTextView = TextView(requireContext()).apply {
                     tag = "number_text"
                     text = number.toString()
-                    textSize = 24f // 調整為更大的字體，配合52dp的圓圈
+                    textSize = 24f
                     setTextColor(textColor)
                     gravity = Gravity.CENTER
                     layoutParams = FrameLayout.LayoutParams(
@@ -426,7 +436,7 @@ class ScratchBoardPreviewFragment : Fragment() {
             } else {
                 numberTextView.text = number.toString()
                 numberTextView.setTextColor(textColor)
-                numberTextView.textSize = 24f // 統一字體大小
+                numberTextView.textSize = 24f
                 numberTextView.visibility = View.VISIBLE
             }
         }
@@ -448,10 +458,15 @@ class ScratchBoardPreviewFragment : Fragment() {
         return grandSelectedNumbers.contains(number)
     }
 
-    // 降級到動態布局
-    private fun fallbackToDynamicLayout(scratchCount: Int) {
-        val dims = getRowsColsFromTotal(scratchCount)
-        setupGridLayout("${scratchCount}刮 (${dims.first}x${dims.second})")
+    // 🌟 修改點 6：如果是分割版面就顯示提示，不是才繼續走動態生成
+    private fun fallbackToDynamicLayout(typeStr: String) {
+        if (typeStr.contains("x")) {
+            showErrorMessage("尚無 ${typeStr} 預覽版型")
+        } else {
+            val scratchCount = typeStr.toIntOrNull() ?: 25
+            val dims = getRowsColsFromTotal(scratchCount)
+            setupGridLayout("${scratchCount}刮 (${dims.first}x${dims.second})")
+        }
     }
 
     // 設置格子佈局（原有的動態生成方式）
@@ -500,8 +515,8 @@ class ScratchBoardPreviewFragment : Fragment() {
         if (singlePickEnabled == enabled) return
         singlePickEnabled = enabled
         if (enabled) multiPickEnabled = false
-        updateHintBarText()     // ✅ 改在這裡更新提示字
-        applyModesAndMarkers()  // ✅ 再刷新格子狀態
+        updateHintBarText()
+        applyModesAndMarkers()
     }
 
     fun setMultiPickEnabled(enabled: Boolean) {
@@ -509,8 +524,8 @@ class ScratchBoardPreviewFragment : Fragment() {
         if (multiPickEnabled == enabled) return
         multiPickEnabled = enabled
         if (enabled) singlePickEnabled = false
-        updateHintBarText()     // ✅ 改在這裡更新提示字
-        applyModesAndMarkers()  // ✅ 再刷新格子狀態
+        updateHintBarText()
+        applyModesAndMarkers()
     }
 
 
@@ -534,9 +549,6 @@ class ScratchBoardPreviewFragment : Fragment() {
         generatedNumberConfigurations
     fun getScratchesType(): String? = scratchesType
 
-    /**
-     * ✅ 由 SettingsFragment 呼叫：指定一些 number 直接設為 scratched=true，並刷新預覽
-     */
     fun scratchNumbers(numbers: Collection<Int>) {
         if (numbers.isEmpty()) return
         val set = numbers.toSet()
@@ -566,7 +578,7 @@ class ScratchBoardPreviewFragment : Fragment() {
         }
     }
 
-    // 專職更新上方提示文字
+    // 🌟 修改點 7：對應新的字串擷取
     private fun updateHintBarText() {
         when {
             readonlyMode -> {
@@ -580,10 +592,10 @@ class ScratchBoardPreviewFragment : Fragment() {
             }
 
             multiPickEnabled -> {
-                val count = extractScratchCount(scratchesType ?: "")
+                val countStr = extractScratchTypeStr(scratchesType ?: "")
                 val limit = getGrandLimitByScratchType()
                 val text = if (limit > 0) {
-                    "請點選一個或多個數字作為「大獎」（再點可取消）\n${count}刮的大獎數量限制為 ${limit} 個"
+                    "請點選一個或多個數字作為「大獎」（再點可取消）\n${countStr}刮的大獎數量限制為 ${limit} 個"
                 } else {
                     "請點選一個或多個數字作為「大獎」（再點可取消）"
                 }
@@ -603,12 +615,10 @@ class ScratchBoardPreviewFragment : Fragment() {
             val isScratched = numberConfig?.scratched == true
             val number = numberConfig?.number
 
-            // ★ 直接從 map 中取得 TextView
             val textView = textViews[cellNumber]
 
             updateCellDisplay(cellView, textView, isScratched, number)
 
-            // 重新設定點擊事件
             val clickTarget = cellView.parent as? View ?: cellView
 
             if (!readonlyMode && (singlePickEnabled || multiPickEnabled)) {
@@ -624,7 +634,6 @@ class ScratchBoardPreviewFragment : Fragment() {
     }
 
     private fun updateGridCells() {
-        // 由 number -> config 快取，便於查 scratched
         val cfgByNumber = (generatedNumberConfigurations ?: emptyList()).associateBy { it.number }
 
         grid.children.forEach { view ->
@@ -774,7 +783,6 @@ class ScratchBoardPreviewFragment : Fragment() {
         }
     }
 
-    // 根據總數推算行列數
     private fun getRowsColsFromTotal(total: Int): Pair<Int, Int> {
         return when (total) {
             10 -> Pair(2, 5)
@@ -791,7 +799,6 @@ class ScratchBoardPreviewFragment : Fragment() {
             200 -> Pair(10, 20)
             240 -> Pair(12, 20)
             else -> {
-                // 嘗試計算最接近正方形的配置
                 val sqrt = kotlin.math.sqrt(total.toFloat()).toInt()
                 if (sqrt * sqrt == total) {
                     Pair(sqrt, sqrt)
@@ -801,8 +808,6 @@ class ScratchBoardPreviewFragment : Fragment() {
             }
         }
     }
-
-    // ====== 背景樣式方法保持不變 ======
 
     private fun buildCellBackgroundBase(
         scratched: Boolean,
@@ -830,8 +835,12 @@ class ScratchBoardPreviewFragment : Fragment() {
     private fun buildCellBackgroundSelectedGreen(scratched: Boolean): GradientDrawable =
         buildCellBackgroundBase(scratched, 5, 0xFF43A047.toInt())
 
+    // 🌟 修改點 8：避免分割版面造成轉型錯誤
     private fun getGrandLimitByScratchType(): Int {
-        val scratchCount = extractScratchCount(scratchesType ?: "")
+        val typeStr = extractScratchTypeStr(scratchesType ?: "")
+        if (typeStr.contains("x")) return 0 // 分割版面的大獎限制未來實作
+
+        val scratchCount = typeStr.toIntOrNull() ?: return 0
         return when (scratchCount) {
             10 -> 3
             20 -> 5
