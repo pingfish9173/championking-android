@@ -580,7 +580,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 val tv = TextView(requireContext()).apply {
                     text = "無"
                     setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white))
-                    textSize = 10f
+                    textSize = 18f // 🌟 放大字體
                     gravity = android.view.Gravity.CENTER
                 }
                 llGrandPrizes.addView(tv)
@@ -589,13 +589,14 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 val green = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_green)
                 val whiteText = androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white)
 
-                val sizePx = (22 * resources.displayMetrics.density).toInt()
-                val marginPx = (2 * resources.displayMetrics.density).toInt()
+                // 🌟 大幅增加圈圈的直徑 (與特獎的 38dp 一致)
+                val sizePx = (38 * resources.displayMetrics.density).toInt()
+                val marginPx = (4 * resources.displayMetrics.density).toInt()
 
                 for (num in allNumbers) {
                     val tv = TextView(requireContext()).apply {
                         text = num.toString()
-                        textSize = 10f
+                        textSize = 18f // 🌟 放大數字字體
                         setTextColor(whiteText)
                         gravity = android.view.Gravity.CENTER
                         background = android.graphics.drawable.GradientDrawable().apply {
