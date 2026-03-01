@@ -19,17 +19,23 @@ class ShopRepository(
     private fun shopsRef() = root.child("shops")
     private fun usersRef() = root.child("users")
 
-    /** 監聽商店清單（依 order 排序後回傳） */
+    /** 監聽商店清單（依 order 排序後回傳，並攜帶節點 Key） */
     fun observeShopItems(
-        onItems: (List<ShopItem>) -> Unit,
+        onItems: (List<Pair<String, ShopItem>>) -> Unit, // 🌟 修改：回傳 List<Pair<節點名稱, 商品資料>>
         onError: (String) -> Unit
     ): DbListenerHandle {
         val q = shopsRef()
         val l = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
-                val list = mutableListOf<ShopItem>()
-                for (c in snap.children) c.getValue(ShopItem::class.java)?.let(list::add)
-                onItems(list.sortedBy { it.order })
+                val list = mutableListOf<Pair<String, ShopItem>>()
+                for (c in snap.children) {
+                    val item = c.getValue(ShopItem::class.java)
+                    val key = c.key
+                    if (item != null && key != null) {
+                        list.add(key to item) // 把 "product_20x4" 和商品實體綁在一起
+                    }
+                }
+                onItems(list.sortedBy { it.second.order })
             }
             override fun onCancelled(error: DatabaseError) = onError(error.message)
         }
@@ -62,8 +68,7 @@ class ShopRepository(
     fun purchase(
         userKey: String,
         totalCost: Int,
-        // key = productName（如 "10刮"），value = 數量
-        quantities: Map<String, Int>,
+        quantities: Map<String, Int>, // 🌟 這裡的 Key 現在是節點名稱 (例如 "product_20x4")
         onResult: (success: Boolean, message: String?) -> Unit
     ) {
         val userRef = usersRef().child(userKey)
@@ -74,15 +79,17 @@ class ShopRepository(
                 if (totalCost <= 0) { onResult(false, "購物車為空"); return@addOnSuccessListener }
                 if (current < totalCost) { onResult(false, "點數不足"); return@addOnSuccessListener }
 
-                val valid = setOf("10","20","25","30","40","50","60","80","100","120","160","200","240")
                 val updates = hashMapOf<String, Any>("point" to (current - totalCost))
 
-                quantities.forEach { (productName, qtyRaw) ->
+                quantities.forEach { (nodeKey, qtyRaw) ->
                     val qty = qtyRaw.coerceAtLeast(0)
                     if (qty <= 0) return@forEach
-                    val num = REGEX_NUMBER.find(productName)?.groupValues?.get(1)
-                    if (num != null && valid.contains(num)) {
-                        val field = "scratchType_$num"
+
+                    // 🌟 核心魔法：直接擷取節點名稱的後綴
+                    // 如果 nodeKey 是 "product_20x4"，type 就會變成 "20x4"
+                    if (nodeKey.startsWith("product_")) {
+                        val type = nodeKey.removePrefix("product_")
+                        val field = "scratchType_$type" // 自動組合成 "scratchType_20x4"
                         updates[field] = ServerValue.increment(qty.toLong())
                     }
                 }

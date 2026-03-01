@@ -77,8 +77,11 @@ class BackpackFragment : BaseBindingFragment<FragmentBackpackBinding>() {
             userKey = userKey,
             onBackpack = { map ->
                 if (!isAdded || this@BackpackFragment.view == null) return@observeBackpack
-                // 依固定順序輸出（與你原先顯示一致）
-                val order = listOf("10","20","25","30","40","50","60","80","100","120","160","200","240")
+                // 🌟 修正：把 6 種新的分割版面加入到顯示順序清單中
+                val order = listOf(
+                    "10","20","25","30","40","50","60","80","100","120","160","200","240",
+                    "20x4", "20x6", "25x4", "25x6", "30x4", "30x6"
+                )
                 val items = order
                     .filter { map.containsKey(it) }
                     .map { BackpackItem("${it}刮", map[it] ?: 0) }
@@ -138,11 +141,9 @@ class BackpackFragment : BaseBindingFragment<FragmentBackpackBinding>() {
 
                 val productNameTextView: TextView = itemLayout.findViewById(R.id.product_name_textview)
                 val quantityTextView: TextView = itemLayout.findViewById(R.id.quantity_textview)
-                val productImageView: ImageView = itemLayout.findViewById(R.id.product_image_view)
 
                 productNameTextView.text = item.type
                 quantityTextView.text = "數量：${item.quantity}"
-                productImageView.setImageResource(R.drawable.ic_shop_item)
 
                 rowLayout?.addView(itemLayout)
             } else {

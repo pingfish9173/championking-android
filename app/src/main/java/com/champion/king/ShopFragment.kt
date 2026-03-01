@@ -28,15 +28,15 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
     private val repo by lazy { ShopRepository() }
 
-    private var shopItems: List<ShopItem> = emptyList()
+    // 🌟 修改：變更為 Pair 結構以儲存節點名稱
+    private var shopItems: List<Pair<String, ShopItem>> = emptyList()
+    // 🌟 修改：購物車的 Key 現在是 節點名稱 (nodeKey) 而不是 productName
     private val itemQuantities = mutableMapOf<String, Int>()
     private var currentUserPoints: Int = 0
 
-    // 監聽奶槍（onDestroyView 會確實移除）
     private var shopItemsHandle: DbListenerHandle? = null
     private var userPointsHandle: DbListenerHandle? = null
 
-    // ✅ 租賃制判斷（吃到飽不提供商城）
     private var isRentalMode: Boolean = false
     private var hasShownRentalShopToast: Boolean = false
 
@@ -57,7 +57,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 監聽商店清單
         shopItemsHandle = repo.observeShopItems(
             onItems = { items ->
                 if (!isAdded || this@ShopFragment.view == null) return@observeShopItems
@@ -71,13 +70,11 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             }
         )
 
-        // 監聽當前使用者點數
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
         if (userKey.isNullOrEmpty()) {
             binding.userPointsTextview.text = "我的點數: N/A"
             showToast("無法載入點數：用戶未登入")
         } else {
-            // ✅ 進商城：先檢查是否租賃制，租賃制就先提示一次
             loadBillingModeAndMaybeToast(userKey)
             userPointsHandle = repo.observeUserPoints(
                 userKey,
@@ -94,11 +91,9 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             )
         }
 
-        // 設定 LINE 帳號帶底線
         setupLineTextWithUnderline()
 
         binding.confirmPurchaseButton.setThrottledClick {
-            // ✅ 租賃制：按購買就擋下來
             if (isRentalMode) {
                 showToast("此帳號為租賃制，無提供商城服務")
                 return@setThrottledClick
@@ -110,7 +105,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     private fun setupLineTextWithUnderline() {
-        val fullText = "儲值請加入官方Line：\n@376xyozd" // 加入換行符號可以讓 ID 絕對置中
+        val fullText = "儲值請加入官方Line：\n@376xyozd"
         val underlinePart = "@376xyozd"
         val spannable = android.text.SpannableString(fullText)
 
@@ -125,23 +120,19 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             )
         }
 
-        // 使用 binding 訪問更安全
         binding.lineIdText.apply {
             text = spannable
-            gravity = android.view.Gravity.CENTER // 確保程式碼層級也強制置中
+            gravity = android.view.Gravity.CENTER
         }
     }
 
     override fun onDestroyView() {
-        // ✅ 確實移除監聽，避免 View 銷毀後回呼觸發 UI 操作
         shopItemsHandle?.remove(); shopItemsHandle = null
         userPointsHandle?.remove(); userPointsHandle = null
         super.onDestroyView()
     }
 
     private fun loadBillingModeAndMaybeToast(userKey: String) {
-        // 這裡假設你的 users 節點結構是：users/{userKey}/billingMode
-        // （你前面 Settings 那邊就是 User 物件包含 billingMode）
         val ref = com.google.firebase.database.FirebaseDatabase.getInstance()
             .reference
             .child("users")
@@ -153,7 +144,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 val mode = snapshot.getValue(String::class.java) ?: "POINT"
                 isRentalMode = (mode == "RENTAL")
 
-                // ✅ 進商城先提示一次
                 if (isRentalMode && !hasShownRentalShopToast && isAdded && view != null) {
                     hasShownRentalShopToast = true
                     showToast("此帳號為租賃制，無提供商城服務")
@@ -161,7 +151,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             }
 
             override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
-                // 讀不到就當作 POINT，不影響原本商城
                 Log.w("ShopFragment", "loadBillingMode failed: ${error.message}")
             }
         })
@@ -194,7 +183,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             }
 
             if (index < totalItems) {
-                val item = shopItems[index]
+                val (nodeKey, item) = shopItems[index] // 🌟 解構出 nodeKey 與 item
                 val itemLayout = LayoutInflater.from(requireContext())
                     .inflate(R.layout.shop_item_template, rowLayout, false)
 
@@ -212,21 +201,20 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 productNameTextView.text = name
                 priceTextView.text = "價格：${item.price}點"
 
-                val currentQ = (itemQuantities[name] ?: 0).coerceAtLeast(0)
+                // 🌟 使用 nodeKey 來取值與存值
+                val currentQ = (itemQuantities[nodeKey] ?: 0).coerceAtLeast(0)
                 quantityEditText.setText(currentQ.toString())
 
-                // 禁用直接輸入，改用對話框
                 quantityEditText.isFocusable = false
                 quantityEditText.isCursorVisible = false
                 quantityEditText.setOnClickListener {
-                    showQuantityInputDialog(name, quantityEditText)
+                    showQuantityInputDialog(nodeKey, name, quantityEditText)
                 }
 
-                // 保留 +/- 按鈕功能
                 decreaseButton.setOnClickListener {
                     val q = (quantityEditText.text.toString().toIntOrNull() ?: 0).coerceAtLeast(0)
                     val newValue = (q - 1).coerceAtLeast(0)
-                    itemQuantities[name] = newValue
+                    itemQuantities[nodeKey] = newValue
                     quantityEditText.setText(newValue.toString())
                     updateTotalAmount()
                     displayPurchaseList()
@@ -240,7 +228,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                     } else {
                         q + 1
                     }
-                    itemQuantities[name] = newValue
+                    itemQuantities[nodeKey] = newValue
                     quantityEditText.setText(newValue.toString())
                     updateTotalAmount()
                     displayPurchaseList()
@@ -258,8 +246,7 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         displayPurchaseList()
     }
 
-    // 顯示自定義數字鍵盤對話框
-    private fun showQuantityInputDialog(productName: String, editText: EditText) {
+    private fun showQuantityInputDialog(nodeKey: String, productName: String, editText: EditText) {
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.dialog_quantity_input, null)
 
@@ -269,7 +256,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         val btnClear = dialogView.findViewById<Button>(R.id.dialog_btn_clear)
         val btnDelete = dialogView.findViewById<Button>(R.id.dialog_btn_delete)
 
-        // 數字按鈕 0-9
         val btn0 = dialogView.findViewById<Button>(R.id.dialog_btn_0)
         val btn1 = dialogView.findViewById<Button>(R.id.dialog_btn_1)
         val btn2 = dialogView.findViewById<Button>(R.id.dialog_btn_2)
@@ -281,12 +267,10 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         val btn8 = dialogView.findViewById<Button>(R.id.dialog_btn_8)
         val btn9 = dialogView.findViewById<Button>(R.id.dialog_btn_9)
 
-        // 設置當前數量
-        val currentQuantity = itemQuantities[productName] ?: 0
+        val currentQuantity = itemQuantities[nodeKey] ?: 0
         dialogEditText.setText(currentQuantity.toString())
         dialogEditText.setSelection(dialogEditText.text.length)
 
-        // 禁用系統鍵盤
         dialogEditText.showSoftInputOnFocus = false
 
         val dialog = AlertDialog.Builder(requireContext())
@@ -294,8 +278,8 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             .setView(dialogView)
             .setPositiveButton("確定") { d, _ ->
                 val newQuantity = dialogEditText.text.toString().toIntOrNull() ?: 0
-                itemQuantities[productName] = newQuantity.coerceIn(0, 9999)
-                editText.setText(itemQuantities[productName].toString())
+                itemQuantities[nodeKey] = newQuantity.coerceIn(0, 9999)
+                editText.setText(itemQuantities[nodeKey].toString())
                 updateTotalAmount()
                 displayPurchaseList()
                 d.dismiss()
@@ -303,7 +287,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             .setNegativeButton("取消", null)
             .create()
 
-        // 數字按鈕點擊事件
         val numberClickListener = View.OnClickListener { view ->
             val button = view as Button
             val number = button.text.toString()
@@ -333,7 +316,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         btn8.setOnClickListener(numberClickListener)
         btn9.setOnClickListener(numberClickListener)
 
-        // 減少按鈕
         btnMinus.setOnClickListener {
             val current = dialogEditText.text.toString().toIntOrNull() ?: 0
             val newValue = (current - 1).coerceAtLeast(0)
@@ -341,7 +323,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             dialogEditText.setSelection(dialogEditText.text.length)
         }
 
-        // 增加按鈕
         btnPlus.setOnClickListener {
             val current = dialogEditText.text.toString().toIntOrNull() ?: 0
             val newValue = (current + 1).coerceAtMost(9999)
@@ -352,13 +333,11 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             dialogEditText.setSelection(dialogEditText.text.length)
         }
 
-        // 清除按鈕
         btnClear.setOnClickListener {
             dialogEditText.setText("0")
             dialogEditText.setSelection(dialogEditText.text.length)
         }
 
-        // 刪除按鈕（退格）
         btnDelete.setOnClickListener {
             val currentText = dialogEditText.text.toString()
             if (currentText.isNotEmpty()) {
@@ -373,18 +352,18 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
 
         dialog.show()
-
-        // 點擊 EditText 時也禁用系統鍵盤
-        dialogEditText.setOnClickListener {
-            // 不做任何事，阻止系統鍵盤彈出
-        }
+        dialogEditText.setOnClickListener {}
     }
 
     private fun displayPurchaseList() {
         val list = binding.purchaseListContainer
         list.removeAllViews()
-        itemQuantities.forEach { (name, q) ->
+        itemQuantities.forEach { (nodeKey, q) ->
             if (q > 0) {
+                // 🌟 從 shopItems 裡找出對應的商品名稱來顯示
+                val item = shopItems.find { it.first == nodeKey }?.second
+                val name = item?.productName ?: nodeKey
+
                 val tv = TextView(requireContext()).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -407,9 +386,8 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
     private fun calculateTotalAmount(): Int {
         var sum = 0
-        shopItems.forEach { item ->
-            val name = item.productName ?: ""
-            val q = itemQuantities[name] ?: 0
+        shopItems.forEach { (nodeKey, item) ->
+            val q = itemQuantities[nodeKey] ?: 0
             sum += q * item.price
         }
         return sum
@@ -428,7 +406,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             return@guardOnline
         }
 
-        // 建構確認訊息（只包含購物車內容與總計）
         val confirmMessage = buildConfirmationMessage(total)
 
         AlertDialog.Builder(requireContext())
@@ -439,21 +416,18 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             .show()
     }
 
-    // 建構確認訊息（不含任何贈送資訊）
     private fun buildConfirmationMessage(total: Int): String {
         val sb = StringBuilder()
-
-        // 添加購物車清單
         sb.append("購物車內容：\n")
-        itemQuantities.forEach { (name, quantity) ->
+        itemQuantities.forEach { (nodeKey, quantity) ->
             if (quantity > 0) {
-                val item = shopItems.find { it.productName == name }
+                val item = shopItems.find { it.first == nodeKey }?.second
+                val name = item?.productName ?: nodeKey
                 val price = item?.price ?: 0
                 val subtotal = quantity * price
                 sb.append("• $name $quantity 張 = ${subtotal}點\n")
             }
         }
-
         sb.append("\n總計：$total 點數\n")
         sb.append("\n您確定要進行購買嗎？")
 
@@ -461,7 +435,6 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     private fun confirmPurchase(totalAmount: Int) = requireContext().guardOnline {
-        // ✅ 保險：租賃制一律不允許真正購買流程
         if (isRentalMode) {
             showToast("此帳號為租賃制，無提供商城服務")
             return@guardOnline
@@ -477,24 +450,18 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             return@guardOnline
         }
 
-        // 準備購買資料（不含任何贈送數量）
         val purchaseData = preparePurchaseData()
-
-        // 準備購買紀錄資料
         val purchaseDetails = preparePurchaseDetailsForRecord()
         val itemPrices = prepareItemPrices()
 
-        // 先獲取用戶帳號
         repo.getUserAccount(userKey) { success, account ->
             if (!isAdded || this@ShopFragment.view == null) return@getUserAccount
 
-            val username = account ?: userKey  // 如果獲取失敗，使用 userKey 作為備用
+            val username = account ?: userKey
 
-            // 執行購買
             repo.purchase(userKey, totalAmount, purchaseData) { ok, msg ->
                 if (!isAdded || this@ShopFragment.view == null) return@purchase
                 if (ok) {
-                    // 購買成功後保存購買紀錄
                     repo.savePurchaseRecord(
                         userKey = userKey,
                         username = username,
@@ -522,43 +489,39 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
     }
 
-    // 準備購買詳細資料用於紀錄（bonusQuantity 固定 0）
+    // 紀錄購買明細時，存入實際顯示的 productName
     private fun preparePurchaseDetailsForRecord(): Map<String, Pair<Int, Int>> {
         val details = mutableMapOf<String, Pair<Int, Int>>()
-
-        itemQuantities.forEach { (name, quantity) ->
+        itemQuantities.forEach { (nodeKey, quantity) ->
             if (quantity > 0) {
+                val item = shopItems.find { it.first == nodeKey }?.second
+                val name = item?.productName ?: nodeKey
                 details[name] = Pair(quantity, 0)
             }
         }
-
         return details
     }
 
-    // 準備商品單價資料
+    // 商品單價也用 productName 當 Key 存入購買紀錄
     private fun prepareItemPrices(): Map<String, Int> {
         val prices = mutableMapOf<String, Int>()
-
-        shopItems.forEach { item ->
+        shopItems.forEach { (_, item) ->
             val name = item.productName ?: ""
             if (name.isNotEmpty()) {
                 prices[name] = item.price
             }
         }
-
         return prices
     }
 
-    // 準備購買資料（不再包含贈送數量）
+    // 🌟 準備傳給 repo.purchase 的 Map (Key 必須是 nodeKey)
     private fun preparePurchaseData(): Map<String, Int> {
         val purchaseData = mutableMapOf<String, Int>()
-
-        itemQuantities.forEach { (name, quantity) ->
+        itemQuantities.forEach { (nodeKey, quantity) ->
             if (quantity > 0) {
-                purchaseData[name] = quantity
+                purchaseData[nodeKey] = quantity
             }
         }
-
         return purchaseData
     }
 

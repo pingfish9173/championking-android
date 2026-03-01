@@ -5,35 +5,28 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="8dp"
+    android:padding="12dp"
     android:layout_margin="4dp"
     android:background="@drawable/rounded_corner_background"
     android:elevation="2dp">
-
-    <ImageView
-        android:id="@+id/product_image_view"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_shop_item"
-        android:contentDescription="背包商品圖片"
-        android:layout_marginBottom="4dp"/>
 
     <TextView
         android:id="@+id/product_name_textview"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="商品名稱"
-        android:textSize="12sp"
+        android:textSize="16sp"
         android:textColor="@android:color/black"
-        android:textStyle="bold"/>
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp"/>
 
     <TextView
         android:id="@+id/quantity_textview"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="數量：0"
-        android:textSize="12sp"
-        android:textColor="@android:color/darker_gray"
-        android:layout_marginTop="2dp"/>
+        android:textSize="14sp"
+        android:textColor="#333333"
+        android:layout_marginBottom="6dp"/>
 
 </LinearLayout>

@@ -5,49 +5,42 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="8dp"
+    android:padding="12dp"
     android:layout_margin="4dp"
     android:background="@drawable/rounded_corner_background"
     android:elevation="2dp">
-
-    <ImageView
-        android:id="@+id/product_image_view"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_shop_item"
-        android:contentDescription="商城商品圖片"
-        android:layout_marginBottom="4dp"/>
 
     <TextView
         android:id="@+id/product_name_textview"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="商品名稱"
-        android:textSize="12sp"
+        android:textSize="16sp"
         android:textColor="@android:color/black"
-        android:textStyle="bold"/>
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp"/>
 
     <TextView
         android:id="@+id/price_textview"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="價格：0點"
-        android:textSize="12sp"
-        android:textColor="#333333"/>
+        android:textSize="14sp"
+        android:textColor="#333333"
+        android:layout_marginBottom="10dp"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="8dp">
+        android:gravity="center">
 
         <Button
             android:id="@+id/decrease_quantity_button"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:text="-"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:backgroundTint="#F44336"
@@ -75,10 +68,10 @@
 
         <Button
             android:id="@+id/increase_quantity_button"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:text="+"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             android:backgroundTint="#4CAF50"
