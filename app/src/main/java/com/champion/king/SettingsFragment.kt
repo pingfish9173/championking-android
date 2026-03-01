@@ -347,22 +347,18 @@ class SettingsFragment : Fragment() {
                     position: Int,
                     id: Long
                 ) {
-                    // ★ 程式 setSelection 造成的回呼 → 忽略一次
                     if (suppressNextScratchTypeSelectionEvent) {
                         suppressNextScratchTypeSelectionEvent = false
                         return
                     }
 
-                    // ★ 更新 spinner / 正在儲存時不重建預覽
                     if (isUpdatingSpinner || isSavingInProgress) return
 
                     val selectedItem =
                         binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem ?: return
 
-                    // 🌟 修改點 3：改用取得字串版的方法
                     val scratchTypeStr = selectedItem.getScratchTypeString()
 
-                    // ✅ 第 0 個「請選擇」＝未設置
                     if (scratchTypeStr == null) {
                         showUnsetShelfState()
                         return
@@ -370,16 +366,16 @@ class SettingsFragment : Fragment() {
 
                     Log.d("SettingsFragment", "用戶選擇了刮數: ${scratchTypeStr}刮, 庫存: ${selectedItem.stock}")
 
-                    // ✅ POINT 才需要檢查庫存；RENTAL 吃到飽完全跳過庫存驗證
                     if (currentBillingMode != "RENTAL" && selectedItem.stock <= 0) {
                         showToast("${scratchTypeStr}刮 無庫存，無法選擇")
                         return
                     }
 
-                    // ✅ 有選刮數 + 有庫存 → 顯示右側參數整區
                     showRightPanel()
 
-                    // 只有未設置（selectedCard == null）才需要建立預覽版型
+                    // 🌟 總裁指示：判斷是否為分割版面並隱藏不必要的參數
+                    applySplitModeVisibility(scratchTypeStr.contains("x"))
+
                     val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
                     if (selectedCard == null) {
                         isShowingUnsetState = false
@@ -838,11 +834,13 @@ class SettingsFragment : Fragment() {
             setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
         }
 
-        // 🌟 修改點 6：傳入字串
         showScratchTypeLabel(selectedCard.scratchesType.toString())
         uiManager.updateInUseButtonUI(selectedCard)
         uiManager.updateActionButtonsUI(selectedCard)
         updateRefreshButtonVisibility()
+
+        // 🌟 總裁指示：判斷是否為分割版面並隱藏不必要的參數
+        applySplitModeVisibility(selectedCard.scratchesType.toString().contains("x"))
     }
 
     private fun showRightPanel() {
@@ -1457,6 +1455,64 @@ class SettingsFragment : Fragment() {
 
         binding.radioGroupPitchType.visibility = View.VISIBLE
         binding.spinnerGiveawayCount.visibility = View.VISIBLE
+    }
+
+    // 🌟 總裁專用：動態隱藏/顯示分割版面不需要的參數
+    private fun applySplitModeVisibility(isSplitMode: Boolean) {
+        val visibility = if (isSplitMode) View.GONE else View.VISIBLE
+
+        // 1. 隱藏特獎與大獎的整個容器
+        val specialPrizeContainer = findViewContaining(binding.buttonPickSpecialPrize)
+        val grandPrizeContainer = findViewContaining(binding.buttonPickGrandPrize)
+        specialPrizeContainer?.visibility = visibility
+        grandPrizeContainer?.visibility = visibility
+
+        // 2. 隱藏唯讀模式下的標籤
+        if (isSplitMode) {
+            specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+            grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+            binding.textPitchRuleReadonly.visibility = View.GONE
+        } else {
+            specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+            grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+        }
+
+        // 3. 隱藏玩法規則設定及周邊
+        binding.radioGroupPitchType.visibility = visibility
+        binding.spinnerGiveawayCount.visibility = visibility
+        binding.textClawsPrefix.visibility = visibility
+        binding.textClawsUnit.visibility = visibility
+        binding.textGiveawayPrefix.visibility = visibility
+        binding.textGiveawayUnit.visibility = visibility
+
+        if (isSplitMode) {
+            binding.spinnerClawsCount.visibility = View.GONE
+            binding.editClawsCount.visibility = View.GONE
+
+            // 安全地找出並隱藏「玩法規則設定：」的標題文字
+            (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    if (child is TextView && child.text.toString().contains("玩法規則設定")) {
+                        child.visibility = View.GONE
+                    }
+                }
+            }
+        } else {
+            // 恢復原本的夾出/消費贈送顯示狀態
+            val isShopping = binding.radioPitchShopping.isChecked
+            applyPitchTypeUi(isShopping = isShopping, syncValues = false)
+
+            // 恢復「玩法規則設定：」的標題文字
+            (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    if (child is TextView && child.text.toString().contains("玩法規則設定")) {
+                        child.visibility = View.VISIBLE
+                    }
+                }
+            }
+        }
     }
 
     // ===========================================
