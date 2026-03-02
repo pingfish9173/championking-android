@@ -2395,21 +2395,20 @@ class SettingsFragment : Fragment() {
     }
 
     private fun buildAllSplitPreviews(mainContainer: ViewGroup, boardNumbers: Map<String, List<Int>>) {
+        currentFocusedSubBoardId = null // 🌟 每次重新建立版面時，重置聚焦狀態
         mainContainer.removeAllViews()
 
         val context = mainContainer.context
 
-        // 🌟 核心修正：建立一個垂直的外層容器，避免 row1 和 row2 在 FrameLayout 中重疊
         val verticalWrapper = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            weightSum = 2f // 上下各佔一半
+            weightSum = 2f
         }
 
-        // 建立第一排 (A板, B板)
         val row1 = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -2420,7 +2419,6 @@ class SettingsFragment : Fragment() {
             weightSum = 2f
         }
 
-        // 建立第二排 (C板, D板)
         val row2 = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -2446,7 +2444,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun createSingleBoardPreview(context: android.content.Context, boardName: String, numbers: List<Int>): View {
-        // 1. 外層容器：黑色背景
+        // 1. 外層容器：加入 Tag 與點擊事件
         val boardLayout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
@@ -2454,9 +2452,19 @@ class SettingsFragment : Fragment() {
             }
             setBackgroundColor(Color.BLACK)
             setPadding(8, 8, 8, 8)
+
+            // 🌟 核心控制：綁定標籤與點擊事件
+            tag = "sub_board_$boardName"
+            isClickable = true
+            setOnClickListener {
+                if (currentFocusedSubBoardId == boardName) {
+                    exitSubBoardFocusMode() // 再次點擊背景，取消聚焦
+                } else {
+                    enterSubBoardFocusMode(boardName) // 點擊進入聚焦
+                }
+            }
         }
 
-        // 2. 標題：靠左對齊
         val titleView = TextView(context).apply {
             text = "${boardName}板"
             setTextColor(Color.WHITE)
@@ -2467,7 +2475,6 @@ class SettingsFragment : Fragment() {
         }
         boardLayout.addView(titleView)
 
-        // 3. 數字區域：黑色底色的 GridLayout
         val gridLayout = GridLayout(context).apply {
             rowCount = 4
             columnCount = 5
@@ -2480,41 +2487,39 @@ class SettingsFragment : Fragment() {
 
         val density = context.resources.displayMetrics.density
         val cellMargin = (1 * density).toInt()
-
-        // 🌟 定義正圓的固定尺寸 (例如 36dp)
         val circleSize = (36 * density).toInt()
 
-        // 4. 產生 20 個格子 (白底外框 + 黑色正圓蓋板)
         for (i in 0 until 20) {
-            // 用 FrameLayout 包裝，之後點選這個 FrameLayout
             val cellFrame = FrameLayout(context).apply {
                 setBackgroundColor(Color.WHITE)
                 layoutParams = GridLayout.LayoutParams().apply {
                     width = 0
                     height = 0
-                    // 格子本身依然平均分配寬高
                     columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
                     rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
                     setMargins(cellMargin, cellMargin, cellMargin, cellMargin)
                 }
 
-                // 預留：將來選取特獎與大獎的點擊監聽器
                 isClickable = true
                 setOnClickListener {
-                    android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 ${numbers.getOrNull(i)} 號碼")
+                    // 🌟 體驗優化：如果還沒聚焦，點擊格子就先聚焦該板；如果已聚焦，才觸發選擇邏輯
+                    if (currentFocusedSubBoardId != boardName) {
+                        enterSubBoardFocusMode(boardName)
+                    } else {
+                        android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 ${numbers.getOrNull(i)} 號碼")
+                        // TODO: 之後在這裡加入與 viewModel 連動選取獎項的邏輯
+                    }
                 }
             }
 
-            // 🌟 修正：黑色正圓蓋板
             val circleView = TextView(context).apply {
                 text = numbers.getOrNull(i)?.toString() ?: ""
                 setTextColor(Color.GRAY)
                 textSize = 14f
                 setTypeface(null, Typeface.BOLD)
-                gravity = Gravity.CENTER // 數字在圓內居中
+                gravity = Gravity.CENTER
                 background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
 
-                // 🌟 核心修正：設定固定寬高，並且在 FrameLayout 中置中 (Gravity.CENTER)
                 layoutParams = FrameLayout.LayoutParams(circleSize, circleSize).apply {
                     gravity = Gravity.CENTER
                 }
@@ -2527,5 +2532,62 @@ class SettingsFragment : Fragment() {
         boardLayout.addView(gridLayout)
         return boardLayout
     }
+
+    // ==========================================
+    // 🌟 分割版面專屬：子板聚焦模式控制
+    // ==========================================
+    private var currentFocusedSubBoardId: String? = null
+
+    private fun enterSubBoardFocusMode(boardName: String) {
+        currentFocusedSubBoardId = boardName
+
+        // 1. 更新標題為「X號板Y板參數設定」
+        val order = shelfManager.selectedShelfOrder
+        binding.textParametersTitle.text = "${order}號板${boardName}板參數設定"
+
+        // 2. 處理畫面變暗與鎖定
+        binding.onShelfListContainer.alpha = 0.35f
+        // 🌟 新增：安靜地鎖定上方 6 個板位，不允許點擊
+        setEnabledRecursively(binding.onShelfListContainer, false)
+
+        // 3. 找出並處理所有子板的亮度 (唯獨選取的子板和右側參數區保持 1.0f)
+        updateSubBoardsAlpha(boardName)
+    }
+
+    private fun exitSubBoardFocusMode() {
+        currentFocusedSubBoardId = null
+
+        // 1. 恢復預設標題 (例如「3號板參數設定」)
+        updateParametersTitle(shelfManager.selectedShelfOrder)
+
+        // 2. 恢復畫面亮度與解鎖
+        binding.onShelfListContainer.alpha = 1.0f
+        // 🌟 新增：解除鎖定，恢復上方板位點擊功能
+        setEnabledRecursively(binding.onShelfListContainer, true)
+
+        updateSubBoardsAlpha(null)
+    }
+
+    private fun updateSubBoardsAlpha(focusedBoardName: String?) {
+        val root = binding.scratchBoardArea
+
+        fun applyAlpha(view: View) {
+            val tag = view.tag as? String
+            if (tag != null && tag.startsWith("sub_board_")) {
+                if (focusedBoardName == null || tag == "sub_board_$focusedBoardName") {
+                    view.alpha = 1.0f
+                } else {
+                    view.alpha = 0.35f
+                }
+            } else if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    applyAlpha(view.getChildAt(i))
+                }
+            }
+        }
+        applyAlpha(root)
+    }
+
+    //TODO:子版參數設定
 
 }
