@@ -133,6 +133,34 @@ class SettingsFragment : Fragment() {
     // ✅ 新增：記住目前帳號的計費模式（POINT / RENTAL），用於 UI 規則切換
     private var currentBillingMode: String = "POINT"
 
+    // ==========================================
+    // 🌟 分割版面專屬：子板特獎/大獎暫存區與即時監聽
+    // ==========================================
+    private val splitBoardSpecialPrizes = mutableMapOf<String, String>()
+    private val splitBoardGrandPrizes = mutableMapOf<String, String>()
+
+    private val splitSpecialPrizeWatcher = object : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        override fun afterTextChanged(s: android.text.Editable?) {
+            currentFocusedSubBoardId?.let { boardName ->
+                splitBoardSpecialPrizes[boardName] = s.toString()
+                renderSubBoardHeaderUI(boardName) // 🌟 即時更新子板上方的圈圈
+            }
+        }
+    }
+
+    private val splitGrandPrizeWatcher = object : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        override fun afterTextChanged(s: android.text.Editable?) {
+            currentFocusedSubBoardId?.let { boardName ->
+                splitBoardGrandPrizes[boardName] = s.toString()
+                renderSubBoardHeaderUI(boardName) // 🌟 即時更新子板上方的圈圈
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -2444,7 +2472,6 @@ class SettingsFragment : Fragment() {
     }
 
     private fun createSingleBoardPreview(context: android.content.Context, boardName: String, numbers: List<Int>): View {
-        // 1. 外層容器：加入 Tag 與點擊事件
         val boardLayout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
@@ -2453,39 +2480,54 @@ class SettingsFragment : Fragment() {
             setBackgroundColor(Color.BLACK)
             setPadding(8, 8, 8, 8)
 
-            // 🌟 核心控制：綁定標籤與點擊事件
             tag = "sub_board_$boardName"
             isClickable = true
             setOnClickListener {
                 if (currentFocusedSubBoardId == boardName) {
-                    exitSubBoardFocusMode() // 再次點擊背景，取消聚焦
+                    exitSubBoardFocusMode()
                 } else {
-                    enterSubBoardFocusMode(boardName) // 點擊進入聚焦
+                    enterSubBoardFocusMode(boardName)
                 }
             }
         }
 
-        val titleView = TextView(context).apply {
-            text = "${boardName}板"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        val density = context.resources.displayMetrics.density
+
+        // 🌟 防護牆 1：為標題區塊設定「最小高度」，防止重繪時瞬間塌陷擠壞下方的 GridLayout
+        val headerLayout = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(4, 0, 0, 8)
+            minimumHeight = (36 * density).toInt() // 鎖定最小高度
+            tag = "header_$boardName"
         }
-        boardLayout.addView(titleView)
+        boardLayout.addView(headerLayout)
+
+        renderSubBoardHeaderUI(boardName)
+
+        // 🌟 防護牆 2：用 FrameLayout 將 GridLayout 包起來當作「避震器」
+        val gridContainer = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f // 由外層的 FrameLayout 來負責 LinearLayout 的權重分配
+            )
+        }
 
         val gridLayout = GridLayout(context).apply {
             rowCount = 4
             columnCount = 5
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
+            alignmentMode = GridLayout.ALIGN_BOUNDS // 強制對齊邊界
+            useDefaultMargins = false
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
             setBackgroundColor(Color.BLACK)
         }
 
-        val density = context.resources.displayMetrics.density
         val cellMargin = (1 * density).toInt()
         val circleSize = (36 * density).toInt()
 
@@ -2502,12 +2544,11 @@ class SettingsFragment : Fragment() {
 
                 isClickable = true
                 setOnClickListener {
-                    // 🌟 體驗優化：如果還沒聚焦，點擊格子就先聚焦該板；如果已聚焦，才觸發選擇邏輯
                     if (currentFocusedSubBoardId != boardName) {
                         enterSubBoardFocusMode(boardName)
                     } else {
                         android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 ${numbers.getOrNull(i)} 號碼")
-                        // TODO: 之後在這裡加入與 viewModel 連動選取獎項的邏輯
+                        // TODO: 下一階段實作「點選格子」邏輯
                     }
                 }
             }
@@ -2529,7 +2570,10 @@ class SettingsFragment : Fragment() {
             gridLayout.addView(cellFrame)
         }
 
-        boardLayout.addView(gridLayout)
+        // 把 gridLayout 放進避震器，再放進外層排版
+        gridContainer.addView(gridLayout)
+        boardLayout.addView(gridContainer)
+
         return boardLayout
     }
 
@@ -2540,32 +2584,60 @@ class SettingsFragment : Fragment() {
 
     private fun enterSubBoardFocusMode(boardName: String) {
         currentFocusedSubBoardId = boardName
-
-        // 1. 更新標題為「X號板Y板參數設定」
         val order = shelfManager.selectedShelfOrder
         binding.textParametersTitle.text = "${order}號板${boardName}板參數設定"
 
-        // 2. 處理畫面變暗與鎖定
         binding.onShelfListContainer.alpha = 0.35f
-        // 🌟 新增：安靜地鎖定上方 6 個板位，不允許點擊
         setEnabledRecursively(binding.onShelfListContainer, false)
-
-        // 3. 找出並處理所有子板的亮度 (唯獨選取的子板和右側參數區保持 1.0f)
         updateSubBoardsAlpha(boardName)
+
+        // 🌟 1. UI 顯示切換：隱藏刮數列，顯示右側容器
+        binding.layoutScratchCountRow.visibility = View.GONE
+        binding.rightPanelContainer.visibility = View.VISIBLE
+
+        // 🌟 關鍵修正：透過 .parent 精準把「特獎列」、「大獎列」、「夾送規則列」與「自動刮開」叫出來！
+        (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.VISIBLE
+        (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.VISIBLE
+        (binding.radioGroupPitchType.parent as? View)?.visibility = View.VISIBLE
+        binding.buttonAutoScratch.visibility = View.VISIBLE
+
+        // 🌟 2. 徹底解決 A 切 B 的干擾：先移除竊聽器
+        binding.editTextSpecialPrize.removeTextChangedListener(splitSpecialPrizeWatcher)
+        binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
+
+        // 🌟 3. 安全地載入該子板的暫存資料
+        binding.editTextSpecialPrize.setText(splitBoardSpecialPrizes[boardName] ?: "")
+        binding.editTextGrandPrize.setText(splitBoardGrandPrizes[boardName] ?: "")
+
+        // 🌟 4. 資料塞好後，再重新掛上竊聽器
+        binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
+        binding.editTextGrandPrize.addTextChangedListener(splitGrandPrizeWatcher)
     }
 
     private fun exitSubBoardFocusMode() {
-        currentFocusedSubBoardId = null
+        // 🌟 1. 拔除竊聽器
+        binding.editTextSpecialPrize.removeTextChangedListener(splitSpecialPrizeWatcher)
+        binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
 
-        // 1. 恢復預設標題 (例如「3號板參數設定」)
+        currentFocusedSubBoardId = null
         updateParametersTitle(shelfManager.selectedShelfOrder)
 
-        // 2. 恢復畫面亮度與解鎖
         binding.onShelfListContainer.alpha = 1.0f
-        // 🌟 新增：解除鎖定，恢復上方板位點擊功能
         setEnabledRecursively(binding.onShelfListContainer, true)
-
         updateSubBoardsAlpha(null)
+
+        // 🌟 2. 退出時，清空右側文字
+        binding.editTextSpecialPrize.setText("")
+        binding.editTextGrandPrize.setText("")
+
+        // 🌟 關鍵修正：恢復成「母板」狀態 (顯示刮數列，但把子板專用的參數列隱藏)
+        binding.layoutScratchCountRow.visibility = View.VISIBLE
+        binding.rightPanelContainer.visibility = View.VISIBLE // 容器要保持可見，因為裡面還有儲存/返回按鈕
+
+        (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.GONE
+        (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.GONE
+        (binding.radioGroupPitchType.parent as? View)?.visibility = View.GONE
+        binding.buttonAutoScratch.visibility = View.GONE
     }
 
     private fun updateSubBoardsAlpha(focusedBoardName: String?) {
@@ -2586,6 +2658,88 @@ class SettingsFragment : Fragment() {
             }
         }
         applyAlpha(root)
+    }
+
+    private fun renderSubBoardHeaderUI(boardName: String) {
+        val root = binding.scratchBoardArea
+        val headerLayout = root.findViewWithTag<LinearLayout>("header_$boardName") ?: return
+
+        headerLayout.removeAllViews()
+        val context = headerLayout.context
+        val density = context.resources.displayMetrics.density
+
+        // 1. 繪製標題 ("A板")
+        val titleView = TextView(context).apply {
+            text = "${boardName}板"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, (8 * density).toInt(), 0)
+        }
+        headerLayout.addView(titleView)
+
+        val specialPrize = splitBoardSpecialPrizes[boardName]
+        val grandPrize = splitBoardGrandPrizes[boardName]
+
+        // 2. 繪製特獎 (黃底白字圈)
+        if (!specialPrize.isNullOrEmpty() && specialPrize != "無") {
+            val specialSize = (26 * density).toInt()
+            val tvSpecial = TextView(context).apply {
+                text = specialPrize
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                    if (this is android.graphics.drawable.GradientDrawable) {
+                        val gold = ContextCompat.getColor(context, R.color.scratch_card_gold)
+                        setColor(gold)
+                        setStroke(2, gold)
+                    }
+                }
+                layoutParams = LinearLayout.LayoutParams(specialSize, specialSize).apply {
+                    marginEnd = (8 * density).toInt()
+                }
+            }
+            headerLayout.addView(tvSpecial)
+        }
+
+        // 3. 繪製大獎 (綠底白字圈)
+        if (!grandPrize.isNullOrEmpty() && grandPrize != "無") {
+            val grandSize = (26 * density).toInt()
+            val grandNumbers = grandPrize.split(",").mapNotNull { it.trim().toIntOrNull() }
+
+            val displayNumbers = grandNumbers.take(3)
+            for (num in displayNumbers) {
+                val tvGrand = TextView(context).apply {
+                    text = num.toString()
+                    setTextColor(Color.WHITE)
+                    textSize = 12f
+                    setTypeface(null, Typeface.BOLD)
+                    gravity = Gravity.CENTER
+                    background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                        if (this is android.graphics.drawable.GradientDrawable) {
+                            val green = ContextCompat.getColor(context, R.color.scratch_card_green)
+                            setColor(green)
+                            setStroke(2, green)
+                        }
+                    }
+                    layoutParams = LinearLayout.LayoutParams(grandSize, grandSize).apply {
+                        marginEnd = (4 * density).toInt()
+                    }
+                }
+                headerLayout.addView(tvGrand)
+            }
+            if (grandNumbers.size > 3) {
+                val tvMore = TextView(context).apply {
+                    text = "..."
+                    setTextColor(Color.WHITE)
+                    textSize = 14f
+                    gravity = Gravity.BOTTOM
+                }
+                headerLayout.addView(tvMore)
+            }
+        }
     }
 
     //TODO:子版參數設定
