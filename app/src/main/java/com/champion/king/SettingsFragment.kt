@@ -145,7 +145,8 @@ class SettingsFragment : Fragment() {
         override fun afterTextChanged(s: android.text.Editable?) {
             currentFocusedSubBoardId?.let { boardName ->
                 splitBoardSpecialPrizes[boardName] = s.toString()
-                renderSubBoardHeaderUI(boardName) // 🌟 即時更新子板上方的圈圈
+                renderSubBoardHeaderUI(boardName)
+                updateSubBoardCellsUI(boardName) // 🌟 新增：同步更新格子的外圈顏色
             }
         }
     }
@@ -156,7 +157,8 @@ class SettingsFragment : Fragment() {
         override fun afterTextChanged(s: android.text.Editable?) {
             currentFocusedSubBoardId?.let { boardName ->
                 splitBoardGrandPrizes[boardName] = s.toString()
-                renderSubBoardHeaderUI(boardName) // 🌟 即時更新子板上方的圈圈
+                renderSubBoardHeaderUI(boardName)
+                updateSubBoardCellsUI(boardName) // 🌟 新增：同步更新格子的外圈顏色
             }
         }
     }
@@ -2493,31 +2495,30 @@ class SettingsFragment : Fragment() {
 
         val density = context.resources.displayMetrics.density
 
-        // 🌟 防護牆 1：為標題區塊設定「最小高度」，防止重繪時瞬間塌陷擠壞下方的 GridLayout
         val headerLayout = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(4, 0, 0, 8)
-            minimumHeight = (36 * density).toInt() // 鎖定最小高度
+            minimumHeight = (36 * density).toInt()
             tag = "header_$boardName"
         }
         boardLayout.addView(headerLayout)
 
         renderSubBoardHeaderUI(boardName)
 
-        // 🌟 防護牆 2：用 FrameLayout 將 GridLayout 包起來當作「避震器」
         val gridContainer = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
-                1f // 由外層的 FrameLayout 來負責 LinearLayout 的權重分配
+                1f
             )
         }
 
         val gridLayout = GridLayout(context).apply {
+            tag = "grid_$boardName" // 🌟 核心修改：掛上專屬名牌，讓更新程式能找到它
             rowCount = 4
             columnCount = 5
-            alignmentMode = GridLayout.ALIGN_BOUNDS // 強制對齊邊界
+            alignmentMode = GridLayout.ALIGN_BOUNDS
             useDefaultMargins = false
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -2570,7 +2571,6 @@ class SettingsFragment : Fragment() {
             gridLayout.addView(cellFrame)
         }
 
-        // 把 gridLayout 放進避震器，再放進外層排版
         gridContainer.addView(gridLayout)
         boardLayout.addView(gridContainer)
 
@@ -2738,6 +2738,61 @@ class SettingsFragment : Fragment() {
                     gravity = Gravity.BOTTOM
                 }
                 headerLayout.addView(tvMore)
+            }
+        }
+    }
+
+    private fun updateSubBoardCellsUI(boardName: String) {
+        val root = binding.scratchBoardArea
+        // 透過 Tag 找到該子板專屬的 GridLayout
+        val gridLayout = root.findViewWithTag<GridLayout>("grid_$boardName") ?: return
+        val context = gridLayout.context
+
+        // 取得目前最新的獎項設定
+        val specialStr = splitBoardSpecialPrizes[boardName] ?: ""
+        val grandStr = splitBoardGrandPrizes[boardName] ?: ""
+
+        val specialList = specialStr.split(",").mapNotNull { it.trim().toIntOrNull() }
+        val grandList = grandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
+
+        // 遍歷所有 20 個格子，比對數字並重新上色
+        for (i in 0 until gridLayout.childCount) {
+            val cellFrame = gridLayout.getChildAt(i) as? FrameLayout ?: continue
+            val circleView = cellFrame.getChildAt(0) as? TextView ?: continue
+
+            val numberStr = circleView.text.toString()
+            val number = numberStr.toIntOrNull() ?: continue
+
+            when {
+                specialList.contains(number) -> {
+                    // 🌟 特獎：白色粗體字 + 金色加粗外框
+                    circleView.setTextColor(Color.WHITE)
+                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                        if (this is android.graphics.drawable.GradientDrawable) {
+                            val gold = ContextCompat.getColor(context, R.color.scratch_card_gold)
+                            val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
+                            setColor(darkGray)
+                            setStroke(4, gold)
+                        }
+                    }
+                }
+                grandList.contains(number) -> {
+                    // 🌟 大獎：白色粗體字 + 綠色加粗外框
+                    circleView.setTextColor(Color.WHITE)
+                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                        if (this is android.graphics.drawable.GradientDrawable) {
+                            val green = ContextCompat.getColor(context, R.color.scratch_card_green)
+                            val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
+                            setColor(darkGray)
+                            setStroke(4, green)
+                        }
+                    }
+                }
+                else -> {
+                    // ⬛ 沒中獎：恢復原始的黑底灰字與細灰框
+                    circleView.setTextColor(Color.GRAY)
+                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+                }
             }
         }
     }
