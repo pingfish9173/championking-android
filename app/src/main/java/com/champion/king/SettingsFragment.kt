@@ -1089,7 +1089,7 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 🌟 修改點 9：使用字串
+        // 🌟 取得字串 (如 "20x4" 或 "240")
         val scratchTypeStr = selectedItem.getScratchTypeString()
         if (scratchTypeStr == null) {
             showToast("請先選擇刮數")
@@ -1097,23 +1097,24 @@ class SettingsFragment : Fragment() {
         }
         val stock = selectedItem.stock
 
-        if (stock <= 0) {
+        if (currentBillingMode != "RENTAL" && stock <= 0) {
             showToast("此刮數無庫存，無法重新整理")
             return
         }
 
-        showToast("重新生成 ${scratchTypeStr}刮 配置中…")
+        showToast("重新生成 ${scratchTypeStr}版型 配置中…")
 
-        currentPreviewFragment = ScratchBoardPreviewFragment.newInstance(
-            "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
-        )
-
-        childFragmentManager.beginTransaction()
-            .replace(binding.scratchBoardArea.id, currentPreviewFragment!!)
-            .commitAllowingStateLoss()
+        // 🌟 核心修正：統一交給 displayScratchBoardPreview 處理，它會自動判斷並產生新的亂數
+        displayScratchBoardPreview(scratchTypeStr, null)
 
         binding.editTextSpecialPrize.text?.clear()
         binding.editTextGrandPrize.text?.clear()
+
+        // 🌟 修正：如果是分割版面，重新整理時順便清空所有子板的暫存獎項
+        if (scratchTypeStr.contains("x")) {
+            splitBoardSpecialPrizes.clear()
+            splitBoardGrandPrizes.clear()
+        }
 
         setPrizeControlsEnabled(true)
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
@@ -1419,11 +1420,15 @@ class SettingsFragment : Fragment() {
 
             // 🌟 攔截點：只要包含 "x" (例如 20x4)，就切換到分割版面預覽
             if (scratchTypeStr.contains("x")) {
+                // 🌟 修正：解析子板刮數（如 20x4 取出 20，25x4 取出 25）
+                val subBoardScratchCount = scratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
+
+                // 🌟 核心修正：利用 .shuffled() 產生 ABCD 四個子板的「亂數配置」
                 val splitNumbers = mapOf(
-                    "A" to (1..20).toList(),
-                    "B" to (1..20).toList(),
-                    "C" to (1..20).toList(),
-                    "D" to (1..20).toList()
+                    "A" to (1..subBoardScratchCount).toList().shuffled(),
+                    "B" to (1..subBoardScratchCount).toList().shuffled(),
+                    "C" to (1..subBoardScratchCount).toList().shuffled(),
+                    "D" to (1..subBoardScratchCount).toList().shuffled()
                 )
                 buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                 return@safeExecute // 執行完畢，直接中斷，不跑下面的舊版邏輯
