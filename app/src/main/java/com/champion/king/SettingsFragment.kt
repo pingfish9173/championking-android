@@ -139,6 +139,11 @@ class SettingsFragment : Fragment() {
     private val splitBoardSpecialPrizes = mutableMapOf<String, String>()
     private val splitBoardGrandPrizes = mutableMapOf<String, String>()
 
+    // 🌟 新增：子板專屬的玩法規則暫存區
+    private val splitBoardPitchTypes = mutableMapOf<String, String>()
+    private val splitBoardClawsCounts = mutableMapOf<String, String>()
+    private val splitBoardGiveawayCounts = mutableMapOf<String, Int>()
+
     private val splitSpecialPrizeWatcher = object : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -1089,7 +1094,6 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 🌟 取得字串 (如 "20x4" 或 "240")
         val scratchTypeStr = selectedItem.getScratchTypeString()
         if (scratchTypeStr == null) {
             showToast("請先選擇刮數")
@@ -1104,16 +1108,18 @@ class SettingsFragment : Fragment() {
 
         showToast("重新生成 ${scratchTypeStr}版型 配置中…")
 
-        // 🌟 核心修正：統一交給 displayScratchBoardPreview 處理，它會自動判斷並產生新的亂數
         displayScratchBoardPreview(scratchTypeStr, null)
 
         binding.editTextSpecialPrize.text?.clear()
         binding.editTextGrandPrize.text?.clear()
 
-        // 🌟 修正：如果是分割版面，重新整理時順便清空所有子板的暫存獎項
+        // 🌟 修正：如果是分割版面，重新整理時順便清空所有子板的所有暫存資料
         if (scratchTypeStr.contains("x")) {
             splitBoardSpecialPrizes.clear()
             splitBoardGrandPrizes.clear()
+            splitBoardPitchTypes.clear()
+            splitBoardClawsCounts.clear()
+            splitBoardGiveawayCounts.clear()
         }
 
         setPrizeControlsEnabled(true)
@@ -2695,31 +2701,76 @@ class SettingsFragment : Fragment() {
         setEnabledRecursively(binding.onShelfListContainer, false)
         updateSubBoardsAlpha(boardName)
 
-        // 🌟 1. UI 顯示切換：隱藏刮數列，顯示右側容器
+        // 1. UI 顯示切換：隱藏刮數列，顯示右側容器
         binding.layoutScratchCountRow.visibility = View.GONE
         binding.rightPanelContainer.visibility = View.VISIBLE
 
-        // 🌟 關鍵修正：透過 .parent 精準把「特獎列」、「大獎列」、「夾送規則列」與「自動刮開」叫出來！
         (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.VISIBLE
         (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.VISIBLE
-        (binding.radioGroupPitchType.parent as? View)?.visibility = View.VISIBLE
+
+        // 🌟 修正：恢復玩法規則設定區塊的顯示，讓大獎下方出現單選選項
+        (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
+            parent.visibility = View.VISIBLE
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChildAt(i)
+                if (child is TextView && child.text.toString().contains("玩法規則設定")) {
+                    child.visibility = View.VISIBLE
+                }
+            }
+        }
+        binding.radioGroupPitchType.visibility = View.VISIBLE
+        binding.textClawsPrefix.visibility = View.VISIBLE
+        binding.textClawsUnit.visibility = View.VISIBLE
+        binding.textGiveawayPrefix.visibility = View.VISIBLE
+        binding.textGiveawayUnit.visibility = View.VISIBLE
+        binding.spinnerGiveawayCount.visibility = View.VISIBLE
         binding.buttonAutoScratch.visibility = View.VISIBLE
 
-        // 🌟 2. 徹底解決 A 切 B 的干擾：先移除竊聽器
+        // 2. 徹底解決 A 切 B 的干擾：先移除竊聽器
         binding.editTextSpecialPrize.removeTextChangedListener(splitSpecialPrizeWatcher)
         binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
 
-        // 🌟 3. 安全地載入該子板的暫存資料
+        // 3. 安全地載入該子板的特獎/大獎暫存資料
         binding.editTextSpecialPrize.setText(splitBoardSpecialPrizes[boardName] ?: "")
         binding.editTextGrandPrize.setText(splitBoardGrandPrizes[boardName] ?: "")
 
-        // 🌟 4. 資料塞好後，再重新掛上竊聽器
+        // 🌟 4. 載入該子板專屬的玩法規則
+        val pitchType = splitBoardPitchTypes[boardName] ?: "scratch"
+        val claws = splitBoardClawsCounts[boardName] ?: "1"
+        val giveaway = splitBoardGiveawayCounts[boardName] ?: 1
+
+        if (pitchType == "shopping") {
+            binding.radioPitchShopping.isChecked = true
+            applyPitchTypeUi(isShopping = true, syncValues = false)
+            binding.editClawsCount.setText(claws)
+        } else {
+            binding.radioPitchScratch.isChecked = true
+            applyPitchTypeUi(isShopping = false, syncValues = false)
+            setSpinnerSelection(binding.spinnerClawsCount, claws.toIntOrNull() ?: 1)
+        }
+        setSpinnerSelection(binding.spinnerGiveawayCount, giveaway)
+
+        // 5. 資料塞好後，再重新掛上竊聽器
         binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
         binding.editTextGrandPrize.addTextChangedListener(splitGrandPrizeWatcher)
     }
 
     private fun exitSubBoardFocusMode() {
-        // 🌟 1. 拔除竊聽器
+        // 🌟 1. 在退出前，先把當前 UI 的數值存進子板地圖中！
+        currentFocusedSubBoardId?.let { boardName ->
+            val isShopping = binding.radioPitchShopping.isChecked
+            splitBoardPitchTypes[boardName] = if (isShopping) "shopping" else "scratch"
+
+            splitBoardClawsCounts[boardName] = if (isShopping) {
+                binding.editClawsCount.text?.toString() ?: "0"
+            } else {
+                binding.spinnerClawsCount.selectedItem?.toString() ?: "1"
+            }
+
+            splitBoardGiveawayCounts[boardName] = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull() ?: 1
+        }
+
+        // 2. 拔除竊聽器
         binding.editTextSpecialPrize.removeTextChangedListener(splitSpecialPrizeWatcher)
         binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
 
@@ -2730,18 +2781,28 @@ class SettingsFragment : Fragment() {
         setEnabledRecursively(binding.onShelfListContainer, true)
         updateSubBoardsAlpha(null)
 
-        // 🌟 2. 退出時，清空右側文字
+        // 3. 退出時，清空右側文字
         binding.editTextSpecialPrize.setText("")
         binding.editTextGrandPrize.setText("")
 
-        // 🌟 關鍵修正：恢復成「母板」狀態 (顯示刮數列，但把子板專用的參數列隱藏)
+        // 4. 恢復成「母板」狀態 (顯示刮數列，但把子板專用的參數列隱藏)
         binding.layoutScratchCountRow.visibility = View.VISIBLE
-        binding.rightPanelContainer.visibility = View.VISIBLE // 容器要保持可見，因為裡面還有儲存/返回按鈕
+        binding.rightPanelContainer.visibility = View.VISIBLE
 
         (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.GONE
         (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.GONE
         (binding.radioGroupPitchType.parent as? View)?.visibility = View.GONE
         binding.buttonAutoScratch.visibility = View.GONE
+
+        // 🌟 5. 隱藏玩法設定內部元件，避免污染母板
+        binding.radioGroupPitchType.visibility = View.GONE
+        binding.textClawsPrefix.visibility = View.GONE
+        binding.textClawsUnit.visibility = View.GONE
+        binding.textGiveawayPrefix.visibility = View.GONE
+        binding.textGiveawayUnit.visibility = View.GONE
+        binding.spinnerGiveawayCount.visibility = View.GONE
+        binding.spinnerClawsCount.visibility = View.GONE
+        binding.editClawsCount.visibility = View.GONE
     }
 
     private fun updateSubBoardsAlpha(focusedBoardName: String?) {
@@ -2907,7 +2968,4 @@ class SettingsFragment : Fragment() {
             }
         }
     }
-
-    //TODO:子版參數設定
-
 }
