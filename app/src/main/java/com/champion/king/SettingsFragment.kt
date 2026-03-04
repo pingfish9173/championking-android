@@ -506,6 +506,7 @@ class SettingsFragment : Fragment() {
             }
         }
 
+        // ⚠️ 這裡會把全畫面變亮
         restoreAllInteractive()
 
         if (!isFocusMode) {
@@ -532,6 +533,13 @@ class SettingsFragment : Fragment() {
                     setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
                 }
             }
+
+            // 🌟 修正：退出選取模式時，若仍在分割子板聚焦模式，要恢復周圍暗化狀態
+            currentFocusedSubBoardId?.let { boardName ->
+                updateSubBoardsAlpha(boardName)
+                binding.onShelfListContainer.alpha = 0.35f
+                setEnabledRecursively(binding.onShelfListContainer, false)
+            }
             return
         }
 
@@ -550,6 +558,11 @@ class SettingsFragment : Fragment() {
         }
 
         binding.scratchBoardArea.alpha = 1f
+
+        // 🌟 修正：進入選取模式時，把 BCD 板（非聚焦板）強制壓回暗化狀態
+        currentFocusedSubBoardId?.let { boardName ->
+            updateSubBoardsAlpha(boardName)
+        }
 
         fun disableView(v: View) {
             v.isEnabled = false
@@ -2484,8 +2497,15 @@ class SettingsFragment : Fragment() {
             isClickable = true
             setOnClickListener {
                 if (currentFocusedSubBoardId == boardName) {
+                    if (isPickingSpecialPrize || isPickingGrandPrize) {
+                        showToast("請先再點擊一次按鈕取消選取模式，再離開 ${boardName}板")
+                        return@setOnClickListener
+                    }
                     exitSubBoardFocusMode()
                 } else {
+                    if (isPickingSpecialPrize || isPickingGrandPrize) {
+                        return@setOnClickListener
+                    }
                     enterSubBoardFocusMode(boardName)
                 }
             }
@@ -2494,8 +2514,14 @@ class SettingsFragment : Fragment() {
         val density = context.resources.displayMetrics.density
 
         val headerLayout = LinearLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // 🌟 修正點：Kotlin 中 LinearLayout 的屬性是 isBaselineAligned
+            isBaselineAligned = false
             setPadding(4, 0, 0, 8)
             minimumHeight = (36 * density).toInt()
             tag = "header_$boardName"
@@ -2513,7 +2539,7 @@ class SettingsFragment : Fragment() {
         }
 
         val gridLayout = GridLayout(context).apply {
-            tag = "grid_$boardName" // 🌟 核心修改：掛上專屬名牌，讓更新程式能找到它
+            tag = "grid_$boardName"
             rowCount = 4
             columnCount = 5
             alignmentMode = GridLayout.ALIGN_BOUNDS
@@ -2530,7 +2556,8 @@ class SettingsFragment : Fragment() {
         val cellMargin = (1 * density).toInt()
         val circleSize = (36 * density).toInt()
 
-        for (i in 0 until 20) {
+        val cellCount = numbers.size
+        for (i in 0 until cellCount) {
             val cellFrame = FrameLayout(context).apply {
                 setBackgroundColor(Color.WHITE)
                 layoutParams = GridLayout.LayoutParams().apply {
@@ -2544,10 +2571,56 @@ class SettingsFragment : Fragment() {
                 isClickable = true
                 setOnClickListener {
                     if (currentFocusedSubBoardId != boardName) {
+                        if (isPickingSpecialPrize || isPickingGrandPrize) {
+                            return@setOnClickListener
+                        }
                         enterSubBoardFocusMode(boardName)
                     } else {
-                        android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 ${numbers.getOrNull(i)} 號碼")
-                        // TODO: 下一階段實作「點選格子」邏輯
+                        val number = numbers.getOrNull(i) ?: return@setOnClickListener
+
+                        if (isPickingSpecialPrize) {
+                            val currentGrandStr = binding.editTextGrandPrize.text.toString()
+                            val grandList = currentGrandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
+
+                            if (grandList.contains(number)) {
+                                showToast("此數字已在大獎清單，請先取消大獎再選為特獎")
+                                return@setOnClickListener
+                            }
+
+                            binding.editTextSpecialPrize.setText(number.toString())
+
+                        } else if (isPickingGrandPrize) {
+                            val currentSpecialStr = binding.editTextSpecialPrize.text.toString()
+                            val specialNum = currentSpecialStr.toIntOrNull()
+
+                            if (specialNum == number) {
+                                showToast("此數字已是特獎，無法加入大獎清單")
+                                return@setOnClickListener
+                            }
+
+                            val currentGrandStr = binding.editTextGrandPrize.text.toString()
+                            val grandList = currentGrandStr.split(",").mapNotNull { it.trim().toIntOrNull() }.toMutableList()
+
+                            if (grandList.contains(number)) {
+                                grandList.remove(number)
+                            } else {
+                                val selectedScratchTypeStr = getCurrentScratchType() ?: "20x4"
+                                val subBoardCount = selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
+                                val limit = GRAND_LIMITS[subBoardCount] ?: 0
+
+                                if (limit > 0 && grandList.size >= limit) {
+                                    showToast("${subBoardCount}刮的大獎數量限制為 ${limit} 個")
+                                    return@setOnClickListener
+                                }
+                                grandList.add(number)
+                            }
+
+                            val sortedText = grandList.sorted().joinToString(", ")
+                            binding.editTextGrandPrize.setText(sortedText)
+
+                        } else {
+                            android.util.Log.d("SettingsFragment", "總裁，您點擊了 ${boardName}板 的第 $number 號碼")
+                        }
                     }
                 }
             }
@@ -2733,7 +2806,14 @@ class SettingsFragment : Fragment() {
                     text = "..."
                     setTextColor(Color.WHITE)
                     textSize = 14f
-                    gravity = Gravity.BOTTOM
+                    // 🌟 核心修正 3：明確給定 LayoutParams 與置中屬性，防止 Layout 暴走
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        marginStart = (2 * density).toInt()
+                    }
                 }
                 headerLayout.addView(tvMore)
             }
