@@ -1794,22 +1794,25 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSpecialPrizeKeyboardClick() {
-        val selectedScratchTypeStr = getCurrentScratchType()
+        val selectedScratchTypeStr = getCurrentScratchType() // 取得如 "20x4" 或 "240"
         if (selectedScratchTypeStr == null) {
             showToast("請先選擇刮數")
             return
         }
 
-        val currentValue = binding.editTextSpecialPrize.text.toString()
+        // 🌟 修正：判斷是否為分割版面，若是則抓取 'x' 前面的數字作為子板刮數
+        val displayScratchType = if (selectedScratchTypeStr.contains("x")) {
+            selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
+        } else {
+            selectedScratchTypeStr.toIntOrNull() ?: 240
+        }
 
-        // 🌟 轉為 Int 餵給 UIManager (如果是分割版面先塞 240 頂著，避免紅字)
-        val scratchTypeInt = selectedScratchTypeStr.toIntOrNull() ?: 240
+        val currentValue = binding.editTextSpecialPrize.text.toString()
 
         uiManager.showSpecialPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
-            currentScratchType = scratchTypeInt,
+            currentScratchType = displayScratchType, // 傳入解析後的子板刮數 (如 20)
             onConfirm = { validatedInput ->
-
                 val specialPrizeNumber = validatedInput.toIntOrNull()
                 if (specialPrizeNumber == null) {
                     showToast("無效的特獎數字")
@@ -1817,13 +1820,9 @@ class SettingsFragment : Fragment() {
                 }
 
                 val cleaned = specialPrizeNumber.toString()
-
                 val grandText = binding.editTextGrandPrize.text.toString()
                 if (grandText.isNotEmpty()) {
-                    val grandList = grandText.split(",")
-                        .map { it.trim() }
-                        .mapNotNull { it.toIntOrNull() }
-
+                    val grandList = grandText.split(",").map { it.trim() }.mapNotNull { it.toIntOrNull() }
                     if (grandList.contains(specialPrizeNumber)) {
                         showToast("特獎不能與大獎重複！")
                         return@showSpecialPrizeKeyboard
@@ -1831,9 +1830,7 @@ class SettingsFragment : Fragment() {
                 }
 
                 binding.editTextSpecialPrize.setText(cleaned)
-
                 currentPreviewFragment?.setSelectedNumber(specialPrizeNumber)
-
                 showToast("特獎已設定：$cleaned")
             }
         )
@@ -1846,15 +1843,19 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        val currentValue = binding.editTextGrandPrize.text.toString()
+        // 🌟 修正：分割版面時，鍵盤上限與提示應以子板為主
+        val displayScratchType = if (selectedScratchTypeStr.contains("x")) {
+            selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
+        } else {
+            selectedScratchTypeStr.toIntOrNull() ?: 240
+        }
 
-        val scratchTypeInt = selectedScratchTypeStr.toIntOrNull() ?: 240
+        val currentValue = binding.editTextGrandPrize.text.toString()
 
         uiManager.showGrandPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
-            currentScratchType = scratchTypeInt,
+            currentScratchType = displayScratchType, // 傳入解析後的子板刮數 (如 20)
             onConfirm = { validatedInput ->
-
                 val cleanedList = validatedInput.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -1866,7 +1867,6 @@ class SettingsFragment : Fragment() {
                 }
 
                 val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
-
                 val specialText = binding.editTextSpecialPrize.text.toString()
                 val specialNumber = specialText.toIntOrNull()
 
@@ -1877,9 +1877,7 @@ class SettingsFragment : Fragment() {
 
                 val sortedText = sortedList.joinToString(", ")
                 binding.editTextGrandPrize.setText(sortedText)
-
                 currentPreviewFragment?.setGrandSelectedNumbers(sortedList)
-
                 showToast("大獎已設定：$sortedText")
             }
         )
