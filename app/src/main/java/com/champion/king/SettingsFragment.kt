@@ -2563,6 +2563,77 @@ class SettingsFragment : Fragment() {
         }
         boardLayout.addView(headerLayout)
 
+        // 🌟 核心修復：預先建立所有標題元件，避免 removeAllViews 造成 GridLayout 排版崩潰
+        val titleView = TextView(context).apply {
+            tag = "title"
+            text = "${boardName}板"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, (8 * density).toInt(), 0)
+        }
+        headerLayout.addView(titleView)
+
+        val specialSize = (26 * density).toInt()
+        val tvSpecial = TextView(context).apply {
+            tag = "special"
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                if (this is android.graphics.drawable.GradientDrawable) {
+                    val gold = ContextCompat.getColor(context, R.color.scratch_card_gold)
+                    setColor(gold)
+                    setStroke(2, gold)
+                }
+            }
+            layoutParams = LinearLayout.LayoutParams(specialSize, specialSize).apply {
+                marginEnd = (8 * density).toInt()
+            }
+            visibility = View.GONE
+        }
+        headerLayout.addView(tvSpecial)
+
+        for (i in 0..2) {
+            val tvGrand = TextView(context).apply {
+                tag = "grand_$i"
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                    if (this is android.graphics.drawable.GradientDrawable) {
+                        val green = ContextCompat.getColor(context, R.color.scratch_card_green)
+                        setColor(green)
+                        setStroke(2, green)
+                    }
+                }
+                layoutParams = LinearLayout.LayoutParams(specialSize, specialSize).apply {
+                    marginEnd = (4 * density).toInt()
+                }
+                visibility = View.GONE
+            }
+            headerLayout.addView(tvGrand)
+        }
+
+        val tvMore = TextView(context).apply {
+            tag = "more"
+            text = "..."
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                marginStart = (2 * density).toInt()
+            }
+            visibility = View.GONE
+        }
+        headerLayout.addView(tvMore)
+
+        // 初始化顯示資料
         renderSubBoardHeaderUI(boardName)
 
         val gridContainer = FrameLayout(context).apply {
@@ -2613,6 +2684,7 @@ class SettingsFragment : Fragment() {
                     } else {
                         val number = numbers.getOrNull(i) ?: return@setOnClickListener
 
+                        // 🌟 補回遺失的點擊格子選取邏輯
                         if (isPickingSpecialPrize) {
                             val currentGrandStr = binding.editTextGrandPrize.text.toString()
                             val grandList = currentGrandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
@@ -2643,7 +2715,6 @@ class SettingsFragment : Fragment() {
                                 val isSplitMode = selectedScratchTypeStr.contains("x")
                                 val subBoardCount = selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
 
-                                // 🌟 防呆：分割版面大獎上限固定為 2，單一版面照舊
                                 val limit = if (isSplitMode) 2 else (GRAND_LIMITS[subBoardCount] ?: 0)
 
                                 if (limit > 0 && grandList.size >= limit) {
@@ -2829,87 +2900,48 @@ class SettingsFragment : Fragment() {
         val root = binding.scratchBoardArea
         val headerLayout = root.findViewWithTag<LinearLayout>("header_$boardName") ?: return
 
-        headerLayout.removeAllViews()
-        val context = headerLayout.context
-        val density = context.resources.displayMetrics.density
-
-        // 1. 繪製標題 ("A板")
-        val titleView = TextView(context).apply {
-            text = "${boardName}板"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, 0, (8 * density).toInt(), 0)
-        }
-        headerLayout.addView(titleView)
+        // 🌟 核心修復：絕對不能呼叫 removeAllViews()！改用控制 visibility
 
         val specialPrize = splitBoardSpecialPrizes[boardName]
         val grandPrize = splitBoardGrandPrizes[boardName]
 
-        // 2. 繪製特獎 (黃底白字圈)
-        if (!specialPrize.isNullOrEmpty() && specialPrize != "無") {
-            val specialSize = (26 * density).toInt()
-            val tvSpecial = TextView(context).apply {
-                text = specialPrize
-                setTextColor(Color.WHITE)
-                textSize = 12f
-                setTypeface(null, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                    if (this is android.graphics.drawable.GradientDrawable) {
-                        val gold = ContextCompat.getColor(context, R.color.scratch_card_gold)
-                        setColor(gold)
-                        setStroke(2, gold)
-                    }
-                }
-                layoutParams = LinearLayout.LayoutParams(specialSize, specialSize).apply {
-                    marginEnd = (8 * density).toInt()
-                }
+        // 更新特獎
+        val tvSpecial = headerLayout.findViewWithTag<TextView>("special")
+        if (tvSpecial != null) {
+            if (!specialPrize.isNullOrEmpty() && specialPrize != "無") {
+                tvSpecial.text = specialPrize
+                tvSpecial.visibility = View.VISIBLE
+            } else {
+                tvSpecial.visibility = View.GONE
             }
-            headerLayout.addView(tvSpecial)
         }
 
-        // 3. 繪製大獎 (綠底白字圈)
-        if (!grandPrize.isNullOrEmpty() && grandPrize != "無") {
-            val grandSize = (26 * density).toInt()
-            val grandNumbers = grandPrize.split(",").mapNotNull { it.trim().toIntOrNull() }
+        // 更新大獎
+        val grandNumbers = if (!grandPrize.isNullOrEmpty() && grandPrize != "無") {
+            grandPrize.split(",").mapNotNull { it.trim().toIntOrNull() }
+        } else {
+            emptyList()
+        }
 
-            val displayNumbers = grandNumbers.take(3)
-            for (num in displayNumbers) {
-                val tvGrand = TextView(context).apply {
-                    text = num.toString()
-                    setTextColor(Color.WHITE)
-                    textSize = 12f
-                    setTypeface(null, Typeface.BOLD)
-                    gravity = Gravity.CENTER
-                    background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                        if (this is android.graphics.drawable.GradientDrawable) {
-                            val green = ContextCompat.getColor(context, R.color.scratch_card_green)
-                            setColor(green)
-                            setStroke(2, green)
-                        }
-                    }
-                    layoutParams = LinearLayout.LayoutParams(grandSize, grandSize).apply {
-                        marginEnd = (4 * density).toInt()
-                    }
+        for (i in 0..2) {
+            val tvGrand = headerLayout.findViewWithTag<TextView>("grand_$i")
+            if (tvGrand != null) {
+                if (i < grandNumbers.size) {
+                    tvGrand.text = grandNumbers[i].toString()
+                    tvGrand.visibility = View.VISIBLE
+                } else {
+                    tvGrand.visibility = View.GONE
                 }
-                headerLayout.addView(tvGrand)
             }
+        }
+
+        // 更新 More "..."
+        val tvMore = headerLayout.findViewWithTag<TextView>("more")
+        if (tvMore != null) {
             if (grandNumbers.size > 3) {
-                val tvMore = TextView(context).apply {
-                    text = "..."
-                    setTextColor(Color.WHITE)
-                    textSize = 14f
-                    // 🌟 核心修正 3：明確給定 LayoutParams 與置中屬性，防止 Layout 暴走
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        gravity = Gravity.CENTER_VERTICAL
-                        marginStart = (2 * density).toInt()
-                    }
-                }
-                headerLayout.addView(tvMore)
+                tvMore.visibility = View.VISIBLE
+            } else {
+                tvMore.visibility = View.GONE
             }
         }
     }
