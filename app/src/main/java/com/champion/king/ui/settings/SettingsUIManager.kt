@@ -187,16 +187,26 @@ class SettingsUIManager(
     fun showGrandPrizeKeyboard(
         currentValue: String?,
         currentScratchType: Int,
+        isSplitMode: Boolean = false, // 🌟 新增：接收是否為分割版面
         onConfirm: (String) -> Unit
     ) {
-        val grandLimit = GRAND_LIMITS[currentScratchType] ?: 20
+        val grandLimit = if (isSplitMode) 2 else (GRAND_LIMITS[currentScratchType] ?: 20)
+
+        // 🌟 修改：根據模式顯示不同的提示文字
+        val hintText = if (isSplitMode) {
+            "子板大獎個數上限為 2 個"
+        } else {
+            "${currentScratchType}刮｜大獎最多可設定 ${grandLimit} 個"
+        }
+
         showPrizeKeyboard(
             title = "輸入大獎數字",
             currentValue = currentValue,
-            hint = "${currentScratchType}刮｜大獎最多可設定 ${grandLimit} 個",
+            hint = hintText,
             allowComma = true,
             validator = { input ->
-                validatePrizeInput(input, currentScratchType, isSpecialPrize = false)
+                // 將 isSplitMode 傳給驗證器
+                validatePrizeInput(input, currentScratchType, isSpecialPrize = false, isSplitMode = isSplitMode)
             },
             onConfirm = onConfirm
         )
@@ -404,23 +414,21 @@ class SettingsUIManager(
     }
 
     // ✅ 新增：驗證獎項輸入
-    /**
-     * 驗證數字鍵盤輸入的特獎/大獎數字是否有效
-     *
-     * @param inputValue 使用者輸入的字串（例如 "03, 15, 7"）
-     * @param maxNumber  目前刮數設定的最大格子數，例如 240
-     * @param isSpecialPrize true=特獎, false=大獎
-     * @return ValidationResult(isValid, errorMessage)
-     */
     private fun validatePrizeInput(
         inputValue: String,
         maxNumber: Int,
-        isSpecialPrize: Boolean
+        isSpecialPrize: Boolean,
+        isSplitMode: Boolean = false
     ): ValidationResult {
 
         // 1️⃣ 空值
         if (inputValue.isBlank()) {
-            return ValidationResult(false, "請輸入數字")
+            // 🌟 修正：特獎必填，但大獎允許留空（代表 0 個）
+            return if (isSpecialPrize) {
+                ValidationResult(false, "請輸入數字")
+            } else {
+                ValidationResult(true, "")
+            }
         }
 
         // 2️⃣ 不可有空 token（避免 "5,,5"）
@@ -455,9 +463,10 @@ class SettingsUIManager(
 
         // 6️⃣ ⭐ 大獎數量限制（依刮數）
         if (!isSpecialPrize) {
-            val grandLimit = GRAND_LIMITS[maxNumber] ?: 20
+            val grandLimit = if (isSplitMode) 2 else (GRAND_LIMITS[maxNumber] ?: 20)
             if (numbers.size > grandLimit) {
-                return ValidationResult(false, "超過大獎最大數量（最多 $grandLimit 個）")
+                val errorMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "超過大獎最大數量（最多 $grandLimit 個）"
+                return ValidationResult(false, errorMsg)
             }
         }
 

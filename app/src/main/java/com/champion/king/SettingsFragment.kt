@@ -969,12 +969,19 @@ class SettingsFragment : Fragment() {
     )
 
     private fun handleSaveSettings(data: SaveData) {
-        val limit = GRAND_LIMITS[data.scratchType] ?: 0
+        val selectedScratchTypeStr = getCurrentScratchType() ?: ""
+        val isSplitMode = selectedScratchTypeStr.contains("x")
+
+        // 🌟 防呆：儲存時再次驗證大獎上限（分割=2，單一=既有限制）
+        val limit = if (isSplitMode) 2 else (GRAND_LIMITS[data.scratchType] ?: 0)
+
         val gpList = data.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
         if (limit > 0 && gpList.size > limit) {
-            showToast("${data.scratchType}刮的大獎數量限制為 ${limit} 個")
+            val limitMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "${data.scratchType}刮的大獎數量限制為 ${limit} 個"
+            showToast(limitMsg)
             return
         }
+
         if (!validateBeforeSave(data)) return
 
         val sp = data.specialPrize?.toIntOrNull()
@@ -1856,8 +1863,8 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 🌟 修正：分割版面時，鍵盤上限與提示應以子板為主
-        val displayScratchType = if (selectedScratchTypeStr.contains("x")) {
+        val isSplitMode = selectedScratchTypeStr.contains("x")
+        val displayScratchType = if (isSplitMode) {
             selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
         } else {
             selectedScratchTypeStr.toIntOrNull() ?: 240
@@ -1867,8 +1874,18 @@ class SettingsFragment : Fragment() {
 
         uiManager.showGrandPrizeKeyboard(
             currentValue = if (currentValue.isEmpty()) null else currentValue,
-            currentScratchType = displayScratchType, // 傳入解析後的子板刮數 (如 20)
+            currentScratchType = displayScratchType,
+            isSplitMode = isSplitMode,
             onConfirm = { validatedInput ->
+
+                // 🌟 修正：如果回傳的是空字串，代表使用者清空了所有數字，直接視為「0個大獎」
+                if (validatedInput.isBlank()) {
+                    binding.editTextGrandPrize.setText("")
+                    currentPreviewFragment?.setGrandSelectedNumbers(emptyList())
+                    showToast("大獎已清空")
+                    return@showGrandPrizeKeyboard
+                }
+
                 val cleanedList = validatedInput.split(",")
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
@@ -1880,6 +1897,12 @@ class SettingsFragment : Fragment() {
                 }
 
                 val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
+
+                if (isSplitMode && sortedList.size > 2) {
+                    showToast("分割版面的大獎數量限制為 2 個")
+                    return@showGrandPrizeKeyboard
+                }
+
                 val specialText = binding.editTextSpecialPrize.text.toString()
                 val specialNumber = specialText.toIntOrNull()
 
@@ -1890,7 +1913,9 @@ class SettingsFragment : Fragment() {
 
                 val sortedText = sortedList.joinToString(", ")
                 binding.editTextGrandPrize.setText(sortedText)
+
                 currentPreviewFragment?.setGrandSelectedNumbers(sortedList)
+
                 showToast("大獎已設定：$sortedText")
             }
         )
@@ -2520,7 +2545,6 @@ class SettingsFragment : Fragment() {
             )
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            // 🌟 修正點：Kotlin 中 LinearLayout 的屬性是 isBaselineAligned
             isBaselineAligned = false
             setPadding(4, 0, 0, 8)
             minimumHeight = (36 * density).toInt()
@@ -2605,11 +2629,15 @@ class SettingsFragment : Fragment() {
                                 grandList.remove(number)
                             } else {
                                 val selectedScratchTypeStr = getCurrentScratchType() ?: "20x4"
+                                val isSplitMode = selectedScratchTypeStr.contains("x")
                                 val subBoardCount = selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
-                                val limit = GRAND_LIMITS[subBoardCount] ?: 0
+
+                                // 🌟 防呆：分割版面大獎上限固定為 2，單一版面照舊
+                                val limit = if (isSplitMode) 2 else (GRAND_LIMITS[subBoardCount] ?: 0)
 
                                 if (limit > 0 && grandList.size >= limit) {
-                                    showToast("${subBoardCount}刮的大獎數量限制為 ${limit} 個")
+                                    val limitMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "${subBoardCount}刮的大獎數量限制為 ${limit} 個"
+                                    showToast(limitMsg)
                                     return@setOnClickListener
                                 }
                                 grandList.add(number)
