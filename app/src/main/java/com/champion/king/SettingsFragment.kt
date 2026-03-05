@@ -1108,12 +1108,7 @@ class SettingsFragment : Fragment() {
 
         showToast("重新生成 ${scratchTypeStr}版型 配置中…")
 
-        displayScratchBoardPreview(scratchTypeStr, null)
-
-        binding.editTextSpecialPrize.text?.clear()
-        binding.editTextGrandPrize.text?.clear()
-
-        // 🌟 修正：如果是分割版面，重新整理時順便清空所有子板的所有暫存資料
+        // 🌟 修正：將清空暫存的邏輯移到生成預覽「之前」，避免把剛生成的亂數特獎給清掉
         if (scratchTypeStr.contains("x")) {
             splitBoardSpecialPrizes.clear()
             splitBoardGrandPrizes.clear()
@@ -1121,6 +1116,11 @@ class SettingsFragment : Fragment() {
             splitBoardClawsCounts.clear()
             splitBoardGiveawayCounts.clear()
         }
+
+        displayScratchBoardPreview(scratchTypeStr, null)
+
+        binding.editTextSpecialPrize.text?.clear()
+        binding.editTextGrandPrize.text?.clear()
 
         setPrizeControlsEnabled(true)
         saveDraftIfNeeded(shelfManager.selectedShelfOrder)
@@ -1424,23 +1424,40 @@ class SettingsFragment : Fragment() {
                     .commitNowAllowingStateLoss()
             }
 
-            // 🌟 攔截點：只要包含 "x" (例如 20x4)，就切換到分割版面預覽
             if (scratchTypeStr.contains("x")) {
-                // 🌟 修正：解析子板刮數（如 20x4 取出 20，25x4 取出 25）
                 val subBoardScratchCount = scratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
 
-                // 🌟 核心修正：利用 .shuffled() 產生 ABCD 四個子板的「亂數配置」
                 val splitNumbers = mapOf(
                     "A" to (1..subBoardScratchCount).toList().shuffled(),
                     "B" to (1..subBoardScratchCount).toList().shuffled(),
                     "C" to (1..subBoardScratchCount).toList().shuffled(),
                     "D" to (1..subBoardScratchCount).toList().shuffled()
                 )
+
+                if (existingConfigs == null) {
+                    splitBoardSpecialPrizes.clear()
+                    splitBoardGrandPrizes.clear()
+                    splitBoardPitchTypes.clear()
+                    splitBoardClawsCounts.clear()
+                    splitBoardGiveawayCounts.clear()
+
+                    listOf("A", "B", "C", "D").forEach { boardName ->
+                        val randomSp = splitNumbers[boardName]?.random()?.toString() ?: "1"
+                        splitBoardSpecialPrizes[boardName] = randomSp
+                        splitBoardGrandPrizes[boardName] = ""
+
+                        // 🌟 核心修改：寫入預設玩法規則「夾1刮1」
+                        splitBoardPitchTypes[boardName] = "scratch"
+                        splitBoardClawsCounts[boardName] = "1"
+                        splitBoardGiveawayCounts[boardName] = 1
+                    }
+                }
+
                 buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
-                return@safeExecute // 執行完畢，直接中斷，不跑下面的舊版邏輯
+                return@safeExecute
             }
 
-            // --- 以下為單一版面原有邏輯 ---
+            // --- 單一版面原有邏輯 ---
             val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
@@ -1449,10 +1466,7 @@ class SettingsFragment : Fragment() {
                 ScratchBoardPreviewFragment.newInstance(scratchesTypeString)
             }
 
-            currentPreviewFragment?.arguments?.putBoolean(
-                "enable_single_pick",
-                isPickingSpecialPrize
-            )
+            currentPreviewFragment?.arguments?.putBoolean("enable_single_pick", isPickingSpecialPrize)
 
             childFragmentManager.beginTransaction()
                 .replace(binding.scratchBoardArea.id, currentPreviewFragment!!)
@@ -2517,7 +2531,15 @@ class SettingsFragment : Fragment() {
 
         verticalWrapper.addView(row1)
         verticalWrapper.addView(row2)
+
+        // 🌟 正式將四個子板貼到畫面上
         mainContainer.addView(verticalWrapper)
+
+        // 🌟 核心修改：在全部視圖加入到 mainContainer (畫面上) 後，統一更新一次各子板的格子 UI 與上方標題 UI
+        listOf("A", "B", "C", "D").forEach { boardName ->
+            updateSubBoardCellsUI(boardName)
+            renderSubBoardHeaderUI(boardName) // 🌟 補上這行，標題列就會顯示金圈特獎了！
+        }
     }
 
     private fun createSingleBoardPreview(context: android.content.Context, boardName: String, numbers: List<Int>): View {
@@ -2563,7 +2585,6 @@ class SettingsFragment : Fragment() {
         }
         boardLayout.addView(headerLayout)
 
-        // 🌟 核心修復：預先建立所有標題元件，避免 removeAllViews 造成 GridLayout 排版崩潰
         val titleView = TextView(context).apply {
             tag = "title"
             text = "${boardName}板"
@@ -2633,7 +2654,28 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(tvMore)
 
-        // 初始化顯示資料
+        // 🌟 核心修改 1：加入一個彈性空白 (Space)，利用 weight 把它後面的東西推到最右邊
+        val space = Space(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        headerLayout.addView(space)
+
+        // 🌟 核心修改 2：加入顯示「夾X刮X」的黃色文字
+        val tvRule = TextView(context).apply {
+            tag = "rule"
+            setTextColor(Color.parseColor("#FFC107")) // 黃色
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                marginEnd = (4 * density).toInt()
+            }
+        }
+        headerLayout.addView(tvRule)
+
         renderSubBoardHeaderUI(boardName)
 
         val gridContainer = FrameLayout(context).apply {
@@ -2684,7 +2726,6 @@ class SettingsFragment : Fragment() {
                     } else {
                         val number = numbers.getOrNull(i) ?: return@setOnClickListener
 
-                        // 🌟 補回遺失的點擊格子選取邏輯
                         if (isPickingSpecialPrize) {
                             val currentGrandStr = binding.editTextGrandPrize.text.toString()
                             val grandList = currentGrandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
@@ -2827,7 +2868,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun exitSubBoardFocusMode() {
-        // 🌟 1. 在退出前，先把當前 UI 的數值存進子板地圖中！
+        // 1. 在退出前，先把當前 UI 的數值存進子板地圖中！
         currentFocusedSubBoardId?.let { boardName ->
             val isShopping = binding.radioPitchShopping.isChecked
             splitBoardPitchTypes[boardName] = if (isShopping) "shopping" else "scratch"
@@ -2839,6 +2880,9 @@ class SettingsFragment : Fragment() {
             }
 
             splitBoardGiveawayCounts[boardName] = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull() ?: 1
+
+            // 🌟 核心修改：存好之後，馬上呼叫 render 讓剛剛設定好的規則顯示到標題列
+            renderSubBoardHeaderUI(boardName)
         }
 
         // 2. 拔除竊聽器
@@ -2856,7 +2900,7 @@ class SettingsFragment : Fragment() {
         binding.editTextSpecialPrize.setText("")
         binding.editTextGrandPrize.setText("")
 
-        // 4. 恢復成「母板」狀態 (顯示刮數列，但把子板專用的參數列隱藏)
+        // 4. 恢復成「母板」狀態
         binding.layoutScratchCountRow.visibility = View.VISIBLE
         binding.rightPanelContainer.visibility = View.VISIBLE
 
@@ -2865,7 +2909,6 @@ class SettingsFragment : Fragment() {
         (binding.radioGroupPitchType.parent as? View)?.visibility = View.GONE
         binding.buttonAutoScratch.visibility = View.GONE
 
-        // 🌟 5. 隱藏玩法設定內部元件，避免污染母板
         binding.radioGroupPitchType.visibility = View.GONE
         binding.textClawsPrefix.visibility = View.GONE
         binding.textClawsUnit.visibility = View.GONE
@@ -2899,8 +2942,6 @@ class SettingsFragment : Fragment() {
     private fun renderSubBoardHeaderUI(boardName: String) {
         val root = binding.scratchBoardArea
         val headerLayout = root.findViewWithTag<LinearLayout>("header_$boardName") ?: return
-
-        // 🌟 核心修復：絕對不能呼叫 removeAllViews()！改用控制 visibility
 
         val specialPrize = splitBoardSpecialPrizes[boardName]
         val grandPrize = splitBoardGrandPrizes[boardName]
@@ -2942,6 +2983,20 @@ class SettingsFragment : Fragment() {
                 tvMore.visibility = View.VISIBLE
             } else {
                 tvMore.visibility = View.GONE
+            }
+        }
+
+        // 🌟 核心修改：更新玩法規則文字 (夾X刮X / 消費X刮X)
+        val tvRule = headerLayout.findViewWithTag<TextView>("rule")
+        if (tvRule != null) {
+            val pitchType = splitBoardPitchTypes[boardName] ?: "scratch"
+            val claws = splitBoardClawsCounts[boardName] ?: "1"
+            val giveaway = splitBoardGiveawayCounts[boardName] ?: 1
+
+            if (pitchType == "shopping") {
+                tvRule.text = "消費${claws}刮${giveaway}"
+            } else {
+                tvRule.text = "夾${claws}刮${giveaway}"
             }
         }
     }
