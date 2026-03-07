@@ -408,8 +408,8 @@ class SettingsFragment : Fragment() {
 
                     showRightPanel()
 
-                    // 🌟 總裁指示：判斷是否為分割版面並隱藏不必要的參數
-                    applySplitModeVisibility(scratchTypeStr.contains("x"))
+                    // 🌟 配合新參數，下拉選單未設置狀態必定為可編輯 (isReadonly = false)
+                    applySplitModeVisibility(scratchTypeStr.contains("x"), isReadonly = false)
 
                     val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
                     if (selectedCard == null) {
@@ -503,7 +503,7 @@ class SettingsFragment : Fragment() {
         }
 
         val allowedViews = mutableSetOf<View>(
-            binding.scratchBoardArea // 預覽區
+            binding.scratchBoardArea
         ).apply {
             allowedButton?.let { btn ->
                 add(btn)
@@ -511,7 +511,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // ⚠️ 這裡會把全畫面變亮
         restoreAllInteractive()
 
         if (!isFocusMode) {
@@ -527,7 +526,8 @@ class SettingsFragment : Fragment() {
                     delete = false
                 )
             } else {
-                val isReadonly = card.inUsed || hasBeenScratched(card)
+                // 🌟 修正：同步這裡的判斷邏輯，僅刮過才唯讀
+                val isReadonly = hasBeenScratched(card)
                 if (isReadonly) {
                     if (card.inUsed) {
                         setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
@@ -535,11 +535,14 @@ class SettingsFragment : Fragment() {
                         setButtonsEnabled(save = false, toggleInUse = true, autoScratch = true, returnBtn = false, delete = true)
                     }
                 } else {
-                    setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
+                    if (card.inUsed) {
+                        setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
+                    } else {
+                        setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
+                    }
                 }
             }
 
-            // 🌟 修正：退出選取模式時，若仍在分割子板聚焦模式，要恢復周圍暗化狀態
             currentFocusedSubBoardId?.let { boardName ->
                 updateSubBoardsAlpha(boardName)
                 binding.onShelfListContainer.alpha = 0.35f
@@ -564,7 +567,6 @@ class SettingsFragment : Fragment() {
 
         binding.scratchBoardArea.alpha = 1f
 
-        // 🌟 修正：進入選取模式時，把 BCD 板（非聚焦板）強制壓回暗化狀態
         currentFocusedSubBoardId?.let { boardName ->
             updateSubBoardsAlpha(boardName)
         }
@@ -868,7 +870,8 @@ class SettingsFragment : Fragment() {
         restorePreviewContainer()
         updateParametersTitle(shelfManager.selectedShelfOrder)
 
-        val shouldShowReadonly = selectedCard.inUsed || hasBeenScratched(selectedCard)
+        // 🌟 修正：只有「已刮過」才強制唯讀，單純「使用中」仍然可以編輯
+        val shouldShowReadonly = hasBeenScratched(selectedCard)
 
         if (shouldShowReadonly) {
             displayScratchCardDetailsReadonly(selectedCard)
@@ -879,10 +882,14 @@ class SettingsFragment : Fragment() {
             }
         } else {
             displayScratchCardDetails(selectedCard)
-            setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
+            if (selectedCard.inUsed) {
+                // 🌟 使用中但沒刮過：可儲存、不可刪除返回
+                setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = false, delete = false)
+            } else {
+                setButtonsEnabled(save = true, toggleInUse = true, autoScratch = true, returnBtn = true, delete = true)
+            }
         }
 
-        // 🌟 核心修改：顯示標籤和隱藏邏輯也要支援分割版面字串
         val scratchTypeStr = if (!selectedCard.splitMode.isNullOrEmpty()) selectedCard.splitMode!! else selectedCard.scratchesType.toString()
 
         showScratchTypeLabel(scratchTypeStr)
@@ -890,8 +897,8 @@ class SettingsFragment : Fragment() {
         uiManager.updateActionButtonsUI(selectedCard)
         updateRefreshButtonVisibility()
 
-        // 🌟 總裁指示：判斷是否為分割版面並隱藏不必要的參數
-        applySplitModeVisibility(scratchTypeStr.contains("x"))
+        // 🌟 修正：將 shouldShowReadonly 狀態傳遞下去，避免 UI 衝突
+        applySplitModeVisibility(scratchTypeStr.contains("x"), shouldShowReadonly)
     }
 
     private fun showRightPanel() {
@@ -908,7 +915,6 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
-        // 🌟 攔截：如果目前在「子板聚焦模式」，按下儲存鈕只做暫存，不寫入 Firebase
         if (currentFocusedSubBoardId != null) {
             val boardName = currentFocusedSubBoardId
 
@@ -917,18 +923,17 @@ class SettingsFragment : Fragment() {
                 return
             }
 
-            // exitSubBoardFocusMode 會自動把目前的輸入存進 Map，更新 UI 並退回母板
             exitSubBoardFocusMode()
             showToast("${boardName}板參數已暫存！全部子板設定完畢後，請點擊母板的儲存按鈕寫入資料庫")
             return
         }
 
-        // --- 以下為原本的母板儲存邏輯 ---
         val selectedOrder = shelfManager.selectedShelfOrder
         val selectedCard = viewModel.cards.value[selectedOrder]
 
-        if (selectedCard != null && (selectedCard.inUsed || hasBeenScratched(selectedCard))) {
-            showToast("此板位已使用中或已刮開，無法儲存參數")
+        // 🌟 修正：只有「已刮過」才阻擋儲存，單純「使用中」仍可儲存修改
+        if (selectedCard != null && hasBeenScratched(selectedCard)) {
+            showToast("此刮板已刮開，無法儲存參數")
             return
         }
 
@@ -1787,39 +1792,28 @@ class SettingsFragment : Fragment() {
         binding.spinnerGiveawayCount.visibility = View.VISIBLE
     }
 
-    // 🌟 總裁專用：動態隱藏/顯示分割版面不需要的參數
-    private fun applySplitModeVisibility(isSplitMode: Boolean) {
-        val visibility = if (isSplitMode) View.GONE else View.VISIBLE
-
-        // 1. 隱藏特獎與大獎的整個容器
+    private fun applySplitModeVisibility(isSplitMode: Boolean, isReadonly: Boolean) {
         val specialPrizeContainer = findViewContaining(binding.buttonPickSpecialPrize)
         val grandPrizeContainer = findViewContaining(binding.buttonPickGrandPrize)
-        specialPrizeContainer?.visibility = visibility
-        grandPrizeContainer?.visibility = visibility
 
-        // 2. 隱藏唯讀模式下的標籤
         if (isSplitMode) {
+            specialPrizeContainer?.visibility = View.GONE
+            grandPrizeContainer?.visibility = View.GONE
+
             specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
             grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
             binding.textPitchRuleReadonly.visibility = View.GONE
-        } else {
-            specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
-            grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
-        }
 
-        // 3. 隱藏玩法規則設定及周邊
-        binding.radioGroupPitchType.visibility = visibility
-        binding.spinnerGiveawayCount.visibility = visibility
-        binding.textClawsPrefix.visibility = visibility
-        binding.textClawsUnit.visibility = visibility
-        binding.textGiveawayPrefix.visibility = visibility
-        binding.textGiveawayUnit.visibility = visibility
+            binding.radioGroupPitchType.visibility = View.GONE
+            binding.spinnerGiveawayCount.visibility = View.GONE
+            binding.textClawsPrefix.visibility = View.GONE
+            binding.textClawsUnit.visibility = View.GONE
+            binding.textGiveawayPrefix.visibility = View.GONE
+            binding.textGiveawayUnit.visibility = View.GONE
 
-        if (isSplitMode) {
             binding.spinnerClawsCount.visibility = View.GONE
             binding.editClawsCount.visibility = View.GONE
 
-            // 安全地找出並隱藏「玩法規則設定：」的標題文字
             (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
                 for (i in 0 until parent.childCount) {
                     val child = parent.getChildAt(i)
@@ -1829,9 +1823,37 @@ class SettingsFragment : Fragment() {
                 }
             }
         } else {
-            // 恢復原本的夾出/消費贈送顯示狀態
-            val isShopping = binding.radioPitchShopping.isChecked
-            applyPitchTypeUi(isShopping = isShopping, syncValues = false)
+            // 🌟 單一版面：根據 isReadonly 決定顯示編輯框還是唯讀標籤，避免兩者同時出現
+            if (isReadonly) {
+                specialPrizeContainer?.visibility = View.GONE
+                grandPrizeContainer?.visibility = View.GONE
+                specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+                grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+                binding.textPitchRuleReadonly.visibility = View.VISIBLE
+
+                binding.radioGroupPitchType.visibility = View.GONE
+                binding.spinnerGiveawayCount.visibility = View.GONE
+                binding.textClawsPrefix.visibility = View.GONE
+                binding.textClawsUnit.visibility = View.GONE
+                binding.textGiveawayPrefix.visibility = View.GONE
+                binding.textGiveawayUnit.visibility = View.GONE
+            } else {
+                specialPrizeContainer?.visibility = View.VISIBLE
+                grandPrizeContainer?.visibility = View.VISIBLE
+                specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+                grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+                binding.textPitchRuleReadonly.visibility = View.GONE
+
+                binding.radioGroupPitchType.visibility = View.VISIBLE
+                binding.spinnerGiveawayCount.visibility = View.VISIBLE
+                binding.textClawsPrefix.visibility = View.VISIBLE
+                binding.textClawsUnit.visibility = View.VISIBLE
+                binding.textGiveawayPrefix.visibility = View.VISIBLE
+                binding.textGiveawayUnit.visibility = View.VISIBLE
+
+                val isShopping = binding.radioPitchShopping.isChecked
+                applyPitchTypeUi(isShopping = isShopping, syncValues = false)
+            }
 
             // 恢復「玩法規則設定：」的標題文字
             (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
@@ -2504,7 +2526,8 @@ class SettingsFragment : Fragment() {
 
         val order = shelfManager.selectedShelfOrder
         val card = viewModel.cards.value[order]
-        val forceDisableSave = (card != null) && (card.inUsed || hasBeenScratched(card))
+        // 🌟 修正：只有「已刮過」才強制停用儲存，單純「使用中」仍可儲存
+        val forceDisableSave = (card != null) && hasBeenScratched(card)
 
         apply(binding.buttonSaveSettings, if (forceDisableSave) false else save)
         apply(binding.buttonToggleInuse, toggleInUse)

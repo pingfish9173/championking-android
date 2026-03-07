@@ -37,47 +37,38 @@ class SettingsActionHandler(
     }
 
     private fun handleSetInUse(targetCard: ScratchCard, currentCards: Map<Int, ScratchCard>) {
-        // 檢查是否有其他刮板正在使用中
         val currentInUseCard = currentCards.values.firstOrNull { it.inUsed }
 
         if (currentInUseCard == null) {
-            // 沒有任何刮板在使用中，直接上板
             Log.d(TAG, "沒有其他刮板在使用中，直接設為使用中")
             viewModel.setInUseExclusive(targetCard, currentCards, true)
             return
         }
 
-        // 有其他刮板在使用中，需要檢查切換條件
-        Log.d(TAG, "檢測到刮板${currentInUseCard.order}正在使用中，開始檢查切換條件")
+        Log.d(TAG, "檢測到 ${currentInUseCard.order}號板 正在使用中，開始檢查切換條件")
 
-        // ⭐ 新增：檢查當前使用中的版位是否被鎖定（特獎未開出且已刮超過1/2）
         val lockAnalysis = analyzeSwitchConditions(currentInUseCard)
 
         if (lockAnalysis.result == SwitchResult.DENY_OVER_HALF_NO_SPECIAL) {
-            // 當前使用中的版位被鎖定，不允許切換到其他版位
-            Log.d(TAG, "當前使用中的版位${currentInUseCard.order}被鎖定（特獎未開出且已刮超過1/2），不允許切換")
-            showToast("無法切換：當前使用中的版位${currentInUseCard.order}已刮超過1/2（${lockAnalysis.scratchedCount}/${lockAnalysis.totalCount}）且特獎未開出，請先完成當前刮板。")
+            Log.d(TAG, "當前使用中的 ${currentInUseCard.order}號板 被鎖定，不允許切換")
+            showToast("無法切換：當前使用中的 ${currentInUseCard.order}號板 已刮超過1/2（${lockAnalysis.scratchedCount}/${lockAnalysis.totalCount}）且特獎未完全開出，請先完成該板。")
             return
         }
 
-        // 當前版位未被鎖定，可以進行切換檢查
         checkSwitchConditions(targetCard, currentInUseCard, currentCards)
     }
 
     private fun handleSetNotInUse(targetCard: ScratchCard, currentCards: Map<Int, ScratchCard>) {
-        // ⭐ 新增：檢查該版位是否被鎖定（特獎未開出且已刮超過1/2）
-        Log.d(TAG, "檢查刮板${targetCard.order}是否可以取消使用中")
+        Log.d(TAG, "檢查 ${targetCard.order}號板 是否可以取消使用中")
 
         val lockAnalysis = analyzeSwitchConditions(targetCard)
 
         if (lockAnalysis.result == SwitchResult.DENY_OVER_HALF_NO_SPECIAL) {
-            // 該版位被鎖定，不允許取消使用中
-            Log.d(TAG, "版位${targetCard.order}被鎖定（特獎未開出且已刮超過1/2），不允許取消使用中")
-            showToast("無法取消使用中：此版位已刮超過1/2（${lockAnalysis.scratchedCount}/${lockAnalysis.totalCount}）且特獎未開出，請先完成刮板。")
+            Log.d(TAG, "${targetCard.order}號板 被鎖定，不允許取消使用中")
+            showToast("無法取消使用中：${targetCard.order}號板 已刮超過1/2（${lockAnalysis.scratchedCount}/${lockAnalysis.totalCount}）且特獎未完全開出，請先完成該板。")
             return
         }
 
-        // 該版位未被鎖定，可以檢查取消條件
         checkUnsetConditions(targetCard, currentCards)
     }
 
@@ -90,30 +81,23 @@ class SettingsActionHandler(
 
         when (switchAnalysis.result) {
             SwitchResult.ALLOW_SPECIAL_PRIZE_OUT -> {
-                Log.d(TAG, "檢測到特獎已出，允許切換")
                 showSwitchConfirmDialog(
                     "切換確認",
-                    "檢測到刮板${currentInUseCard.order}的特獎已經刮出，可以切換到刮板${targetCard.order}。\n\n是否確認切換？",
+                    "檢測到 ${currentInUseCard.order}號板 的特獎已經刮出，可以切換到 ${targetCard.order}號板。\n\n是否確認切換？",
                     onConfirm = { viewModel.setInUseExclusive(targetCard, currentCards, true) }
                 )
             }
-
             SwitchResult.ALLOW_UNDER_HALF -> {
-                Log.d(TAG, "檢測到刮取進度未超過1/2，允許切換")
                 showSwitchConfirmDialog(
                     "切換確認",
-                    "刮板${currentInUseCard.order}刮取進度未超過1/2（${switchAnalysis.scratchedCount}/${switchAnalysis.totalCount}），可以切換到刮板${targetCard.order}。\n\n是否確認切換？",
+                    "${currentInUseCard.order}號板 刮取進度未超過1/2（${switchAnalysis.scratchedCount}/${switchAnalysis.totalCount}），可以切換到 ${targetCard.order}號板。\n\n是否確認切換？",
                     onConfirm = { viewModel.setInUseExclusive(targetCard, currentCards, true) }
                 )
             }
-
             SwitchResult.DENY_OVER_HALF_NO_SPECIAL -> {
-                Log.d(TAG, "刮取進度超過1/2且特獎未出，拒絕切換")
-                showToast("無法切換：刮板${currentInUseCard.order}已刮超過1/2（${switchAnalysis.scratchedCount}/${switchAnalysis.totalCount}）且特獎未出，請先完成當前刮板。")
+                showToast("無法切換：${currentInUseCard.order}號板 已刮超過1/2（${switchAnalysis.scratchedCount}/${switchAnalysis.totalCount}）且特獎未出，請先完成該板。")
             }
-
             SwitchResult.ERROR -> {
-                Log.e(TAG, "分析切換條件時發生錯誤")
                 showToast("切換檢查失敗，請重試。")
             }
         }
@@ -127,70 +111,115 @@ class SettingsActionHandler(
 
         when (unsetAnalysis.result) {
             SwitchResult.ALLOW_SPECIAL_PRIZE_OUT -> {
-                Log.d(TAG, "檢測到特獎已出，允許取消使用中")
                 showUnsetConfirmDialog(
                     "取消使用中確認",
-                    "檢測到刮板${targetCard.order}的特獎已經刮出，可以取消使用中。\n\n是否確認取消使用中？",
+                    "檢測到 ${targetCard.order}號板 的特獎已經刮出，可以取消使用中。\n\n是否確認取消使用中？",
                     onConfirm = { viewModel.setInUseExclusive(targetCard, currentCards, false) }
                 )
             }
-
             SwitchResult.ALLOW_UNDER_HALF -> {
-                Log.d(TAG, "檢測到刮取進度未超過1/2，允許取消使用中")
                 showUnsetConfirmDialog(
                     "取消使用中確認",
-                    "刮板${targetCard.order}刮取進度未超過1/2（${unsetAnalysis.scratchedCount}/${unsetAnalysis.totalCount}），可以取消使用中。\n\n是否確認取消使用中？",
+                    "${targetCard.order}號板 刮取進度未超過1/2（${unsetAnalysis.scratchedCount}/${unsetAnalysis.totalCount}），可以取消使用中。\n\n是否確認取消使用中？",
                     onConfirm = { viewModel.setInUseExclusive(targetCard, currentCards, false) }
                 )
             }
-
             SwitchResult.DENY_OVER_HALF_NO_SPECIAL -> {
-                // 這個情況已經在 handleSetNotInUse 中處理了，不應該執行到這裡
-                Log.d(TAG, "刮取進度超過1/2且特獎未出，拒絕取消使用中")
-                showToast("無法取消使用中：此版位已刮超過1/2（${unsetAnalysis.scratchedCount}/${unsetAnalysis.totalCount}）且特獎未出，請先完成刮板。")
+                showToast("無法取消使用中：${targetCard.order}號板 已刮超過1/2（${unsetAnalysis.scratchedCount}/${unsetAnalysis.totalCount}）且特獎未出，請先完成該板。")
             }
-
             SwitchResult.ERROR -> {
-                Log.e(TAG, "分析取消使用中條件時發生錯誤")
                 showToast("取消使用中檢查失敗，請重試。")
             }
         }
     }
 
-    private fun analyzeSwitchConditions(currentInUseCard: ScratchCard): SwitchAnalysis {
+    // 🌟 核心修改：完整支援分割版面的切換防呆分析邏輯
+    private fun analyzeSwitchConditions(card: ScratchCard): SwitchAnalysis {
         try {
-            // 檢查特獎是否已出
-            val specialPrizeNumber = currentInUseCard.specialPrize?.toIntOrNull()
-            if (specialPrizeNumber == null) {
-                Log.w(TAG, "當前刮板沒有設定特獎")
-                return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
+            if (!card.splitMode.isNullOrEmpty()) {
+                var totalCells = 0
+                var totalScratched = 0
+                var allSpecialsOut = true
+                var hasValidBoard = false
+
+                val boardsMap = try { card.javaClass.getMethod("getBoards").invoke(card) as? Map<*, *> } catch (e: Exception) { null }
+                    ?: try {
+                        val field = card.javaClass.getDeclaredField("boards")
+                        field.isAccessible = true
+                        field.get(card) as? Map<*, *>
+                    } catch (e: Exception) { null }
+
+                if (boardsMap != null) {
+                    for ((_, rawBoard) in boardsMap) {
+                        var spStr = ""
+                        var configsList: List<*>? = null
+
+                        if (rawBoard is Map<*, *>) {
+                            spStr = rawBoard["specialPrize"]?.toString() ?: ""
+                            configsList = rawBoard["numberConfigurations"] as? List<*>
+                        } else if (rawBoard is com.champion.king.model.Board) {
+                            spStr = rawBoard.specialPrize ?: ""
+                            configsList = rawBoard.numberConfigurations
+                        }
+
+                        val spNum = spStr.toIntOrNull()
+                        if (configsList == null || spNum == null) continue
+
+                        hasValidBoard = true
+                        var boardSpecialOut = false
+                        for (item in configsList) {
+                            var num = 0
+                            var scratched = false
+                            if (item is Map<*, *>) {
+                                num = (item["number"] as? Number)?.toInt() ?: 0
+                                scratched = item["scratched"] as? Boolean ?: false
+                            } else if (item is NumberConfiguration) {
+                                num = item.number
+                                scratched = item.scratched
+                            }
+
+                            if (num > 0) {
+                                totalCells++
+                                if (scratched) {
+                                    totalScratched++
+                                    if (num == spNum) boardSpecialOut = true
+                                }
+                            }
+                        }
+                        if (!boardSpecialOut) allSpecialsOut = false
+                    }
+                }
+
+                if (!hasValidBoard || totalCells == 0) return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
+
+                // 若所有子板特獎皆已刮出，允許切換
+                if (allSpecialsOut) return SwitchAnalysis(SwitchResult.ALLOW_SPECIAL_PRIZE_OUT, totalScratched, totalCells)
+
+                val scratchedRatio = totalScratched.toDouble() / totalCells.toDouble()
+                return if (scratchedRatio < switchThreshold) {
+                    SwitchAnalysis(SwitchResult.ALLOW_UNDER_HALF, totalScratched, totalCells)
+                } else {
+                    SwitchAnalysis(SwitchResult.DENY_OVER_HALF_NO_SPECIAL, totalScratched, totalCells)
+                }
             }
 
-            val configurations = currentInUseCard.numberConfigurations
-            if (configurations.isNullOrEmpty()) {
-                Log.w(TAG, "當前刮板沒有數字配置")
-                return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
-            }
+            // --- 單一版面原有邏輯 ---
+            val specialPrizeNumber = card.specialPrize?.toIntOrNull()
+            if (specialPrizeNumber == null) return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
 
-            // 查找特獎號碼對應的配置
+            val configurations = card.numberConfigurations
+            if (configurations.isNullOrEmpty()) return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
+
             val specialPrizeConfig = configurations.find { it.number == specialPrizeNumber }
-            if (specialPrizeConfig == null) {
-                Log.w(TAG, "找不到特獎號碼 $specialPrizeNumber 對應的配置")
-                return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
-            }
+            if (specialPrizeConfig == null) return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
 
-            // 檢查特獎是否已經刮出
             if (specialPrizeConfig.scratched) {
-                Log.d(TAG, "特獎號碼 $specialPrizeNumber 已經刮出")
                 return SwitchAnalysis(SwitchResult.ALLOW_SPECIAL_PRIZE_OUT, 0, configurations.size)
             }
 
-            // 計算刮取進度
             val totalCount = configurations.size
             val scratchedCount = configurations.count { it.scratched }
             val scratchedRatio = scratchedCount.toDouble() / totalCount.toDouble()
-
-            Log.d(TAG, "刮取進度分析：$scratchedCount/$totalCount = ${String.format("%.2f", scratchedRatio * 100)}%")
 
             return if (scratchedRatio < switchThreshold) {
                 SwitchAnalysis(SwitchResult.ALLOW_UNDER_HALF, scratchedCount, totalCount)
@@ -244,8 +273,37 @@ class SettingsActionHandler(
         showReturnConfirmationDialog { viewModel.returnCard(selectedShelfOrder, card) }
     }
 
-    // 檢查刮板是否已被刮過（1刮含以上）
+    // 🌟 核心修改：支援判斷分割版面是否已經被刮過
     private fun hasBeenScratched(card: ScratchCard): Boolean {
+        if (!card.splitMode.isNullOrEmpty()) {
+            val boardsMap = try { card.javaClass.getMethod("getBoards").invoke(card) as? Map<*, *> } catch (e: Exception) { null }
+                ?: try {
+                    val field = card.javaClass.getDeclaredField("boards")
+                    field.isAccessible = true
+                    field.get(card) as? Map<*, *>
+                } catch (e: Exception) { null }
+
+            if (boardsMap != null) {
+                for ((_, rawBoard) in boardsMap) {
+                    var configsList: List<*>? = null
+                    if (rawBoard is Map<*, *>) {
+                        configsList = rawBoard["numberConfigurations"] as? List<*>
+                    } else if (rawBoard is com.champion.king.model.Board) {
+                        configsList = rawBoard.numberConfigurations
+                    }
+
+                    if (configsList != null) {
+                        for (item in configsList) {
+                            val scratched = if (item is Map<*, *>) item["scratched"] as? Boolean ?: false
+                            else if (item is NumberConfiguration) item.scratched else false
+                            if (scratched) return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
+
         val configurations = card.numberConfigurations
         if (configurations.isNullOrEmpty()) {
             Log.w(TAG, "刮板沒有數字配置，視為未刮過")
@@ -326,46 +384,96 @@ class SettingsActionHandler(
         }
     }
 
+    // 🌟 核心修改：同上，支援判斷分割版面的刪除條件
     private fun analyzeDeleteConditions(card: ScratchCard): DeleteAnalysis {
         try {
-            // 檢查特獎是否已出
-            val specialPrizeNumber = card.specialPrize?.toIntOrNull()
-            if (specialPrizeNumber == null) {
-                Log.w(TAG, "刮板沒有設定特獎")
-                return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
+            if (!card.splitMode.isNullOrEmpty()) {
+                var totalCells = 0
+                var totalScratched = 0
+                var allSpecialsOut = true
+                var hasValidBoard = false
+
+                val boardsMap = try { card.javaClass.getMethod("getBoards").invoke(card) as? Map<*, *> } catch (e: Exception) { null }
+                    ?: try {
+                        val field = card.javaClass.getDeclaredField("boards")
+                        field.isAccessible = true
+                        field.get(card) as? Map<*, *>
+                    } catch (e: Exception) { null }
+
+                if (boardsMap != null) {
+                    for ((_, rawBoard) in boardsMap) {
+                        var spStr = ""
+                        var configsList: List<*>? = null
+
+                        if (rawBoard is Map<*, *>) {
+                            spStr = rawBoard["specialPrize"]?.toString() ?: ""
+                            configsList = rawBoard["numberConfigurations"] as? List<*>
+                        } else if (rawBoard is com.champion.king.model.Board) {
+                            spStr = rawBoard.specialPrize ?: ""
+                            configsList = rawBoard.numberConfigurations
+                        }
+
+                        val spNum = spStr.toIntOrNull()
+                        if (configsList == null || spNum == null) continue
+
+                        hasValidBoard = true
+                        var boardSpecialOut = false
+                        for (item in configsList) {
+                            var num = 0
+                            var scratched = false
+                            if (item is Map<*, *>) {
+                                num = (item["number"] as? Number)?.toInt() ?: 0
+                                scratched = item["scratched"] as? Boolean ?: false
+                            } else if (item is NumberConfiguration) {
+                                num = item.number
+                                scratched = item.scratched
+                            }
+
+                            if (num > 0) {
+                                totalCells++
+                                if (scratched) {
+                                    totalScratched++
+                                    if (num == spNum) boardSpecialOut = true
+                                }
+                            }
+                        }
+                        if (!boardSpecialOut) allSpecialsOut = false
+                    }
+                }
+
+                if (!hasValidBoard || totalCells == 0) return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
+
+                if (allSpecialsOut) return DeleteAnalysis(DeleteResult.ALLOW_SPECIAL_PRIZE_OUT, totalScratched, totalCells)
+
+                val scratchedRatio = totalScratched.toDouble() / totalCells.toDouble()
+                return if (scratchedRatio < switchThreshold) {
+                    DeleteAnalysis(DeleteResult.ALLOW_UNDER_HALF_NO_SPECIAL, totalScratched, totalCells)
+                } else {
+                    DeleteAnalysis(DeleteResult.DENY_OVER_HALF_NO_SPECIAL, totalScratched, totalCells)
+                }
             }
+
+            // --- 單一版面原有邏輯 ---
+            val specialPrizeNumber = card.specialPrize?.toIntOrNull()
+            if (specialPrizeNumber == null) return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
 
             val configurations = card.numberConfigurations
-            if (configurations.isNullOrEmpty()) {
-                Log.w(TAG, "刮板沒有數字配置")
-                return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
-            }
+            if (configurations.isNullOrEmpty()) return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
 
-            // 查找特獎號碼對應的配置
             val specialPrizeConfig = configurations.find { it.number == specialPrizeNumber }
-            if (specialPrizeConfig == null) {
-                Log.w(TAG, "找不到特獎號碼 $specialPrizeNumber 對應的配置")
-                return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
-            }
+            if (specialPrizeConfig == null) return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
 
-            // 8-2-1: 檢查特獎是否已經刮出
             if (specialPrizeConfig.scratched) {
-                Log.d(TAG, "特獎號碼 $specialPrizeNumber 已經刮出")
                 return DeleteAnalysis(DeleteResult.ALLOW_SPECIAL_PRIZE_OUT, 0, configurations.size)
             }
 
-            // 8-2-2: 特獎未出，檢查刮取進度
             val totalCount = configurations.size
             val scratchedCount = configurations.count { it.scratched }
             val scratchedRatio = scratchedCount.toDouble() / totalCount.toDouble()
 
-            Log.d(TAG, "刪除條件分析：$scratchedCount/$totalCount = ${String.format("%.2f", scratchedRatio * 100)}%")
-
             return if (scratchedRatio < switchThreshold) {
-                // 8-2-2-2: 未超過1/2，允許刪除
                 DeleteAnalysis(DeleteResult.ALLOW_UNDER_HALF_NO_SPECIAL, scratchedCount, totalCount)
             } else {
-                // 8-2-2-1: 超過1/2，拒絕刪除
                 DeleteAnalysis(DeleteResult.DENY_OVER_HALF_NO_SPECIAL, scratchedCount, totalCount)
             }
 

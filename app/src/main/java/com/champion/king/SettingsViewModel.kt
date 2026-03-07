@@ -34,7 +34,7 @@ class SettingsViewModel(
     }
 
     // ==============================
-    // ✅ 設置頁「草稿」：每個板位各自保存（全域 DraftStore，登出可直接清除）
+    // ✅ 設置頁「草稿」：每個板位各自保存
     // ==============================
     data class SettingsDraft(
         val scratchType: Int?,
@@ -43,8 +43,6 @@ class SettingsViewModel(
         val claws: Int?,
         val giveaway: Int?,
         val numberConfigurations: List<NumberConfiguration>?,
-
-        // ✅ 新增：草稿記住規則類型（scratch / shopping）
         val pitchType: String = "scratch"
     )
 
@@ -62,24 +60,53 @@ class SettingsViewModel(
             _draftMap.value = _draftMap.value.toMutableMap().apply { remove(order) }
         }
 
-        /** ✅ 登出用：清空所有板位草稿 */
         fun clearAllDrafts() {
             _draftMap.value = emptyMap()
         }
     }
 
-    // --- 下面這些是「instance wrapper」：讓你 Fragment 原本 viewModel.saveDraft(...) 不用改 ---
     val draftMap: StateFlow<Map<Int, SettingsDraft>> get() = DraftStore.draftMap
     fun saveDraft(order: Int, draft: SettingsDraft) = DraftStore.saveDraft(order, draft)
     fun getDraft(order: Int): SettingsDraft? = DraftStore.getDraft(order)
     fun clearDraft(order: Int) = DraftStore.clearDraft(order)
     fun clearAllDrafts() = DraftStore.clearAllDrafts()
 
+    // 🌟 核心修改：使用 updateChildren 精準修改 inUsed，絕對保護分割版面資料
     fun setInUseExclusive(target: ScratchCard, current: Map<Int, ScratchCard>, newState: Boolean) {
         viewModelScope.launch {
             try {
-                repo.setInUseExclusive(userKey, target, current, newState)
-                _events.emit(UiEvent.Toast(if (newState) "已設為使用中" else "已改為未使用"))
+                val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(com.champion.king.core.config.AppConfig.DB_URL).reference
+                val updates = mutableMapOf<String, Any>()
+
+                if (newState) {
+                    // 若設為使用中，先把其他所有卡片設為 false
+                    current.values.forEach { card ->
+                        if (card.serialNumber != null && card.serialNumber != target.serialNumber) {
+                            updates["users/$userKey/scratchCards/${card.serialNumber}/inUsed"] = false
+                        }
+                    }
+                }
+
+                // 設定目標卡片
+                if (target.serialNumber != null) {
+                    updates["users/$userKey/scratchCards/${target.serialNumber}/inUsed"] = newState
+                }
+
+                if (updates.isNotEmpty()) {
+                    dbRef.updateChildren(updates).addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            viewModelScope.launch {
+                                _events.emit(UiEvent.Toast(if (newState) "已設為使用中" else "已改為未使用"))
+                            }
+                        } else {
+                            viewModelScope.launch {
+                                _events.emit(UiEvent.Toast("更新狀態失敗：${task.exception?.message}"))
+                            }
+                        }
+                    }
+                } else {
+                    _events.emit(UiEvent.Toast("無有效的版位可更新"))
+                }
             } catch (e: Exception) {
                 _events.emit(UiEvent.Toast("更新失敗：${e.message}"))
             }
@@ -118,8 +145,6 @@ class SettingsViewModel(
         numberConfigurations: List<NumberConfiguration>,
         existingSerial: String?,
         keepInUsed: Boolean,
-
-        // ✅ 新增（放最後、給預設值）
         pitchType: String = "scratch"
     ) {
         viewModelScope.launch {
@@ -127,7 +152,7 @@ class SettingsViewModel(
                 repo.upsertScratchCard(
                     userKey, order, scratchesType, specialPrize, grandPrize,
                     clawsCount, giveawayCount, numberConfigurations,
-                    pitchType,                    // ✅ 這個位置要對上 repo 的 pitchType 參數
+                    pitchType,
                     existingSerial, keepInUsed
                 )
                 _events.emit(UiEvent.Toast(if (existingSerial == null) "刮刮卡設定已新增！" else "${order}號板設定已更新！"))
@@ -171,7 +196,6 @@ class SettingsViewModel(
         }
     }
 
-    // 簡易 DI：用 Factory 注入 repo 與 userKey
     class Factory(
         private val repo: FirebaseRepository,
         private val userKey: String
