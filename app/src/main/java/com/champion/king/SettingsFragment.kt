@@ -2825,6 +2825,24 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(titleView)
 
+        // 🌟 修改：特獎文字標籤 (縮小字體與間距)
+        val tvSpecialLabel = TextView(context).apply {
+            tag = "special_label"
+            text = "特獎:"
+            setTextColor(Color.WHITE)
+            textSize = 12f // 從 14f 縮小至 12f
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                marginEnd = (2 * density).toInt() // 間距從 4 縮小至 2
+            }
+            visibility = View.GONE
+        }
+        headerLayout.addView(tvSpecialLabel)
+
         val specialSize = (26 * density).toInt()
         val tvSpecial = TextView(context).apply {
             tag = "special"
@@ -2845,6 +2863,25 @@ class SettingsFragment : Fragment() {
             visibility = View.GONE
         }
         headerLayout.addView(tvSpecial)
+
+        // 🌟 修改：大獎文字標籤 (縮小字體與間距)
+        val tvGrandLabel = TextView(context).apply {
+            tag = "grand_label"
+            text = "大獎:"
+            setTextColor(Color.WHITE)
+            textSize = 12f // 從 14f 縮小至 12f
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                marginStart = (2 * density).toInt() // 間距從 4 縮小至 2
+                marginEnd = (2 * density).toInt()   // 間距從 4 縮小至 2
+            }
+            visibility = View.GONE
+        }
+        headerLayout.addView(tvGrandLabel)
 
         for (i in 0..2) {
             val tvGrand = TextView(context).apply {
@@ -2884,24 +2921,23 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(tvMore)
 
-        // 🌟 核心修改 1：加入一個彈性空白 (Space)，利用 weight 把它後面的東西推到最右邊
         val space = Space(context).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         headerLayout.addView(space)
 
-        // 🌟 核心修改 2：加入顯示「夾X刮X」的黃色文字
+        // 🌟 修改：玩法規則標籤 (縮小字體避免長字串被裁切)
         val tvRule = TextView(context).apply {
             tag = "rule"
             setTextColor(Color.parseColor("#FFC107")) // 黃色
-            textSize = 14f
+            textSize = 11f // 從 14f 縮小至 11f
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                marginEnd = (4 * density).toInt()
+                marginEnd = (2 * density).toInt() // 間距從 4 縮小至 2
             }
         }
         headerLayout.addView(tvRule)
@@ -3176,10 +3212,17 @@ class SettingsFragment : Fragment() {
         val specialPrize = splitBoardSpecialPrizes[boardName]
         val grandPrize = splitBoardGrandPrizes[boardName]
 
-        // 更新特獎
+        // 🌟 更新特獎：連同標籤一起判斷顯示
+        val hasSpecial = !specialPrize.isNullOrEmpty() && specialPrize != "無"
+        val tvSpecialLabel = headerLayout.findViewWithTag<TextView>("special_label")
         val tvSpecial = headerLayout.findViewWithTag<TextView>("special")
+
+        if (tvSpecialLabel != null) {
+            tvSpecialLabel.visibility = if (hasSpecial) View.VISIBLE else View.GONE
+        }
+
         if (tvSpecial != null) {
-            if (!specialPrize.isNullOrEmpty() && specialPrize != "無") {
+            if (hasSpecial) {
                 tvSpecial.text = specialPrize
                 tvSpecial.visibility = View.VISIBLE
             } else {
@@ -3187,11 +3230,16 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 更新大獎
+        // 🌟 更新大獎：連同標籤一起判斷顯示
         val grandNumbers = if (!grandPrize.isNullOrEmpty() && grandPrize != "無") {
             grandPrize.split(",").mapNotNull { it.trim().toIntOrNull() }
         } else {
             emptyList()
+        }
+
+        val tvGrandLabel = headerLayout.findViewWithTag<TextView>("grand_label")
+        if (tvGrandLabel != null) {
+            tvGrandLabel.visibility = if (grandNumbers.isNotEmpty()) View.VISIBLE else View.GONE
         }
 
         for (i in 0..2) {
@@ -3206,7 +3254,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 更新 More "..."
         val tvMore = headerLayout.findViewWithTag<TextView>("more")
         if (tvMore != null) {
             if (grandNumbers.size > 3) {
@@ -3216,7 +3263,6 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 🌟 核心修改：更新玩法規則文字 (夾X刮X / 消費X刮X)
         val tvRule = headerLayout.findViewWithTag<TextView>("rule")
         if (tvRule != null) {
             val pitchType = splitBoardPitchTypes[boardName] ?: "scratch"
