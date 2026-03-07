@@ -137,6 +137,40 @@ class SettingsViewModel(
         }
     }
 
+    fun saveSplitCardDirectly(
+        existingSerial: String?,
+        cardData: Map<String, Any>,
+        onComplete: () -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(com.champion.king.core.config.AppConfig.DB_URL).reference
+                val cardRef = if (existingSerial != null) {
+                    dbRef.child("users").child(userKey).child("scratchCards").child(existingSerial)
+                } else {
+                    dbRef.child("users").child(userKey).child("scratchCards").push()
+                }
+
+                cardRef.setValue(cardData).addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        viewModelScope.launch {
+                            _events.emit(UiEvent.Toast(if (existingSerial == null) "分割版面已新增！" else "分割版面已更新！"))
+                            onComplete()
+                        }
+                    } else {
+                        viewModelScope.launch {
+                            _events.emit(UiEvent.Toast("儲存失敗：${task.exception?.message}"))
+                            onComplete()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _events.emit(UiEvent.Toast("儲存失敗：${e.message}"))
+                onComplete()
+            }
+        }
+    }
+
     // 簡易 DI：用 Factory 注入 repo 與 userKey
     class Factory(
         private val repo: FirebaseRepository,

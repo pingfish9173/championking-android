@@ -143,7 +143,6 @@ class SettingsFragment : Fragment() {
     private val splitBoardPitchTypes = mutableMapOf<String, String>()
     private val splitBoardClawsCounts = mutableMapOf<String, String>()
     private val splitBoardGiveawayCounts = mutableMapOf<String, Int>()
-
     private val splitSpecialPrizeWatcher = object : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -155,7 +154,6 @@ class SettingsFragment : Fragment() {
             }
         }
     }
-
     private val splitGrandPrizeWatcher = object : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -167,6 +165,8 @@ class SettingsFragment : Fragment() {
             }
         }
     }
+    // 🌟 新增：分割版面專屬的格子數字配置暫存區
+    private val splitBoardConfigurations = mutableMapOf<String, List<NumberConfiguration>>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -913,14 +913,21 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 🌟 修改點 7：取得字串版的 scratchTypeStr
+        // 🌟 判斷版型：如果是分割版面，優先取 splitMode 字串
         val scratchTypeStr = if (selectedCard != null) {
-            selectedCard.scratchesType.toString()
+            if (!selectedCard.splitMode.isNullOrEmpty()) selectedCard.splitMode!! else selectedCard.scratchesType.toString()
         } else {
             val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
             selectedItem?.getScratchTypeString() ?: return
         }
 
+        // 🌟 分流點：分割版面走專屬儲存流程
+        if (scratchTypeStr.contains("x")) {
+            handleSaveSplitMode(scratchTypeStr, selectedCard)
+            return
+        }
+
+        // --- 單一版面邏輯維持不變 ---
         val saveData = extractSaveData(scratchTypeStr)
 
         currentPreviewFragment?.setSelectedNumber(
@@ -932,6 +939,132 @@ class SettingsFragment : Fragment() {
         currentPreviewFragment?.setGrandSelectedNumbers(gp)
 
         handleSaveSettings(saveData)
+    }
+
+    private fun handleSaveSplitMode(splitModeStr: String, existingCard: ScratchCard?) {
+        val order = shelfManager.selectedShelfOrder
+
+        val boardsData = mutableMapOf<String, Any>()
+        val subBoardCount = splitModeStr.substringBefore("x").toIntOrNull() ?: 20
+        val boards = splitModeStr.substringAfter("x").toIntOrNull() ?: 4
+        val totalScratches = subBoardCount * boards
+
+        val boardNames = listOf("A", "B", "C", "D").take(boards)
+
+        // 1. 組裝各子板資料
+        for ((index, boardName) in boardNames.withIndex()) {
+            val sp = splitBoardSpecialPrizes[boardName]
+            if (sp.isNullOrBlank()) {
+                showToast("儲存失敗：請先點擊 ${boardName}板 確認預設參數")
+                return
+            }
+
+            val gp = splitBoardGrandPrizes[boardName] ?: ""
+            val gpList = gp.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (gpList.contains(sp.toIntOrNull())) {
+                showToast("無法儲存：${boardName}板 的特獎不可與大獎重複")
+                return
+            }
+            if (gpList.size > 2) {
+                showToast("無法儲存：${boardName}板 的大獎數量限制為 2 個")
+                return
+            }
+
+            val configs = splitBoardConfigurations[boardName]
+            if (configs == null) {
+                showToast("發生錯誤：找不到 ${boardName}板 的數字配置，請點擊重新整理按鈕")
+                return
+            }
+
+            val boardData = mapOf(
+                "id" to boardName,
+                "order" to (index + 1),
+                "specialPrize" to sp,
+                "grandPrize" to gp,
+                "pitchType" to (splitBoardPitchTypes[boardName] ?: "scratch"),
+                "clawsCount" to (splitBoardClawsCounts[boardName]?.toIntOrNull() ?: 1),
+                "giveawayCount" to (splitBoardGiveawayCounts[boardName] ?: 1),
+                "numberConfigurations" to configs.map {
+                    mapOf("id" to it.id, "number" to it.number, "scratched" to it.scratched)
+                }
+            )
+            boardsData[boardName] = boardData
+        }
+
+        val isNewCard = existingCard == null
+        isSavingInProgress = true
+
+        // 2. 組裝母板外層屬性，完美符合您上傳的 JSON 結構
+        val cardData = mapOf(
+            "order" to order,
+            "scratchesType" to totalScratches, // 例如 20x4 會存 80
+            "splitMode" to splitModeStr,
+            "inUsed" to (existingCard?.inUsed ?: false),
+            "boards" to boardsData
+        )
+
+        fun finishAndRefreshUI() {
+            viewLifecycleOwner.lifecycleScope.launch {
+                kotlinx.coroutines.delay(500)
+                isSavingInProgress = false
+                val updatedCard = viewModel.cards.value[order]
+                if (updatedCard != null) {
+                    viewModel.clearDraft(order)
+                    showSetShelfState(updatedCard)
+                } else {
+                    showUnsetShelfState()
+                }
+            }
+        }
+
+        // 3. 儲存與扣庫存
+        if (isNewCard) {
+            if (currentBillingMode == "RENTAL") {
+                viewModel.saveSplitCardDirectly(existingCard?.serialNumber, cardData) { finishAndRefreshUI() }
+            } else {
+                deductSplitStock(splitModeStr) { success ->
+                    if (success) {
+                        viewModel.saveSplitCardDirectly(existingCard?.serialNumber, cardData) { finishAndRefreshUI() }
+                    } else {
+                        isSavingInProgress = false
+                        showToast("庫存不足或扣減失敗")
+                    }
+                }
+            }
+        } else {
+            viewModel.saveSplitCardDirectly(existingCard?.serialNumber, cardData) { finishAndRefreshUI() }
+        }
+    }
+
+    private fun deductSplitStock(scratchTypeStr: String, onComplete: (Boolean) -> Unit) {
+        if (currentBillingMode == "RENTAL") {
+            onComplete(true)
+            return
+        }
+
+        val userRef = getUserFirebaseReference()
+        if (userRef == null) {
+            onComplete(false)
+            return
+        }
+
+        val stockFieldName = "scratchType_$scratchTypeStr" // 例如 scratchType_20x4
+
+        userRef.child(stockFieldName).get()
+            .addOnSuccessListener { snapshot ->
+                val currentStock = snapshot.getValue(Int::class.java) ?: 0
+                if (currentStock > 0) {
+                    userRef.child(stockFieldName).setValue(currentStock - 1)
+                        .addOnSuccessListener {
+                            Log.d("SettingsFragment", "${scratchTypeStr}版型 庫存已扣減1，剩餘: ${currentStock - 1}")
+                            onComplete(true)
+                        }
+                        .addOnFailureListener { onComplete(false) }
+                } else {
+                    onComplete(false)
+                }
+            }
+            .addOnFailureListener { onComplete(false) }
     }
 
     // 🌟 修改點 8：接收字串並轉為 Int 存入 data 類 (因為 SaveData 目前維持 Int)
@@ -1108,13 +1241,13 @@ class SettingsFragment : Fragment() {
 
         showToast("重新生成 ${scratchTypeStr}版型 配置中…")
 
-        // 🌟 修正：將清空暫存的邏輯移到生成預覽「之前」，避免把剛生成的亂數特獎給清掉
         if (scratchTypeStr.contains("x")) {
             splitBoardSpecialPrizes.clear()
             splitBoardGrandPrizes.clear()
             splitBoardPitchTypes.clear()
             splitBoardClawsCounts.clear()
             splitBoardGiveawayCounts.clear()
+            splitBoardConfigurations.clear() // 🌟 重新整理時一併清空
         }
 
         displayScratchBoardPreview(scratchTypeStr, null)
@@ -1440,16 +1573,21 @@ class SettingsFragment : Fragment() {
                     splitBoardPitchTypes.clear()
                     splitBoardClawsCounts.clear()
                     splitBoardGiveawayCounts.clear()
+                    splitBoardConfigurations.clear() // 🌟 清空舊的格子配置
 
                     listOf("A", "B", "C", "D").forEach { boardName ->
                         val randomSp = splitNumbers[boardName]?.random()?.toString() ?: "1"
                         splitBoardSpecialPrizes[boardName] = randomSp
                         splitBoardGrandPrizes[boardName] = ""
 
-                        // 🌟 核心修改：寫入預設玩法規則「夾1刮1」
                         splitBoardPitchTypes[boardName] = "scratch"
                         splitBoardClawsCounts[boardName] = "1"
                         splitBoardGiveawayCounts[boardName] = 1
+
+                        // 🌟 將打亂好的數字轉成 NumberConfiguration 並存入暫存區，等一下儲存要用
+                        splitBoardConfigurations[boardName] = splitNumbers[boardName]!!.mapIndexed { index, num ->
+                            NumberConfiguration(id = index + 1, number = num, scratched = false)
+                        }
                     }
                 }
 
