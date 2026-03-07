@@ -908,6 +908,22 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
+        // 🌟 攔截：如果目前在「子板聚焦模式」，按下儲存鈕只做暫存，不寫入 Firebase
+        if (currentFocusedSubBoardId != null) {
+            val boardName = currentFocusedSubBoardId
+
+            if (isPickingSpecialPrize || isPickingGrandPrize) {
+                showToast("請先點擊按鈕取消選取模式，再儲存暫存")
+                return
+            }
+
+            // exitSubBoardFocusMode 會自動把目前的輸入存進 Map，更新 UI 並退回母板
+            exitSubBoardFocusMode()
+            showToast("${boardName}板參數已暫存！全部子板設定完畢後，請點擊母板的儲存按鈕寫入資料庫")
+            return
+        }
+
+        // --- 以下為原本的母板儲存邏輯 ---
         val selectedOrder = shelfManager.selectedShelfOrder
         val selectedCard = viewModel.cards.value[selectedOrder]
 
@@ -916,7 +932,6 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        // 🌟 判斷版型：如果是分割版面，優先取 splitMode 字串
         val scratchTypeStr = if (selectedCard != null) {
             if (!selectedCard.splitMode.isNullOrEmpty()) selectedCard.splitMode!! else selectedCard.scratchesType.toString()
         } else {
@@ -924,13 +939,11 @@ class SettingsFragment : Fragment() {
             selectedItem?.getScratchTypeString() ?: return
         }
 
-        // 🌟 分流點：分割版面走專屬儲存流程
         if (scratchTypeStr.contains("x")) {
             handleSaveSplitMode(scratchTypeStr, selectedCard)
             return
         }
 
-        // --- 單一版面邏輯維持不變 ---
         val saveData = extractSaveData(scratchTypeStr)
 
         currentPreviewFragment?.setSelectedNumber(
@@ -2783,17 +2796,23 @@ class SettingsFragment : Fragment() {
 
             tag = "sub_board_$boardName"
             isClickable = true
+
+            // 🌟 修改：處理整個子板外框(含標題)的點擊事件
             setOnClickListener {
                 if (currentFocusedSubBoardId == boardName) {
-                    if (isPickingSpecialPrize || isPickingGrandPrize) {
-                        showToast("請先再點擊一次按鈕取消選取模式，再離開 ${boardName}板")
-                        return@setOnClickListener
-                    }
-                    exitSubBoardFocusMode()
+                    // 1. 點擊正在聚焦的自己：無反應，不再跳出聚焦模式
+                    return@setOnClickListener
                 } else {
                     if (isPickingSpecialPrize || isPickingGrandPrize) {
+                        showToast("請先取消選取模式，再切換子板")
                         return@setOnClickListener
                     }
+
+                    // 2. 點擊其他子板：如果目前有聚焦的板，先把它暫存並退出
+                    if (currentFocusedSubBoardId != null) {
+                        exitSubBoardFocusMode()
+                    }
+                    // 接著直接進入點擊的那個新子板
                     enterSubBoardFocusMode(boardName)
                 }
             }
@@ -2825,19 +2844,18 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(titleView)
 
-        // 🌟 修改：特獎文字標籤 (縮小字體與間距)
         val tvSpecialLabel = TextView(context).apply {
             tag = "special_label"
             text = "特獎:"
             setTextColor(Color.WHITE)
-            textSize = 12f // 從 14f 縮小至 12f
+            textSize = 12f
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                marginEnd = (2 * density).toInt() // 間距從 4 縮小至 2
+                marginEnd = (2 * density).toInt()
             }
             visibility = View.GONE
         }
@@ -2864,20 +2882,19 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(tvSpecial)
 
-        // 🌟 修改：大獎文字標籤 (縮小字體與間距)
         val tvGrandLabel = TextView(context).apply {
             tag = "grand_label"
             text = "大獎:"
             setTextColor(Color.WHITE)
-            textSize = 12f // 從 14f 縮小至 12f
+            textSize = 12f
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                marginStart = (2 * density).toInt() // 間距從 4 縮小至 2
-                marginEnd = (2 * density).toInt()   // 間距從 4 縮小至 2
+                marginStart = (2 * density).toInt()
+                marginEnd = (2 * density).toInt()
             }
             visibility = View.GONE
         }
@@ -2926,18 +2943,17 @@ class SettingsFragment : Fragment() {
         }
         headerLayout.addView(space)
 
-        // 🌟 修改：玩法規則標籤 (縮小字體避免長字串被裁切)
         val tvRule = TextView(context).apply {
             tag = "rule"
             setTextColor(Color.parseColor("#FFC107")) // 黃色
-            textSize = 11f // 從 14f 縮小至 11f
+            textSize = 11f
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                marginEnd = (2 * density).toInt() // 間距從 4 縮小至 2
+                marginEnd = (2 * density).toInt()
             }
         }
         headerLayout.addView(tvRule)
@@ -2983,10 +2999,18 @@ class SettingsFragment : Fragment() {
                 }
 
                 isClickable = true
+
+                // 🌟 修改：處理格子的點擊事件，邏輯與外框點擊一致
                 setOnClickListener {
                     if (currentFocusedSubBoardId != boardName) {
                         if (isPickingSpecialPrize || isPickingGrandPrize) {
+                            showToast("請先取消選取模式，再切換子板")
                             return@setOnClickListener
+                        }
+
+                        // 點擊其他子板的格子：先暫存目前的，再切換
+                        if (currentFocusedSubBoardId != null) {
+                            exitSubBoardFocusMode()
                         }
                         enterSubBoardFocusMode(boardName)
                     } else {
