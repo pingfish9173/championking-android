@@ -1554,7 +1554,7 @@ class SettingsFragment : Fragment() {
     private fun displayScratchBoardPreview(
         scratchTypeStr: String,
         existingConfigs: List<NumberConfiguration>?,
-        savedCard: ScratchCard? = null // 🌟 新增參數：接收已儲存的卡片資料
+        savedCard: ScratchCard? = null
     ) {
         safeExecute("顯示刮板預覽") {
             currentPreviewFragment?.let { fragment ->
@@ -1568,7 +1568,7 @@ class SettingsFragment : Fragment() {
                 val boardNames = listOf("A", "B", "C", "D")
                 val splitNumbers = mutableMapOf<String, List<Int>>()
 
-                // 🌟 情況 A：正在載入已儲存的分割版面
+                // 🌟 情況 A：正在載入已儲存的分割版面 (點擊架位或儲存後重新整理)
                 if (savedCard != null && savedCard.splitMode == scratchTypeStr) {
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
@@ -1577,42 +1577,81 @@ class SettingsFragment : Fragment() {
                     splitBoardGiveawayCounts.clear()
                     splitBoardConfigurations.clear()
 
-                    // 安全地從 Firebase 資料中提取 boards 結構
+                    // 安全提取 boards 屬性
                     val boardsMap = try {
                         savedCard.javaClass.getMethod("getBoards").invoke(savedCard) as? Map<*, *>
-                    } catch (e: Exception) { null }
+                    } catch (e: Exception) {
+                        try {
+                            val field = savedCard.javaClass.getDeclaredField("boards")
+                            field.isAccessible = true
+                            field.get(savedCard) as? Map<*, *>
+                        } catch (ex: Exception) { null }
+                    }
 
                     boardNames.forEach { boardName ->
                         val rawBoard = boardsMap?.get(boardName)
-                        if (rawBoard is Map<*, *>) {
-                            // 1. 還原獎項與規則
-                            splitBoardSpecialPrizes[boardName] = rawBoard["specialPrize"] as? String ?: ""
-                            splitBoardGrandPrizes[boardName] = rawBoard["grandPrize"] as? String ?: ""
-                            splitBoardPitchTypes[boardName] = rawBoard["pitchType"] as? String ?: "scratch"
-                            splitBoardClawsCounts[boardName] = rawBoard["clawsCount"]?.toString() ?: "1"
-                            splitBoardGiveawayCounts[boardName] = (rawBoard["giveawayCount"] as? Number)?.toInt() ?: 1
 
-                            // 2. 還原這張子板當初存下來的格子數字與狀態
-                            val configsList = rawBoard["numberConfigurations"] as? List<Map<String, Any>>
+                        // 準備預設值
+                        var sp = ""
+                        var gp = ""
+                        var pt = "scratch"
+                        var cc = "1"
+                        var gc = 1
+                        var configs: List<NumberConfiguration>? = null
+
+                        // 🌟 核心修復：完美支援您自訂的 Board 類別，並保留 Map 作為防呆退路
+                        if (rawBoard is com.champion.king.model.Board) {
+                            sp = rawBoard.specialPrize ?: ""
+                            gp = rawBoard.grandPrize ?: ""
+                            pt = rawBoard.pitchType
+                            cc = rawBoard.clawsCount?.toString() ?: "1"
+                            gc = rawBoard.giveawayCount ?: 1
+                            configs = rawBoard.numberConfigurations
+                        } else if (rawBoard is Map<*, *>) {
+                            sp = rawBoard["specialPrize"]?.toString() ?: ""
+                            gp = rawBoard["grandPrize"]?.toString() ?: ""
+                            pt = rawBoard["pitchType"]?.toString() ?: "scratch"
+                            cc = rawBoard["clawsCount"]?.toString() ?: "1"
+                            gc = (rawBoard["giveawayCount"] as? Number)?.toInt() ?: 1
+
+                            val configsList = rawBoard["numberConfigurations"] as? List<*>
                             if (configsList != null) {
-                                val configs = configsList.map { map ->
-                                    NumberConfiguration(
-                                        id = (map["id"] as? Number)?.toInt() ?: 0,
-                                        number = (map["number"] as? Number)?.toInt() ?: 0,
-                                        scratched = map["scratched"] as? Boolean ?: false
-                                    )
+                                configs = configsList.mapNotNull { item ->
+                                    if (item is Map<*, *>) {
+                                        NumberConfiguration(
+                                            id = (item["id"] as? Number)?.toInt() ?: 0,
+                                            number = (item["number"] as? Number)?.toInt() ?: 0,
+                                            scratched = item["scratched"] as? Boolean ?: false
+                                        )
+                                    } else if (item is NumberConfiguration) {
+                                        item
+                                    } else null
                                 }
-                                splitBoardConfigurations[boardName] = configs
-                                splitNumbers[boardName] = configs.map { it.number }
-                            } else {
-                                splitNumbers[boardName] = (1..subBoardScratchCount).toList()
                             }
+                        }
+
+                        // 寫入暫存區！這樣標題列 UI 才抓得到資料來顯示「特獎、大獎、夾X刮X」
+                        splitBoardSpecialPrizes[boardName] = sp
+                        splitBoardGrandPrizes[boardName] = gp
+                        splitBoardPitchTypes[boardName] = pt
+                        splitBoardClawsCounts[boardName] = cc
+                        splitBoardGiveawayCounts[boardName] = gc
+
+                        if (configs != null && configs.isNotEmpty()) {
+                            splitBoardConfigurations[boardName] = configs
+                            splitNumbers[boardName] = configs.map { it.number }
                         } else {
-                            splitNumbers[boardName] = (1..subBoardScratchCount).toList()
+                            // 萬一沒抓到配置，給予亂數並預設特獎，避免畫面空掉
+                            val shuffled = (1..subBoardScratchCount).toList().shuffled()
+                            splitNumbers[boardName] = shuffled
+                            splitBoardConfigurations[boardName] = shuffled.mapIndexed { idx, num ->
+                                NumberConfiguration(id = idx + 1, number = num, scratched = false)
+                            }
+                            if (sp.isEmpty()) splitBoardSpecialPrizes[boardName] = shuffled.random().toString()
                         }
                     }
                 }
-                // 🌟 情況 B：全新生成亂數配置（例如切換下拉選單或按重新整理）
+                // 🌟 情況 B：全新生成 (選擇下拉選單)
                 else if (existingConfigs == null) {
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
@@ -1625,8 +1664,7 @@ class SettingsFragment : Fragment() {
                         val shuffled = (1..subBoardScratchCount).toList().shuffled()
                         splitNumbers[boardName] = shuffled
 
-                        val randomSp = shuffled.random().toString()
-                        splitBoardSpecialPrizes[boardName] = randomSp
+                        splitBoardSpecialPrizes[boardName] = shuffled.random().toString()
                         splitBoardGrandPrizes[boardName] = ""
                         splitBoardPitchTypes[boardName] = "scratch"
                         splitBoardClawsCounts[boardName] = "1"
@@ -1644,11 +1682,12 @@ class SettingsFragment : Fragment() {
                     }
                 }
 
+                // 呼叫繪製 UI，這時它會去讀取我們剛剛塞進暫存區的特獎與規則
                 buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                 return@safeExecute
             }
 
-            // --- 以下為單一版面原有邏輯 ---
+            // --- 單一版面原有邏輯 ---
             val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
