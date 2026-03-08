@@ -493,7 +493,19 @@
                         android:minHeight="0dp"/>
                 </LinearLayout>
 
-                <!-- 推到下方的空白填充,讓提醒固定在最底 -->
+                <Button
+                    android:id="@+id/button_back_to_master"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="返回上一層"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="0dp"
+                    android:visibility="gone"/>
+
                 <Space
                     android:layout_width="match_parent"
                     android:layout_height="0dp"

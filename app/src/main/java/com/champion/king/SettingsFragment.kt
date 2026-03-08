@@ -340,6 +340,9 @@ class SettingsFragment : Fragment() {
         binding.buttonRefreshScratch.setOnClickListener { handleRefreshScratchClick() }
         binding.buttonAutoScratch.setOnClickListener { handleAutoScratchClick() }
 
+        // 🌟 新增：子板專用返回母板按鈕的點擊事件
+        binding.buttonBackToMaster.setOnClickListener { exitSubBoardFocusMode() }
+
         // ✅ 新增：消費贈送模式下，點「消費X元」input → 跳客製化數字鍵盤
         binding.editClawsCount.setOnClickListener {
             // 保險：只在 shopping 模式響應
@@ -609,7 +612,8 @@ class SettingsFragment : Fragment() {
             binding.buttonToggleInuse,
             binding.buttonAutoScratch,
             binding.buttonReturnSelected,
-            binding.buttonDeleteSelected
+            binding.buttonDeleteSelected,
+            binding.buttonBackToMaster
         ).forEach { v ->
             if (v !in allowedViews) {
                 v.isEnabled = false
@@ -3575,6 +3579,8 @@ class SettingsFragment : Fragment() {
         binding.buttonToggleInuse.visibility = View.GONE
         binding.rowActionsReturnDelete.visibility = View.GONE
 
+        binding.buttonBackToMaster.visibility = View.VISIBLE
+
         // 5. 資料塞好後，再重新掛上竊聽器
         binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
         binding.editTextGrandPrize.addTextChangedListener(splitGrandPrizeWatcher)
@@ -3640,6 +3646,9 @@ class SettingsFragment : Fragment() {
         // 🌟 核心修復點：退出子板時，強制把「設為使用中」與「返回/刪除」列恢復顯示！
         binding.buttonToggleInuse.visibility = View.VISIBLE
         binding.rowActionsReturnDelete.visibility = View.VISIBLE
+
+        // 🌟 隱藏專屬的返回母板按鈕
+        binding.buttonBackToMaster.visibility = View.GONE
 
         // 同步還原下方按鈕的狀態
         if (card != null) {
