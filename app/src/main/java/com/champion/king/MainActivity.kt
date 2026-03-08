@@ -1317,7 +1317,20 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
                 prizeInfoContainerMaster.addView(splitLabelTv)
             }
-            splitLabelTv.text = "${splitMode}版型"
+
+            // 🌟 將 "20x4" 轉換為 "20刮x4板" 格式
+            val displaySplitMode = if (splitMode.contains("x")) {
+                val parts = splitMode.split("x")
+                if (parts.size == 2) {
+                    "${parts[0]}刮x${parts[1]}板"
+                } else {
+                    "${splitMode}版型" // 防呆兜底
+                }
+            } else {
+                "${splitMode}版型" // 防呆兜底
+            }
+
+            splitLabelTv.text = displaySplitMode
             splitLabelTv.visibility = View.VISIBLE
 
             return // 分割版面不需要繼續渲染下面的單一版面獎項，直接結束
