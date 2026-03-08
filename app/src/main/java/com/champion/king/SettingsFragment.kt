@@ -3578,8 +3578,32 @@ class SettingsFragment : Fragment() {
         binding.buttonAutoScratch.visibility = View.VISIBLE
         binding.buttonToggleInuse.visibility = View.GONE
         binding.rowActionsReturnDelete.visibility = View.GONE
-
         binding.buttonBackToMaster.visibility = View.VISIBLE
+
+        // ✅ 修復：連續切換子板 (A -> B) 時，按鈕被 exitSubBoardFocusMode 設為 disabled 的問題
+        // 強制恢復「自動刮開」按鈕為啟用狀態 (紫色)
+        binding.buttonAutoScratch.apply {
+            isEnabled = true
+            isClickable = true
+            isFocusable = true
+            backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#6750A4"))
+            alpha = 1.0f
+        }
+
+        // 根據子板是否已被刮開，動態設定「儲存」按鈕的啟用狀態 (藍色 / 灰色)
+        binding.buttonSaveSettings.apply {
+            val canSave = !isBoardScratched
+            isEnabled = canSave
+            isClickable = canSave
+            isFocusable = canSave
+            if (canSave) {
+                backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2196F3"))
+                alpha = 1.0f
+            } else {
+                backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.LTGRAY)
+                alpha = 0.7f
+            }
+        }
 
         // 5. 資料塞好後，再重新掛上竊聽器
         binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
