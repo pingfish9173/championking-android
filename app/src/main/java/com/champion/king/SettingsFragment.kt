@@ -1373,6 +1373,12 @@ class SettingsFragment : Fragment() {
     }
 
     private fun createReadonlyLabels(card: ScratchCard) {
+        // 🌟 核心修改：改為呼叫新的通用方法
+        setupReadonlyLabels(card.specialPrize, card.grandPrize)
+    }
+
+    // 🌟 新增：抽離出來的通用建立唯讀標籤方法，讓子板也能重複使用
+    private fun setupReadonlyLabels(specialPrizeStr: String?, grandPrizeStr: String?) {
         removeReadonlyLabels()
 
         val context = requireContext()
@@ -1397,7 +1403,7 @@ class SettingsFragment : Fragment() {
         }
 
         specialPrizeLabel = TextView(context).apply {
-            text = card.specialPrize ?: "未設定"
+            text = if (specialPrizeStr.isNullOrEmpty()) "未設定" else specialPrizeStr
             textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.special_prize_gold))
             setPadding(12, 8, 12, 8)
@@ -1437,7 +1443,7 @@ class SettingsFragment : Fragment() {
         }
 
         grandPrizeLabel = TextView(context).apply {
-            text = card.grandPrize ?: "未設定"
+            text = if (grandPrizeStr.isNullOrEmpty()) "未設定" else grandPrizeStr
             textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.grand_prize_green))
             setPadding(12, 8, 12, 8)
@@ -3301,40 +3307,22 @@ class SettingsFragment : Fragment() {
         binding.layoutScratchCountRow.visibility = View.GONE
         binding.rightPanelContainer.visibility = View.VISIBLE
 
-        (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.VISIBLE
-        (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.VISIBLE
-
-        // 🌟 修正：恢復玩法規則設定區塊的顯示，讓大獎下方出現單選選項
-        (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
-            parent.visibility = View.VISIBLE
-            for (i in 0 until parent.childCount) {
-                val child = parent.getChildAt(i)
-                if (child is TextView && child.text.toString().contains("玩法規則設定")) {
-                    child.visibility = View.VISIBLE
-                }
-            }
-        }
-        binding.radioGroupPitchType.visibility = View.VISIBLE
-        binding.textClawsPrefix.visibility = View.VISIBLE
-        binding.textClawsUnit.visibility = View.VISIBLE
-        binding.textGiveawayPrefix.visibility = View.VISIBLE
-        binding.textGiveawayUnit.visibility = View.VISIBLE
-        binding.spinnerGiveawayCount.visibility = View.VISIBLE
-        binding.buttonAutoScratch.visibility = View.VISIBLE
+        // 準備該子板的暫存資料
+        val specialStr = splitBoardSpecialPrizes[boardName] ?: ""
+        val grandStr = splitBoardGrandPrizes[boardName] ?: ""
+        val pitchType = splitBoardPitchTypes[boardName] ?: "scratch"
+        val claws = splitBoardClawsCounts[boardName] ?: "1"
+        val giveaway = splitBoardGiveawayCounts[boardName] ?: 1
 
         // 2. 徹底解決 A 切 B 的干擾：先移除竊聽器
         binding.editTextSpecialPrize.removeTextChangedListener(splitSpecialPrizeWatcher)
         binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
 
-        // 3. 安全地載入該子板的特獎/大獎暫存資料
-        binding.editTextSpecialPrize.setText(splitBoardSpecialPrizes[boardName] ?: "")
-        binding.editTextGrandPrize.setText(splitBoardGrandPrizes[boardName] ?: "")
+        // 3. 安全地載入該子板的特獎/大獎暫存資料到輸入框 (即使隱藏也塞入值)
+        binding.editTextSpecialPrize.setText(specialStr)
+        binding.editTextGrandPrize.setText(grandStr)
 
-        // 🌟 4. 載入該子板專屬的玩法規則
-        val pitchType = splitBoardPitchTypes[boardName] ?: "scratch"
-        val claws = splitBoardClawsCounts[boardName] ?: "1"
-        val giveaway = splitBoardGiveawayCounts[boardName] ?: 1
-
+        // 先把下拉選單的數值與基礎 UI 顯示設定好
         if (pitchType == "shopping") {
             binding.radioPitchShopping.isChecked = true
             applyPitchTypeUi(isShopping = true, syncValues = false)
@@ -3345,6 +3333,94 @@ class SettingsFragment : Fragment() {
             setSpinnerSelection(binding.spinnerClawsCount, claws.toIntOrNull() ?: 1)
         }
         setSpinnerSelection(binding.spinnerGiveawayCount, giveaway)
+
+        // 判斷該子板是否已經有被刮開的格子
+        val configs = splitBoardConfigurations[boardName]
+        val isBoardScratched = configs?.any { it.scratched } == true
+
+        val specialPrizeContainer = findViewContaining(binding.buttonPickSpecialPrize)
+        val grandPrizeContainer = findViewContaining(binding.buttonPickGrandPrize)
+
+        // 依據是否刮過，作為最後一步強制覆蓋元件的隱藏狀態
+        if (isBoardScratched) {
+            setupReadonlyLabels(specialStr, grandStr)
+
+            // 已刮過：強制唯讀，隱藏編輯框，顯示唯讀文字
+            specialPrizeContainer?.visibility = View.GONE
+            grandPrizeContainer?.visibility = View.GONE
+
+            specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+            grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
+
+            // 🌟 關鍵修復：因為 A 切 B 時，exitSubBoardFocusMode 會把整個規則區塊的父容器隱藏
+            // 這裡必須強制把它重新顯示，裡面的「夾X刮X」唯讀字樣才出得來！
+            (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
+                parent.visibility = View.VISIBLE
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    if (child is TextView && child.text.toString().contains("玩法規則設定")) {
+                        child.visibility = View.VISIBLE // 標題保留
+                    }
+                }
+            }
+
+            // 設定規則唯讀文字並顯示
+            if (pitchType == "shopping") {
+                binding.textPitchRuleReadonly.text = "消費 $claws 刮 $giveaway"
+            } else {
+                binding.textPitchRuleReadonly.text = "夾 $claws 刮 $giveaway"
+            }
+            binding.textPitchRuleReadonly.visibility = View.VISIBLE
+
+            // 將所有規則輸入的下拉選單、單位文字「強制隱藏」！
+            binding.radioGroupPitchType.visibility = View.GONE
+            binding.spinnerGiveawayCount.visibility = View.GONE
+            binding.textClawsPrefix.visibility = View.GONE
+            binding.textClawsUnit.visibility = View.GONE
+            binding.textGiveawayPrefix.visibility = View.GONE
+            binding.textGiveawayUnit.visibility = View.GONE
+            binding.spinnerClawsCount.visibility = View.GONE
+            binding.editClawsCount.visibility = View.GONE
+
+        } else {
+            // ⬜ 沒刮過：保持可編輯
+            specialPrizeContainer?.visibility = View.VISIBLE
+            grandPrizeContainer?.visibility = View.VISIBLE
+
+            specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+            grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+            binding.textPitchRuleReadonly.visibility = View.GONE
+
+            (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
+                parent.visibility = View.VISIBLE
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChildAt(i)
+                    if (child is TextView && child.text.toString().contains("玩法規則設定")) {
+                        child.visibility = View.VISIBLE
+                    }
+                }
+            }
+
+            binding.radioGroupPitchType.visibility = View.VISIBLE
+            binding.textClawsPrefix.visibility = View.VISIBLE
+            binding.textClawsUnit.visibility = View.VISIBLE
+            binding.textGiveawayPrefix.visibility = View.VISIBLE
+            binding.textGiveawayUnit.visibility = View.VISIBLE
+            binding.spinnerGiveawayCount.visibility = View.VISIBLE
+
+            // 根據 pitchType 恢復對應的控制項顯示
+            if (pitchType == "shopping") {
+                binding.spinnerClawsCount.visibility = View.GONE
+                binding.editClawsCount.visibility = View.VISIBLE
+            } else {
+                binding.spinnerClawsCount.visibility = View.VISIBLE
+                binding.editClawsCount.visibility = View.GONE
+            }
+        }
+
+        // 核心按鈕控制：子板模式「顯示」自動刮開，「隱藏」設為使用中
+        binding.buttonAutoScratch.visibility = View.VISIBLE
+        binding.buttonToggleInuse.visibility = View.GONE
 
         // 5. 資料塞好後，再重新掛上竊聽器
         binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
@@ -3365,7 +3441,6 @@ class SettingsFragment : Fragment() {
 
             splitBoardGiveawayCounts[boardName] = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull() ?: 1
 
-            // 🌟 核心修改：存好之後，馬上呼叫 render 讓剛剛設定好的規則顯示到標題列
             renderSubBoardHeaderUI(boardName)
         }
 
@@ -3384,6 +3459,11 @@ class SettingsFragment : Fragment() {
         binding.editTextSpecialPrize.setText("")
         binding.editTextGrandPrize.setText("")
 
+        // 🌟 確保唯讀標籤在退回母板時乾淨地隱藏
+        specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+        grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
+        binding.textPitchRuleReadonly.visibility = View.GONE
+
         // 4. 恢復成「母板」狀態
         binding.layoutScratchCountRow.visibility = View.VISIBLE
         binding.rightPanelContainer.visibility = View.VISIBLE
@@ -3391,7 +3471,10 @@ class SettingsFragment : Fragment() {
         (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.GONE
         (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.GONE
         (binding.radioGroupPitchType.parent as? View)?.visibility = View.GONE
+
+        // 核心按鈕控制：退回母板時「隱藏」自動刮開，「恢復顯示」設為使用中
         binding.buttonAutoScratch.visibility = View.GONE
+        binding.buttonToggleInuse.visibility = View.VISIBLE
 
         binding.radioGroupPitchType.visibility = View.GONE
         binding.textClawsPrefix.visibility = View.GONE
