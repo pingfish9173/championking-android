@@ -94,9 +94,9 @@ class SettingsFragment : Fragment() {
         val selectableWithoutStock: Boolean = false
     ) {
         override fun toString(): String {
-            if (isPlaceholder) return "請選擇"
+            // 🌟 核心修改：如果是有帶文字的 placeholder，直接顯示該文字（例如商城提示）
+            if (isPlaceholder) return typeStr.ifEmpty { "請選擇" }
 
-            // 判斷是否為分割版面，動態組裝「X刮xY板」字樣
             val displayTypeStr = if (typeStr.contains("x")) {
                 val parts = typeStr.split("x")
                 if (parts.size == 2) {
@@ -108,7 +108,6 @@ class SettingsFragment : Fragment() {
                 "${typeStr}刮" // 單一版面
             }
 
-            // 🌟 核心修改：將 (無庫存) 改為 (剩0) 來節省空間
             return when {
                 !showStockInfo -> displayTypeStr
                 stock > 0 -> "$displayTypeStr (剩${stock})"
@@ -2071,19 +2070,50 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 🌟 修改點 16：接收 DataSnapshot 動態取值
+    // 🌟 修改點 16：接收 DataSnapshot 動態取值，並過濾無庫存的選項
     private fun updateSpinnerWithStockData(snapshot: DataSnapshot) {
         val stockMap = createStockMap(snapshot)
-        val items = listOf(ScratchTypeItem(typeStr = "", stock = 0, isPlaceholder = true)) +
-                scratchOrder.map { ScratchTypeItem(it, stockMap[it] ?: 0) }
-        val currentSelection = binding.spinnerScratchesCount.selectedItemPosition
+
+        // 🌟 1. 過濾出庫存大於 0 的版型
+        val availableTypes = scratchOrder.filter { (stockMap[it] ?: 0) > 0 }
+
+        // 🌟 2. 判斷是否有庫存，動態組裝選單
+        val items = if (availableTypes.isEmpty()) {
+            // 完全沒庫存：只顯示商城引導文字
+            listOf(ScratchTypeItem(typeStr = "您目前尚無可用庫存，請至商城購買", stock = 0, isPlaceholder = true))
+        } else {
+            // 正常顯示：預設「請選擇」 + 那些有庫存的選項
+            listOf(ScratchTypeItem(typeStr = "", stock = 0, isPlaceholder = true)) +
+                    availableTypes.map { ScratchTypeItem(it, stockMap[it] ?: 0) }
+        }
+
+        val currentSelectionStr = try {
+            val currentItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
+            currentItem?.getScratchTypeString()
+        } catch (e: Exception) { null }
 
         isUpdatingSpinner = true
         val adapter = buildStockAwareAdapter(items)
         binding.spinnerScratchesCount.adapter = adapter
 
-        if (currentSelection >= 0 && currentSelection < adapter.count) {
-            binding.spinnerScratchesCount.setSelection(currentSelection)
+        // 🌟 3. 嘗試恢復原本選擇的項目
+        var targetPos = 0
+        if (currentSelectionStr != null) {
+            for (i in 0 until adapter.count) {
+                val item = adapter.getItem(i)
+                if (item?.getScratchTypeString() == currentSelectionStr) {
+                    targetPos = i
+                    break
+                }
+            }
+        }
+
+        if (targetPos >= 0 && targetPos < adapter.count) {
+            // 如果原本選的版型剛好用完被過濾掉了（targetPos 被歸為 0），抑制事件避免預覽區亂跳
+            if (targetPos == 0 && currentSelectionStr != null) {
+                suppressNextScratchTypeSelectionEvent = true
+            }
+            binding.spinnerScratchesCount.setSelection(targetPos)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
