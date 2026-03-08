@@ -1814,6 +1814,9 @@ class SettingsFragment : Fragment() {
             binding.spinnerClawsCount.visibility = View.GONE
             binding.editClawsCount.visibility = View.GONE
 
+            // 🌟 核心修改：如果是分割版面的「母板」模式，隱藏自動刮開按鈕
+            binding.buttonAutoScratch.visibility = View.GONE
+
             (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
                 for (i in 0 until parent.childCount) {
                     val child = parent.getChildAt(i)
@@ -1823,7 +1826,9 @@ class SettingsFragment : Fragment() {
                 }
             }
         } else {
-            // 🌟 單一版面：根據 isReadonly 決定顯示編輯框還是唯讀標籤，避免兩者同時出現
+            // 🌟 單一版面維持原樣顯示自動刮開按鈕
+            binding.buttonAutoScratch.visibility = View.VISIBLE
+
             if (isReadonly) {
                 specialPrizeContainer?.visibility = View.GONE
                 grandPrizeContainer?.visibility = View.GONE
@@ -1855,7 +1860,6 @@ class SettingsFragment : Fragment() {
                 applyPitchTypeUi(isShopping = isShopping, syncValues = false)
             }
 
-            // 恢復「玩法規則設定：」的標題文字
             (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
                 for (i in 0 until parent.childCount) {
                     val child = parent.getChildAt(i)
@@ -2223,6 +2227,37 @@ class SettingsFragment : Fragment() {
             return
         }
 
+        // 🌟 分流點：如果是子板聚焦模式，執行專屬的自動刮開運算
+        if (currentFocusedSubBoardId != null) {
+            val boardName = currentFocusedSubBoardId!!
+
+            // 從暫存區抓出該子板目前的配置
+            val configs = splitBoardConfigurations[boardName]
+            if (configs.isNullOrEmpty()) {
+                showToast("此子板沒有數字配置，無法自動刮開")
+                return
+            }
+
+            // 取得子板的特獎、大獎字串
+            val specialStr = splitBoardSpecialPrizes[boardName]
+            val grandStr = splitBoardGrandPrizes[boardName] ?: ""
+
+            val maxX = calcSubBoardAutoScratchMaxX(configs, specialStr, grandStr)
+
+            if (maxX <= 0) {
+                showToast("沒有可刮開的格子（已刮/特獎/大獎皆已占滿）")
+                return
+            }
+
+            showAutoScratchInputDialog(maxX = maxX) { x ->
+                showAutoScratchConfirmDialog(x) {
+                    performSubBoardAutoScratch(boardName, selectedCard, x)
+                }
+            }
+            return
+        }
+
+        // --- 以下維持原本單一版面的自動刮開邏輯 ---
         val configs = selectedCard.numberConfigurations
         if (configs.isNullOrEmpty()) {
             showToast("此刮板沒有數字配置，無法自動刮開")
@@ -2256,6 +2291,32 @@ class SettingsFragment : Fragment() {
         if (special != null) unavailableNumbers.add(special)
         unavailableNumbers.addAll(grandSet)
 
+        val eligible = configs.filter { !it.scratched && !unavailableNumbers.contains(it.number) }
+        return eligible.size
+    }
+
+    // 🌟 新增：計算子板專屬的「最大可自動刮開數量」
+    private fun calcSubBoardAutoScratchMaxX(
+        configs: List<NumberConfiguration>,
+        specialPrizeStr: String?,
+        grandPrizeStr: String
+    ): Int {
+        val special = specialPrizeStr?.toIntOrNull()
+        val grandSet = grandPrizeStr
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toSet()
+
+        val unavailableNumbers = mutableSetOf<Int>()
+
+        // 1. 過濾已經刮開的
+        configs.filter { it.scratched }.forEach { unavailableNumbers.add(it.number) }
+        // 2. 過濾特獎
+        if (special != null) unavailableNumbers.add(special)
+        // 3. 過濾大獎
+        unavailableNumbers.addAll(grandSet)
+
+        // 符合資格的 = 沒被刮開 且 不在不可刮名單中的
         val eligible = configs.filter { !it.scratched && !unavailableNumbers.contains(it.number) }
         return eligible.size
     }
@@ -2446,6 +2507,80 @@ class SettingsFragment : Fragment() {
         showSetShelfState(updatedCard)
 
         showToast("已自動刮開 ${eligibleIdx.size} 格")
+    }
+
+    // 🌟 新增：執行子板專屬的自動刮開與儲存邏輯
+    private fun performSubBoardAutoScratch(boardName: String, card: ScratchCard, x: Int) {
+        val order = shelfManager.selectedShelfOrder
+
+        // 複製一份暫存區的格子資料來改
+        val originalConfigs = splitBoardConfigurations[boardName] ?: return
+        val configsToUpdate = originalConfigs.map { it.copy() }.toMutableList()
+
+        val specialStr = splitBoardSpecialPrizes[boardName]
+        val grandStr = splitBoardGrandPrizes[boardName] ?: ""
+
+        val special = specialStr?.toIntOrNull()
+        val grandSet = grandStr.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+
+        val unavailableNumbers = mutableSetOf<Int>()
+        configsToUpdate.filter { it.scratched }.forEach { unavailableNumbers.add(it.number) }
+        if (special != null) unavailableNumbers.add(special)
+        unavailableNumbers.addAll(grandSet)
+
+        // 抽出要被刮開的幸運兒
+        val eligibleIdx = configsToUpdate
+            .mapIndexedNotNull { idx, cfg ->
+                if (!cfg.scratched && !unavailableNumbers.contains(cfg.number)) idx else null
+            }
+            .shuffled()
+            .take(x)
+
+        if (eligibleIdx.isEmpty()) return
+
+        // 修改狀態並紀錄 timestamp
+        eligibleIdx.forEach { idx ->
+            configsToUpdate[idx].scratched = true
+            configsToUpdate[idx].scratchedAt = System.currentTimeMillis()
+        }
+
+        // 🌟 1. 更新暫存區
+        splitBoardConfigurations[boardName] = configsToUpdate
+
+        // 🌟 2. 立刻更新畫面上的 UI 視覺
+        updateSubBoardCellsUI(boardName)
+
+        // 🌟 3. 將資料組裝成 Map 結構，準備只更新這個子板的 numberConfigurations 節點
+        val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
+        val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()
+        val serial = card.serialNumber
+
+        if (userKey != null && serial != null) {
+            val configsMapList = configsToUpdate.map { cfg ->
+                val map = mutableMapOf<String, Any>(
+                    "id" to cfg.id,
+                    "number" to cfg.number,
+                    "scratched" to cfg.scratched
+                )
+                if (cfg.scratchedAt != null) {
+                    map["scratchedAt"] = cfg.scratchedAt!!
+                }
+                map
+            }
+
+            // 寫入 Firebase
+            dbRef.child("users").child(userKey).child("scratchCards")
+                .child(serial).child("boards").child(boardName).child("numberConfigurations")
+                .setValue(configsMapList).addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        showToast("已自動刮開 ${eligibleIdx.size} 格！")
+                        // 雖然在子板模式，但我們可以手動發個更新事件讓總數量改變
+                        updateRemainingScratchesInfo(viewModel.cards.value)
+                    } else {
+                        showToast("寫入失敗：${task.exception?.message}")
+                    }
+                }
+        }
     }
 
     // 🌟 修改點 18：取得字串，避免 Null 例外
