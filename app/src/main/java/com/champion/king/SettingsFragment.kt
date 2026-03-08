@@ -946,7 +946,7 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
-        // 🌟 分流點：如果目前在「子板聚焦模式」
+        // 分流點：如果目前在「子板聚焦模式」
         if (currentFocusedSubBoardId != null) {
             val boardName = currentFocusedSubBoardId!!
 
@@ -962,7 +962,7 @@ class SettingsFragment : Fragment() {
             val configs = splitBoardConfigurations[boardName]
             val isBoardScratched = configs?.any { it.scratched } == true
 
-            // 🌟 核心修改：判斷此刮板是否已經存入資料庫
+            // 判斷此刮板是否已經存入資料庫
             if (selectedCard != null && selectedCard.serialNumber != null) {
                 if (isBoardScratched) {
                     showToast("此子板已有刮開紀錄，參數為唯讀狀態無法儲存")
@@ -981,7 +981,6 @@ class SettingsFragment : Fragment() {
                 }
                 val giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull() ?: 1
 
-                // 準備精準寫入該子板的 Firebase 節點
                 val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
                 val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()
 
@@ -994,7 +993,10 @@ class SettingsFragment : Fragment() {
                         "giveawayCount" to giveaway
                     )
 
-                    // 🌟 直接更新該子板的資料
+                    // 🌟 核心防閃爍：開啟寫入鎖定，防止 Firebase 同步時引發全域畫面重繪
+                    isSavingInProgress = true
+
+                    // 直接更新該子板的資料
                     dbRef.child("users").child(userKey).child("scratchCards")
                         .child(selectedCard.serialNumber!!).child("boards").child(boardName)
                         .updateChildren(updates).addOnCompleteListener { task ->
@@ -1003,6 +1005,11 @@ class SettingsFragment : Fragment() {
                             } else {
                                 showToast("寫入資料庫失敗：${task.exception?.message}")
                             }
+                            // 延遲解除鎖定，讓過渡動畫平順完成
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                kotlinx.coroutines.delay(500)
+                                isSavingInProgress = false
+                            }
                         }
                 }
 
@@ -1010,7 +1017,6 @@ class SettingsFragment : Fragment() {
                 exitSubBoardFocusMode()
                 return
             } else {
-                // 如果是全新還沒建立過（尚未寫入 Firebase）的刮板，維持原有的「暫存」邏輯
                 exitSubBoardFocusMode()
                 showToast("${boardName}板參數已暫存！全部子板設定完畢後，請點擊母板的儲存按鈕寫入資料庫")
                 return
@@ -2637,7 +2643,6 @@ class SettingsFragment : Fragment() {
         showToast("已自動刮開 ${eligibleIdx.size} 格")
     }
 
-    // 🌟 新增：執行子板專屬的自動刮開與儲存邏輯
     private fun performSubBoardAutoScratch(boardName: String, card: ScratchCard, x: Int) {
         val order = shelfManager.selectedShelfOrder
 
@@ -2672,13 +2677,12 @@ class SettingsFragment : Fragment() {
             configsToUpdate[idx].scratchedAt = System.currentTimeMillis()
         }
 
-        // 🌟 1. 更新暫存區
+        // 更新暫存區
         splitBoardConfigurations[boardName] = configsToUpdate
 
-        // 🌟 2. 立刻更新畫面上的 UI 視覺
+        // 立刻更新畫面上的 UI 視覺
         updateSubBoardCellsUI(boardName)
 
-        // 🌟 3. 將資料組裝成 Map 結構，準備只更新這個子板的 numberConfigurations 節點
         val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
         val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()
         val serial = card.serialNumber
@@ -2696,21 +2700,29 @@ class SettingsFragment : Fragment() {
                 map
             }
 
+            // 🌟 核心防閃爍：開啟寫入鎖定，防止 Firebase 同步時引發全域畫面重繪
+            isSavingInProgress = true
+
             // 寫入 Firebase
             dbRef.child("users").child(userKey).child("scratchCards")
                 .child(serial).child("boards").child(boardName).child("numberConfigurations")
                 .setValue(configsMapList).addOnCompleteListener { task ->
                     if (task.isSuccessful) {
                         showToast("已自動刮開 ${eligibleIdx.size} 格！")
-                        // 雖然在子板模式，但我們可以手動發個更新事件讓總數量改變
                         updateRemainingScratchesInfo(viewModel.cards.value)
-
-                        // 🌟 核心修復點：自動刮開成功後，自動退出子板聚焦模式，退回母板
-                        exitSubBoardFocusMode()
                     } else {
                         showToast("寫入失敗：${task.exception?.message}")
                     }
+
+                    // 延遲解除鎖定
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        kotlinx.coroutines.delay(500)
+                        isSavingInProgress = false
+                    }
                 }
+
+            // 🌟 核心修復點：立刻自動退出子板聚焦模式，退回母板
+            exitSubBoardFocusMode()
         }
     }
 
@@ -3588,41 +3600,57 @@ class SettingsFragment : Fragment() {
         binding.editTextGrandPrize.removeTextChangedListener(splitGrandPrizeWatcher)
 
         currentFocusedSubBoardId = null
-        updateParametersTitle(shelfManager.selectedShelfOrder)
+
+        // 3. 準備無縫還原母板 UI 狀態
+        val order = shelfManager.selectedShelfOrder
+        val card = viewModel.cards.value[order]
+        val isReadonly = card != null && hasBeenScratched(card)
+        val scratchTypeStr = if (card != null) {
+            if (!card.splitMode.isNullOrEmpty()) card.splitMode!! else card.scratchesType.toString()
+        } else {
+            getCurrentScratchType() ?: "20x4"
+        }
+
+        updateParametersTitle(order)
+
+        // 核心防閃爍：根據是否已儲存，預先設定好正確的「刮數文字」或「下拉選單」
+        if (card != null) {
+            showScratchTypeLabel(scratchTypeStr)
+        } else {
+            showScratchTypeSpinner()
+        }
 
         binding.onShelfListContainer.alpha = 1.0f
         setEnabledRecursively(binding.onShelfListContainer, true)
         updateSubBoardsAlpha(null)
 
-        // 3. 退出時，清空右側文字
+        // 清空右側文字
         binding.editTextSpecialPrize.setText("")
         binding.editTextGrandPrize.setText("")
 
-        // 🌟 確保唯讀標籤在退回母板時乾淨地隱藏
-        specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
-        grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
-        binding.textPitchRuleReadonly.visibility = View.GONE
-
-        // 4. 恢復成「母板」狀態
+        // 4. 一次性強制套用母板 UI
         binding.layoutScratchCountRow.visibility = View.VISIBLE
         binding.rightPanelContainer.visibility = View.VISIBLE
 
-        (binding.buttonPickSpecialPrize.parent as? View)?.visibility = View.GONE
-        (binding.buttonPickGrandPrize.parent as? View)?.visibility = View.GONE
-        (binding.radioGroupPitchType.parent as? View)?.visibility = View.GONE
+        // 呼叫統一的顯示管理方法，完美隱藏子板專屬欄位並乾淨俐落地處理唯讀標籤
+        applySplitModeVisibility(isSplitMode = true, isReadonly = isReadonly)
 
-        // 核心按鈕控制：退回母板時「隱藏」自動刮開，「恢復顯示」設為使用中
-        binding.buttonAutoScratch.visibility = View.GONE
+        // 🌟 核心修復點：退出子板時，強制把「設為使用中」按鈕恢復顯示！
         binding.buttonToggleInuse.visibility = View.VISIBLE
 
-        binding.radioGroupPitchType.visibility = View.GONE
-        binding.textClawsPrefix.visibility = View.GONE
-        binding.textClawsUnit.visibility = View.GONE
-        binding.textGiveawayPrefix.visibility = View.GONE
-        binding.textGiveawayUnit.visibility = View.GONE
-        binding.spinnerGiveawayCount.visibility = View.GONE
-        binding.spinnerClawsCount.visibility = View.GONE
-        binding.editClawsCount.visibility = View.GONE
+        // 同步還原下方按鈕的狀態
+        if (card != null) {
+            uiManager.updateInUseButtonUI(card)
+            uiManager.updateActionButtonsUI(card)
+            if (isReadonly) {
+                setButtonsEnabled(save = false, toggleInUse = true, autoScratch = false, returnBtn = false, delete = !card.inUsed)
+            } else {
+                setButtonsEnabled(save = true, toggleInUse = true, autoScratch = false, returnBtn = !card.inUsed, delete = !card.inUsed)
+            }
+        } else {
+            setButtonsEnabled(save = true, toggleInUse = false, autoScratch = false, returnBtn = false, delete = false)
+        }
+        updateRefreshButtonVisibility()
     }
 
     private fun updateSubBoardsAlpha(focusedBoardName: String?) {
