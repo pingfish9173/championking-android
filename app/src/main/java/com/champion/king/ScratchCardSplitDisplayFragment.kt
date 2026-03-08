@@ -277,6 +277,7 @@ class ScratchCardSplitDisplayFragment : Fragment() {
         val tvSpecialPrize = containerView.findViewById<TextView>(R.id.tv_special_prize)
         val llGrandPrizes = containerView.findViewById<android.widget.LinearLayout>(R.id.ll_grand_prizes)
         val tvPitchRule = containerView.findViewById<TextView>(R.id.tv_pitch_rule)
+        val tvGrandPrizeLabel = containerView.findViewById<TextView>(R.id.tv_grand_prize_label) // 🌟 新增：取得大獎標籤
 
         tvBoardName?.text = "${board.id}板"
 
@@ -300,25 +301,25 @@ class ScratchCardSplitDisplayFragment : Fragment() {
             llGrandPrizes.removeAllViews()
             val grandPrizeStr = board.grandPrize
             if (grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無") {
-                val tv = TextView(requireContext()).apply {
-                    text = "無"
-                    setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white))
-                    textSize = 10f
-                    gravity = android.view.Gravity.CENTER
-                }
-                llGrandPrizes.addView(tv)
+                // 🌟 如果沒有大獎，直接隱藏「大獎：」標籤與整個容器
+                tvGrandPrizeLabel?.visibility = View.GONE
+                llGrandPrizes.visibility = View.GONE
             } else {
+                // 🌟 如果有大獎，確保標籤與容器顯示出來
+                tvGrandPrizeLabel?.visibility = View.VISIBLE
+                llGrandPrizes.visibility = View.VISIBLE
+
                 val allNumbers = grandPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }
                 val green = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_green)
                 val whiteText = androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white)
 
-                val sizePx = (22 * resources.displayMetrics.density).toInt()
+                val sizePx = (38 * resources.displayMetrics.density).toInt()
                 val marginPx = (2 * resources.displayMetrics.density).toInt()
 
                 for (num in allNumbers) {
                     val tv = TextView(requireContext()).apply {
                         text = num.toString()
-                        textSize = 10f
+                        textSize = 18f
                         setTextColor(whiteText)
                         gravity = android.view.Gravity.CENTER
                         background = android.graphics.drawable.GradientDrawable().apply {

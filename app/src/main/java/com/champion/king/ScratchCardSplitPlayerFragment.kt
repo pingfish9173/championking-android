@@ -551,6 +551,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         val tvSpecialPrize = containerView.findViewById<TextView>(R.id.tv_special_prize)
         val llGrandPrizes = containerView.findViewById<android.widget.LinearLayout>(R.id.ll_grand_prizes)
         val tvPitchRule = containerView.findViewById<TextView>(R.id.tv_pitch_rule)
+        val tvGrandPrizeLabel = containerView.findViewById<TextView>(R.id.tv_grand_prize_label) // 🌟 新增：取得大獎標籤
 
         // 1. 設定版名
         tvBoardName?.text = "${board.id}板"
@@ -577,14 +578,14 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             llGrandPrizes.removeAllViews()
             val grandPrizeStr = board.grandPrize
             if (grandPrizeStr.isNullOrBlank() || grandPrizeStr == "無") {
-                val tv = TextView(requireContext()).apply {
-                    text = "無"
-                    setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white))
-                    textSize = 18f // 🌟 放大字體
-                    gravity = android.view.Gravity.CENTER
-                }
-                llGrandPrizes.addView(tv)
+                // 🌟 如果沒有大獎，直接隱藏「大獎：」標籤與整個容器
+                tvGrandPrizeLabel?.visibility = View.GONE
+                llGrandPrizes.visibility = View.GONE
             } else {
+                // 🌟 如果有大獎，確保標籤與容器顯示出來
+                tvGrandPrizeLabel?.visibility = View.VISIBLE
+                llGrandPrizes.visibility = View.VISIBLE
+
                 val allNumbers = grandPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }
                 val green = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.scratch_card_green)
                 val whiteText = androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.white)
@@ -625,10 +626,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 tvPitchRule.text = "夾${claws}送${giveaway}"
             }
 
-            // 🌟 修正：點擊夾送規則連點 7 下「重新鎖定螢幕」
+            // 🌟 點擊夾送規則連點 7 下「重新鎖定螢幕」
             tvPitchRule.setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
-                // 如果點擊間隔超過 1.2 秒，就重新計算
                 if (now - lastRelockTapAt > 1200) {
                     relockTapCount = 0
                 }
