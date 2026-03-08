@@ -809,17 +809,26 @@ class SettingsFragment : Fragment() {
         if (draft != null && draft.scratchType != null) {
             showRightPanel()
 
-            // 🌟 修改點 4：傳入字串給 spinner 選擇器
-            setScratchTypeSpinnerSelection(draft.scratchType.toString())
+            // 🌟 解析隱藏在 pitchType 裡的真實玩法與分割版面字串
+            val rawPitch = draft.pitchType ?: "scratch"
+            val realPitchType = rawPitch.substringBefore("|")
+            val splitModeStr = rawPitch.substringAfter("|", "")
 
-            // 🌟 修改點 5：傳入字串產生預覽
-            displayScratchBoardPreview(draft.scratchType.toString(), draft.numberConfigurations)
-            setPrizeControlsEnabled(true)
+            // 決定顯示的版型字串：如果是分割版面就用藏著的字串，否則用原本的 Int
+            val displayScratchTypeStr = if (splitModeStr.isNotEmpty()) {
+                splitModeStr
+            } else {
+                draft.scratchType.toString()
+            }
+
+            // 傳入字串給 spinner 選擇器與預覽畫面
+            setScratchTypeSpinnerSelection(displayScratchTypeStr)
+            displayScratchBoardPreview(displayScratchTypeStr, draft.numberConfigurations)
 
             binding.editTextSpecialPrize.setText(draft.specialPrize.orEmpty())
             binding.editTextGrandPrize.setText(draft.grandPrize.orEmpty())
 
-            val isShopping = (draft.pitchType == "shopping")
+            val isShopping = (realPitchType == "shopping")
             if (isShopping) {
                 binding.radioPitchShopping.isChecked = true
                 applyPitchTypeUi(isShopping = true, syncValues = false)
@@ -841,7 +850,15 @@ class SettingsFragment : Fragment() {
             val gp = draft.grandPrize
                 ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
             currentPreviewFragment?.setGrandSelectedNumbers(gp)
+
+            // 🌟 核心修復點：在所有數值與 UI 都載入完畢後，最後一步強制執行隱藏過濾！
+            // 這樣能保證剛剛被 applyPitchTypeUi 顯示出來的元件，如果是分割母板，就會乖乖收起來
+            val isSplitDraft = splitModeStr.isNotEmpty()
+            applySplitModeVisibility(isSplitMode = isSplitDraft, isReadonly = false)
+            setPrizeControlsEnabled(!isSplitDraft)
+
         } else {
+            // 完全沒草稿時，徹底隱藏參數區域
             hideRightPanel()
 
             showPreviewUnset()
@@ -2687,6 +2704,9 @@ class SettingsFragment : Fragment() {
                         showToast("已自動刮開 ${eligibleIdx.size} 格！")
                         // 雖然在子板模式，但我們可以手動發個更新事件讓總數量改變
                         updateRemainingScratchesInfo(viewModel.cards.value)
+
+                        // 🌟 核心修復點：自動刮開成功後，自動退出子板聚焦模式，退回母板
+                        exitSubBoardFocusMode()
                     } else {
                         showToast("寫入失敗：${task.exception?.message}")
                     }
@@ -2893,8 +2913,21 @@ class SettingsFragment : Fragment() {
         val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
         val scratchTypeStr = selectedItem?.getScratchTypeString()
 
+        // 🌟 核心防呆：如果目前是未設置(未選刮數)狀態，清空草稿並直接返回，避免產生異常的UI暫存
+        if (scratchTypeStr.isNullOrEmpty()) {
+            viewModel.clearDraft(order)
+            return
+        }
+
         val isShopping = binding.radioPitchShopping.isChecked
-        val pitchType = if (isShopping) "shopping" else "scratch"
+        val basePitchType = if (isShopping) "shopping" else "scratch"
+
+        // 🌟 技巧：由於草稿的 scratchType 只能存 Int，我們將分割版面的字串(如20x4)偷偷藏進 pitchType 紀錄中
+        val storedPitchType = if (scratchTypeStr.contains("x")) {
+            "${basePitchType}|${scratchTypeStr}"
+        } else {
+            basePitchType
+        }
 
         val clawsValue: Int? = if (isShopping) {
             val t = binding.editClawsCount.text?.toString()?.trim().orEmpty()
@@ -2904,13 +2937,13 @@ class SettingsFragment : Fragment() {
         }
 
         val draft = SettingsViewModel.SettingsDraft(
-            scratchType = scratchTypeStr?.toIntOrNull() ?: 0, // 分割版面草稿先存 0
+            scratchType = scratchTypeStr.toIntOrNull() ?: 0, // 分割版面轉為 0
             specialPrize = binding.editTextSpecialPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
             grandPrize = binding.editTextGrandPrize.text?.toString()?.trim()?.takeIf { it.isNotEmpty() },
             claws = clawsValue,
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
             numberConfigurations = configs,
-            pitchType = pitchType
+            pitchType = storedPitchType
         )
 
         viewModel.saveDraft(order, draft)
@@ -3457,8 +3490,6 @@ class SettingsFragment : Fragment() {
             specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
             grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.VISIBLE }
 
-            // 🌟 關鍵修復：因為 A 切 B 時，exitSubBoardFocusMode 會把整個規則區塊的父容器隱藏
-            // 這裡必須強制把它重新顯示，裡面的「夾X刮X」唯讀字樣才出得來！
             (binding.radioGroupPitchType.parent as? ViewGroup)?.let { parent ->
                 parent.visibility = View.VISIBLE
                 for (i in 0 until parent.childCount) {
@@ -3491,6 +3522,9 @@ class SettingsFragment : Fragment() {
             // ⬜ 沒刮過：保持可編輯
             specialPrizeContainer?.visibility = View.VISIBLE
             grandPrizeContainer?.visibility = View.VISIBLE
+
+            // 🌟 核心修復點：確保在子板模式下，把母板上鎖的控制項重新解鎖！
+            setPrizeControlsEnabled(true)
 
             specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
             grandPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
