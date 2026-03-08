@@ -915,23 +915,81 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
+        // 🌟 分流點：如果目前在「子板聚焦模式」
         if (currentFocusedSubBoardId != null) {
-            val boardName = currentFocusedSubBoardId
+            val boardName = currentFocusedSubBoardId!!
 
             if (isPickingSpecialPrize || isPickingGrandPrize) {
-                showToast("請先點擊按鈕取消選取模式，再儲存暫存")
+                showToast("請先點擊按鈕取消選取模式，再儲存")
                 return
             }
 
-            exitSubBoardFocusMode()
-            showToast("${boardName}板參數已暫存！全部子板設定完畢後，請點擊母板的儲存按鈕寫入資料庫")
-            return
+            val order = shelfManager.selectedShelfOrder
+            val selectedCard = viewModel.cards.value[order]
+
+            // 取得目前的刮開狀態
+            val configs = splitBoardConfigurations[boardName]
+            val isBoardScratched = configs?.any { it.scratched } == true
+
+            // 🌟 核心修改：判斷此刮板是否已經存入資料庫
+            if (selectedCard != null && selectedCard.serialNumber != null) {
+                if (isBoardScratched) {
+                    showToast("此子板已有刮開紀錄，參數為唯讀狀態無法儲存")
+                    return
+                }
+
+                // 抓取當下 UI 數值
+                val specialStr = binding.editTextSpecialPrize.text.toString().trim()
+                val grandStr = binding.editTextGrandPrize.text.toString().trim()
+                val isShopping = binding.radioPitchShopping.isChecked
+                val pitchType = if (isShopping) "shopping" else "scratch"
+                val claws = if (isShopping) {
+                    binding.editClawsCount.text?.toString() ?: "0"
+                } else {
+                    binding.spinnerClawsCount.selectedItem?.toString() ?: "1"
+                }
+                val giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull() ?: 1
+
+                // 準備精準寫入該子板的 Firebase 節點
+                val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
+                val userKey = (requireActivity() as UserSessionProvider).getCurrentUserFirebaseKey()
+
+                if (userKey != null) {
+                    val updates = mapOf(
+                        "specialPrize" to specialStr,
+                        "grandPrize" to grandStr,
+                        "pitchType" to pitchType,
+                        "clawsCount" to (claws.toIntOrNull() ?: 1),
+                        "giveawayCount" to giveaway
+                    )
+
+                    // 🌟 直接更新該子板的資料
+                    dbRef.child("users").child(userKey).child("scratchCards")
+                        .child(selectedCard.serialNumber!!).child("boards").child(boardName)
+                        .updateChildren(updates).addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                showToast("${boardName}板參數已直接更新至資料庫！")
+                            } else {
+                                showToast("寫入資料庫失敗：${task.exception?.message}")
+                            }
+                        }
+                }
+
+                // 執行退回母板並更新暫存 UI
+                exitSubBoardFocusMode()
+                return
+            } else {
+                // 如果是全新還沒建立過（尚未寫入 Firebase）的刮板，維持原有的「暫存」邏輯
+                exitSubBoardFocusMode()
+                showToast("${boardName}板參數已暫存！全部子板設定完畢後，請點擊母板的儲存按鈕寫入資料庫")
+                return
+            }
         }
 
+        // --- 以下為原本的母板儲存邏輯 ---
         val selectedOrder = shelfManager.selectedShelfOrder
         val selectedCard = viewModel.cards.value[selectedOrder]
 
-        // 🌟 修正：只有「已刮過」才阻擋儲存，單純「使用中」仍可儲存修改
         if (selectedCard != null && hasBeenScratched(selectedCard)) {
             showToast("此刮板已刮開，無法儲存參數")
             return
