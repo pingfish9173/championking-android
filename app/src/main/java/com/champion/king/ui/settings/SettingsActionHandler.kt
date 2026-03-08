@@ -77,6 +77,14 @@ class SettingsActionHandler(
         currentInUseCard: ScratchCard,
         currentCards: Map<Int, ScratchCard>
     ) {
+        // 🌟 規則更新：如果當前使用中的是「分割版面」，直接放行並切換，不跳確認視窗！
+        if (!currentInUseCard.splitMode.isNullOrEmpty()) {
+            Log.d(TAG, "當前使用中為分割版面 ${currentInUseCard.splitMode}，免確認直接切換到 ${targetCard.order}號板")
+            viewModel.setInUseExclusive(targetCard, currentCards, true)
+            return
+        }
+
+        // --- 以下為單一版面的原有邏輯 (會跳出確認視窗) ---
         val switchAnalysis = analyzeSwitchConditions(currentInUseCard)
 
         when (switchAnalysis.result) {
@@ -107,6 +115,14 @@ class SettingsActionHandler(
         targetCard: ScratchCard,
         currentCards: Map<Int, ScratchCard>
     ) {
+        // 🌟 規則更新：如果想取消使用的板位是「分割版面」，直接放行並取消，不跳確認視窗！
+        if (!targetCard.splitMode.isNullOrEmpty()) {
+            Log.d(TAG, "目標為分割版面 ${targetCard.splitMode}，免確認直接取消使用中")
+            viewModel.setInUseExclusive(targetCard, currentCards, false)
+            return
+        }
+
+        // --- 以下為單一版面的原有邏輯 (會跳出確認視窗) ---
         val unsetAnalysis = analyzeSwitchConditions(targetCard)
 
         when (unsetAnalysis.result) {
@@ -133,74 +149,14 @@ class SettingsActionHandler(
         }
     }
 
-    // 🌟 核心修改：完整支援分割版面的切換防呆分析邏輯
+    // 🌟 核心修改：完整支援分割版面的切換防呆分析邏輯 (包含豁免機制)
     private fun analyzeSwitchConditions(card: ScratchCard): SwitchAnalysis {
         try {
+            // 🌟 規則更新：如果是分割版面，直接無條件放行 (不受 1/2 與特獎未開限制)
             if (!card.splitMode.isNullOrEmpty()) {
-                var totalCells = 0
-                var totalScratched = 0
-                var allSpecialsOut = true
-                var hasValidBoard = false
-
-                val boardsMap = try { card.javaClass.getMethod("getBoards").invoke(card) as? Map<*, *> } catch (e: Exception) { null }
-                    ?: try {
-                        val field = card.javaClass.getDeclaredField("boards")
-                        field.isAccessible = true
-                        field.get(card) as? Map<*, *>
-                    } catch (e: Exception) { null }
-
-                if (boardsMap != null) {
-                    for ((_, rawBoard) in boardsMap) {
-                        var spStr = ""
-                        var configsList: List<*>? = null
-
-                        if (rawBoard is Map<*, *>) {
-                            spStr = rawBoard["specialPrize"]?.toString() ?: ""
-                            configsList = rawBoard["numberConfigurations"] as? List<*>
-                        } else if (rawBoard is com.champion.king.model.Board) {
-                            spStr = rawBoard.specialPrize ?: ""
-                            configsList = rawBoard.numberConfigurations
-                        }
-
-                        val spNum = spStr.toIntOrNull()
-                        if (configsList == null || spNum == null) continue
-
-                        hasValidBoard = true
-                        var boardSpecialOut = false
-                        for (item in configsList) {
-                            var num = 0
-                            var scratched = false
-                            if (item is Map<*, *>) {
-                                num = (item["number"] as? Number)?.toInt() ?: 0
-                                scratched = item["scratched"] as? Boolean ?: false
-                            } else if (item is NumberConfiguration) {
-                                num = item.number
-                                scratched = item.scratched
-                            }
-
-                            if (num > 0) {
-                                totalCells++
-                                if (scratched) {
-                                    totalScratched++
-                                    if (num == spNum) boardSpecialOut = true
-                                }
-                            }
-                        }
-                        if (!boardSpecialOut) allSpecialsOut = false
-                    }
-                }
-
-                if (!hasValidBoard || totalCells == 0) return SwitchAnalysis(SwitchResult.ERROR, 0, 0)
-
-                // 若所有子板特獎皆已刮出，允許切換
-                if (allSpecialsOut) return SwitchAnalysis(SwitchResult.ALLOW_SPECIAL_PRIZE_OUT, totalScratched, totalCells)
-
-                val scratchedRatio = totalScratched.toDouble() / totalCells.toDouble()
-                return if (scratchedRatio < switchThreshold) {
-                    SwitchAnalysis(SwitchResult.ALLOW_UNDER_HALF, totalScratched, totalCells)
-                } else {
-                    SwitchAnalysis(SwitchResult.DENY_OVER_HALF_NO_SPECIAL, totalScratched, totalCells)
-                }
+                Log.d(TAG, "檢測到分割版面 ${card.splitMode}，豁免切換防呆規則，直接放行")
+                // 為了符合現有架構，我們回傳 ALLOW_UNDER_HALF，這樣它就會跳出「確認切換」的對話框讓台主確認
+                return SwitchAnalysis(SwitchResult.ALLOW_UNDER_HALF, 0, 100)
             }
 
             // --- 單一版面原有邏輯 ---
@@ -384,73 +340,14 @@ class SettingsActionHandler(
         }
     }
 
-    // 🌟 核心修改：同上，支援判斷分割版面的刪除條件
+    // 🌟 核心修改：同上，支援判斷分割版面的刪除條件 (包含豁免機制)
     private fun analyzeDeleteConditions(card: ScratchCard): DeleteAnalysis {
         try {
+            // 🌟 規則更新：如果是分割版面，直接無條件放行 (不受 1/2 與特獎未開限制)
             if (!card.splitMode.isNullOrEmpty()) {
-                var totalCells = 0
-                var totalScratched = 0
-                var allSpecialsOut = true
-                var hasValidBoard = false
-
-                val boardsMap = try { card.javaClass.getMethod("getBoards").invoke(card) as? Map<*, *> } catch (e: Exception) { null }
-                    ?: try {
-                        val field = card.javaClass.getDeclaredField("boards")
-                        field.isAccessible = true
-                        field.get(card) as? Map<*, *>
-                    } catch (e: Exception) { null }
-
-                if (boardsMap != null) {
-                    for ((_, rawBoard) in boardsMap) {
-                        var spStr = ""
-                        var configsList: List<*>? = null
-
-                        if (rawBoard is Map<*, *>) {
-                            spStr = rawBoard["specialPrize"]?.toString() ?: ""
-                            configsList = rawBoard["numberConfigurations"] as? List<*>
-                        } else if (rawBoard is com.champion.king.model.Board) {
-                            spStr = rawBoard.specialPrize ?: ""
-                            configsList = rawBoard.numberConfigurations
-                        }
-
-                        val spNum = spStr.toIntOrNull()
-                        if (configsList == null || spNum == null) continue
-
-                        hasValidBoard = true
-                        var boardSpecialOut = false
-                        for (item in configsList) {
-                            var num = 0
-                            var scratched = false
-                            if (item is Map<*, *>) {
-                                num = (item["number"] as? Number)?.toInt() ?: 0
-                                scratched = item["scratched"] as? Boolean ?: false
-                            } else if (item is NumberConfiguration) {
-                                num = item.number
-                                scratched = item.scratched
-                            }
-
-                            if (num > 0) {
-                                totalCells++
-                                if (scratched) {
-                                    totalScratched++
-                                    if (num == spNum) boardSpecialOut = true
-                                }
-                            }
-                        }
-                        if (!boardSpecialOut) allSpecialsOut = false
-                    }
-                }
-
-                if (!hasValidBoard || totalCells == 0) return DeleteAnalysis(DeleteResult.ERROR, 0, 0)
-
-                if (allSpecialsOut) return DeleteAnalysis(DeleteResult.ALLOW_SPECIAL_PRIZE_OUT, totalScratched, totalCells)
-
-                val scratchedRatio = totalScratched.toDouble() / totalCells.toDouble()
-                return if (scratchedRatio < switchThreshold) {
-                    DeleteAnalysis(DeleteResult.ALLOW_UNDER_HALF_NO_SPECIAL, totalScratched, totalCells)
-                } else {
-                    DeleteAnalysis(DeleteResult.DENY_OVER_HALF_NO_SPECIAL, totalScratched, totalCells)
-                }
+                Log.d(TAG, "檢測到分割版面 ${card.splitMode}，豁免刪除防呆規則，直接放行")
+                // 回傳 ALLOW_UNDER_HALF_NO_SPECIAL 會觸發標準的刪除確認視窗
+                return DeleteAnalysis(DeleteResult.ALLOW_UNDER_HALF_NO_SPECIAL, 0, 100)
             }
 
             // --- 單一版面原有邏輯 ---
