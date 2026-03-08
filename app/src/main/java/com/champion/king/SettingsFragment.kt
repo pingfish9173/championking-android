@@ -3535,7 +3535,7 @@ class SettingsFragment : Fragment() {
             specialPrizeContainer?.visibility = View.VISIBLE
             grandPrizeContainer?.visibility = View.VISIBLE
 
-            // 🌟 核心修復點：確保在子板模式下，把母板上鎖的控制項重新解鎖！
+            // 確保在子板模式下，把母板上鎖的控制項重新解鎖！
             setPrizeControlsEnabled(true)
 
             specialPrizeLabel?.let { (it.parent as? View)?.visibility = View.GONE }
@@ -3569,9 +3569,10 @@ class SettingsFragment : Fragment() {
             }
         }
 
-        // 核心按鈕控制：子板模式「顯示」自動刮開，「隱藏」設為使用中
+        // 🌟 核心按鈕控制：子板模式「顯示」自動刮開，「隱藏」設為使用中、返回與刪除
         binding.buttonAutoScratch.visibility = View.VISIBLE
         binding.buttonToggleInuse.visibility = View.GONE
+        binding.rowActionsReturnDelete.visibility = View.GONE
 
         // 5. 資料塞好後，再重新掛上竊聽器
         binding.editTextSpecialPrize.addTextChangedListener(splitSpecialPrizeWatcher)
@@ -3635,8 +3636,9 @@ class SettingsFragment : Fragment() {
         // 呼叫統一的顯示管理方法，完美隱藏子板專屬欄位並乾淨俐落地處理唯讀標籤
         applySplitModeVisibility(isSplitMode = true, isReadonly = isReadonly)
 
-        // 🌟 核心修復點：退出子板時，強制把「設為使用中」按鈕恢復顯示！
+        // 🌟 核心修復點：退出子板時，強制把「設為使用中」與「返回/刪除」列恢復顯示！
         binding.buttonToggleInuse.visibility = View.VISIBLE
+        binding.rowActionsReturnDelete.visibility = View.VISIBLE
 
         // 同步還原下方按鈕的狀態
         if (card != null) {
