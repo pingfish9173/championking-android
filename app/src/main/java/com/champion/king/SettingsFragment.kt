@@ -2819,11 +2819,9 @@ class SettingsFragment : Fragment() {
 
             tag = "sub_board_$boardName"
             isClickable = true
-
-            // 🌟 修改：處理整個子板外框(含標題)的點擊事件
             setOnClickListener {
                 if (currentFocusedSubBoardId == boardName) {
-                    // 1. 點擊正在聚焦的自己：無反應，不再跳出聚焦模式
+                    // 點擊正在聚焦的自己：無反應，不再跳出聚焦模式
                     return@setOnClickListener
                 } else {
                     if (isPickingSpecialPrize || isPickingGrandPrize) {
@@ -2831,7 +2829,7 @@ class SettingsFragment : Fragment() {
                         return@setOnClickListener
                     }
 
-                    // 2. 點擊其他子板：如果目前有聚焦的板，先把它暫存並退出
+                    // 點擊其他子板：如果目前有聚焦的板，先把它暫存並退出
                     if (currentFocusedSubBoardId != null) {
                         exitSubBoardFocusMode()
                     }
@@ -3009,6 +3007,23 @@ class SettingsFragment : Fragment() {
         val cellMargin = (1 * density).toInt()
         val circleSize = (36 * density).toInt()
 
+        // 🌟 準備好邊框顏色和獎項數字，供下方格子判斷使用
+        val specialPrize = splitBoardSpecialPrizes[boardName]
+        val grandPrize = splitBoardGrandPrizes[boardName]
+
+        val specialNum = specialPrize?.toIntOrNull()
+        val grandNums = if (!grandPrize.isNullOrEmpty() && grandPrize != "無") {
+            grandPrize.split(",").mapNotNull { it.trim().toIntOrNull() }
+        } else {
+            emptyList()
+        }
+
+        val colorGold = ContextCompat.getColor(context, R.color.scratch_card_gold)
+        val colorGreen = ContextCompat.getColor(context, R.color.scratch_card_green)
+        val colorGrey = Color.GRAY
+
+        val configs = splitBoardConfigurations[boardName]
+
         val cellCount = numbers.size
         for (i in 0 until cellCount) {
             val cellFrame = FrameLayout(context).apply {
@@ -3022,8 +3037,6 @@ class SettingsFragment : Fragment() {
                 }
 
                 isClickable = true
-
-                // 🌟 修改：處理格子的點擊事件，邏輯與外框點擊一致
                 setOnClickListener {
                     if (currentFocusedSubBoardId != boardName) {
                         if (isPickingSpecialPrize || isPickingGrandPrize) {
@@ -3031,7 +3044,6 @@ class SettingsFragment : Fragment() {
                             return@setOnClickListener
                         }
 
-                        // 點擊其他子板的格子：先暫存目前的，再切換
                         if (currentFocusedSubBoardId != null) {
                             exitSubBoardFocusMode()
                         }
@@ -3052,9 +3064,9 @@ class SettingsFragment : Fragment() {
 
                         } else if (isPickingGrandPrize) {
                             val currentSpecialStr = binding.editTextSpecialPrize.text.toString()
-                            val specialNum = currentSpecialStr.toIntOrNull()
+                            val specialNumPick = currentSpecialStr.toIntOrNull()
 
-                            if (specialNum == number) {
+                            if (specialNumPick == number) {
                                 showToast("此數字已是特獎，無法加入大獎清單")
                                 return@setOnClickListener
                             }
@@ -3090,12 +3102,36 @@ class SettingsFragment : Fragment() {
             }
 
             val circleView = TextView(context).apply {
-                text = numbers.getOrNull(i)?.toString() ?: ""
-                setTextColor(Color.GRAY)
+                val number = numbers.getOrNull(i) ?: 0
+                text = number.toString()
+
                 textSize = 14f
                 setTypeface(null, Typeface.BOLD)
                 gravity = Gravity.CENTER
-                background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+
+                // 🌟 根據「已刮開」狀態動態渲染 UI 視覺
+                val config = configs?.get(i)
+                val isScratched = config?.scratched ?: false
+
+                if (isScratched) {
+                    setTextColor(Color.BLACK) // 白底黑字
+
+                    val borderColor = when {
+                        number == specialNum -> colorGold
+                        grandNums.contains(number) -> colorGreen
+                        else -> colorGrey
+                    }
+
+                    background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                        if (this is android.graphics.drawable.GradientDrawable) {
+                            setColor(Color.WHITE)
+                            setStroke(3, borderColor) // 稍微加粗邊框讓狀態更明顯
+                        }
+                    }
+                } else {
+                    setTextColor(Color.GRAY) // 黑底灰字
+                    background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+                }
 
                 layoutParams = FrameLayout.LayoutParams(circleSize, circleSize).apply {
                     gravity = Gravity.CENTER
@@ -3337,6 +3373,14 @@ class SettingsFragment : Fragment() {
         val specialList = specialStr.split(",").mapNotNull { it.trim().toIntOrNull() }
         val grandList = grandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
 
+        // 🌟 取得該子板目前的格子配置 (包含是否已被刮開的狀態)
+        val configs = splitBoardConfigurations[boardName]
+
+        val colorGold = ContextCompat.getColor(context, R.color.scratch_card_gold)
+        val colorGreen = ContextCompat.getColor(context, R.color.scratch_card_green)
+        val colorGrey = Color.GRAY
+        val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
+
         // 遍歷所有 20 個格子，比對數字並重新上色
         for (i in 0 until gridLayout.childCount) {
             val cellFrame = gridLayout.getChildAt(i) as? FrameLayout ?: continue
@@ -3345,35 +3389,57 @@ class SettingsFragment : Fragment() {
             val numberStr = circleView.text.toString()
             val number = numberStr.toIntOrNull() ?: continue
 
-            when {
-                specialList.contains(number) -> {
-                    // 🌟 特獎：白色粗體字 + 金色加粗外框
-                    circleView.setTextColor(Color.WHITE)
-                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                        if (this is android.graphics.drawable.GradientDrawable) {
-                            val gold = ContextCompat.getColor(context, R.color.scratch_card_gold)
-                            val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
-                            setColor(darkGray)
-                            setStroke(4, gold)
-                        }
+            // 🌟 判斷該格子是否已被刮開
+            val isScratched = configs?.getOrNull(i)?.scratched ?: configs?.find { it.number == number }?.scratched ?: false
+
+            if (isScratched) {
+                // =====================================
+                // 🌟 已刮開的格子視覺 (白底黑字)
+                // =====================================
+                circleView.setTextColor(Color.BLACK) // 黑字
+
+                val borderColor = when {
+                    specialList.contains(number) -> colorGold    // 特獎用黃框
+                    grandList.contains(number) -> colorGreen // 大獎用綠框
+                    else -> colorGrey // 一般數字用灰框
+                }
+
+                circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                    if (this is android.graphics.drawable.GradientDrawable) {
+                        setColor(Color.WHITE) // 白底
+                        setStroke(3, borderColor)
                     }
                 }
-                grandList.contains(number) -> {
-                    // 🌟 大獎：白色粗體字 + 綠色加粗外框
-                    circleView.setTextColor(Color.WHITE)
-                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                        if (this is android.graphics.drawable.GradientDrawable) {
-                            val green = ContextCompat.getColor(context, R.color.scratch_card_green)
-                            val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
-                            setColor(darkGray)
-                            setStroke(4, green)
+            } else {
+                // =====================================
+                // ⬛ 未刮開的格子視覺 (黑底/灰底 + 灰字/白字)
+                // =====================================
+                when {
+                    specialList.contains(number) -> {
+                        // 🌟 特獎：白色粗體字 + 深灰底 + 金色加粗外框
+                        circleView.setTextColor(Color.WHITE)
+                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                            if (this is android.graphics.drawable.GradientDrawable) {
+                                setColor(darkGray)
+                                setStroke(4, colorGold)
+                            }
                         }
                     }
-                }
-                else -> {
-                    // ⬛ 沒中獎：恢復原始的黑底灰字與細灰框
-                    circleView.setTextColor(Color.GRAY)
-                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+                    grandList.contains(number) -> {
+                        // 🌟 大獎：白色粗體字 + 深灰底 + 綠色加粗外框
+                        circleView.setTextColor(Color.WHITE)
+                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                            if (this is android.graphics.drawable.GradientDrawable) {
+                                setColor(darkGray)
+                                setStroke(4, colorGreen)
+                            }
+                        }
+                    }
+                    else -> {
+                        // ⬛ 沒中獎：恢復原始的黑底灰字與細灰框
+                        circleView.setTextColor(Color.GRAY)
+                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+                    }
                 }
             }
         }

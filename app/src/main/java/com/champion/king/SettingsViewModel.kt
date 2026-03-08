@@ -113,11 +113,45 @@ class SettingsViewModel(
         }
     }
 
+    // 🌟 核心修改：攔截分割版面的返回動作，確保退回的是正確的字串版型（如 20x4）
     fun returnCard(order: Int, card: ScratchCard) {
         viewModelScope.launch {
             try {
-                repo.returnScratchCard(userKey, card)
-                _events.emit(UiEvent.Toast("${order}號板已返回背包，${card.scratchesType}刮數量+1。"))
+                if (!card.splitMode.isNullOrEmpty()) {
+                    val dbRef = com.google.firebase.database.FirebaseDatabase.getInstance(com.champion.king.core.config.AppConfig.DB_URL).reference
+                    val serial = card.serialNumber
+
+                    if (serial != null) {
+                        // 1. 從 Firebase 的 scratchCards 節點中刪除此板
+                        dbRef.child("users").child(userKey).child("scratchCards").child(serial).removeValue()
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    // 2. 增加分割版面專屬庫存 (例如 scratchType_20x4)
+                                    val stockField = "scratchType_${card.splitMode}"
+                                    val stockRef = dbRef.child("users").child(userKey).child(stockField)
+                                    stockRef.get().addOnSuccessListener { snapshot ->
+                                        val currentStock = snapshot.getValue(Int::class.java) ?: 0
+                                        stockRef.setValue(currentStock + 1)
+                                    }
+
+                                    // 3. 顯示成功提示
+                                    viewModelScope.launch {
+                                        _events.emit(UiEvent.Toast("${order}號板已返回背包，${card.splitMode}版型數量+1。"))
+                                    }
+                                } else {
+                                    viewModelScope.launch {
+                                        _events.emit(UiEvent.Toast("返回失敗：${task.exception?.message}"))
+                                    }
+                                }
+                            }
+                    } else {
+                        _events.emit(UiEvent.Toast("返回失敗：找不到卡片序號"))
+                    }
+                } else {
+                    // 單一版面走原本的 repository 邏輯
+                    repo.returnScratchCard(userKey, card)
+                    _events.emit(UiEvent.Toast("${order}號板已返回背包，${card.scratchesType}刮數量+1。"))
+                }
             } catch (e: Exception) {
                 _events.emit(UiEvent.Toast("返回失敗：${e.message}"))
             }
