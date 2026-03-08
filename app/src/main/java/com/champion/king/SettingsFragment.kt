@@ -84,7 +84,6 @@ class SettingsFragment : Fragment() {
 
     private var currentFocusTarget: FocusTarget? = null
 
-    // 🌟 修改點 1：將原本的 Int 轉為 String，適配分割版面字串
     private data class ScratchTypeItem(
         val typeStr: String,
         val stock: Int,
@@ -94,11 +93,27 @@ class SettingsFragment : Fragment() {
         /** RENTAL 吃到飽：即使 stock=0 也允許選擇 */
         val selectableWithoutStock: Boolean = false
     ) {
-        override fun toString(): String = when {
-            isPlaceholder -> "請選擇"
-            !showStockInfo -> "${typeStr}刮"
-            stock > 0 -> "${typeStr}刮 (剩${stock})"
-            else -> "${typeStr}刮 (無庫存)"
+        override fun toString(): String {
+            if (isPlaceholder) return "請選擇"
+
+            // 判斷是否為分割版面，動態組裝「X刮xY板」字樣
+            val displayTypeStr = if (typeStr.contains("x")) {
+                val parts = typeStr.split("x")
+                if (parts.size == 2) {
+                    "${parts[0]}刮x${parts[1]}板"
+                } else {
+                    "${typeStr}刮" // 防呆兜底
+                }
+            } else {
+                "${typeStr}刮" // 單一版面
+            }
+
+            // 🌟 核心修改：將 (無庫存) 改為 (剩0) 來節省空間
+            return when {
+                !showStockInfo -> displayTypeStr
+                stock > 0 -> "$displayTypeStr (剩${stock})"
+                else -> "$displayTypeStr (剩0)"
+            }
         }
 
         fun getScratchTypeString(): String? = if (isPlaceholder) null else typeStr
@@ -2151,8 +2166,10 @@ class SettingsFragment : Fragment() {
                     val view = defaultView() as TextView
                     val enabled = isEnabled(position)
                     view.setTextColor(if (enabled) Color.BLACK else Color.GRAY)
-                    view.textSize = 13f
-                    view.setPadding(12, 6, 12, 6)
+
+                    // 🌟 恢復穩定的設定，不再區分狀態，統一設定大小與適當的上下留白
+                    view.textSize = 12f
+                    view.setPadding(4, 12, 4, 12)
                     view.isSingleLine = true
                     view.ellipsize = android.text.TextUtils.TruncateAt.END
                     view
