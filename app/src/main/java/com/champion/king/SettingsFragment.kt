@@ -2630,7 +2630,8 @@ class SettingsFragment : Fragment() {
             giveawayCount = card.giveawayCount,
             numberConfigurations = configs,
             existingSerial = card.serialNumber,
-            keepInUsed = card.inUsed
+            keepInUsed = card.inUsed,
+            pitchType = card.pitchType // 🌟 核心修復點：把原本的玩法規則原封不動傳回去，防止被預設值覆蓋！
         )
 
         val updatedCard = card.copy(numberConfigurations = configs)
