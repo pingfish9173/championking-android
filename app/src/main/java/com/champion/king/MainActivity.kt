@@ -2658,6 +2658,17 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         }
     }
 
+    // ==========================================
+    // TODO: 準備正式上架前，請務必刪除以下這段測試用捷徑！
+    // ==========================================
+    fun devBypassToSettings() {
+        Log.d(TAG, "🥷 開發者捷徑：直接切換到台主設置頁面")
+        unlockAppFromScreen() // 1. 解除玩家頁面的螢幕鎖定
+        render(Mode.MASTER)   // 2. 切換為台主版面
+        loadFragment(SettingsFragment(), containerIdFor(Mode.MASTER)) // 3. 直接載入設置頁面
+    }
+    // ==========================================
+
     companion object {
         private const val TAG = "MainActivity"
     }

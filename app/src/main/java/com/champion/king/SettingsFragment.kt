@@ -2731,16 +2731,29 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    // 🌟 修改點 18：取得字串，避免 Null 例外
+    // 🌟 修正點 18：取得字串，避免 Null 例外，並正確支援分割版面
     private fun getCurrentScratchType(): String? {
         return try {
             val order = shelfManager.selectedShelfOrder
-            val cardType = viewModel.cards.value[order]?.scratchesType
-            if (cardType != null && cardType > 0) return cardType.toString()
+            val card = viewModel.cards.value[order]
 
-            val draftType = viewModel.getDraft(order)?.scratchType
-            if (draftType != null && draftType > 0) return draftType.toString()
+            // 1. 優先判斷已儲存的卡片是否為分割版面
+            if (card != null) {
+                if (!card.splitMode.isNullOrEmpty()) return card.splitMode
+                val cardType = card.scratchesType
+                if (cardType != null && cardType > 0) return cardType.toString()
+            }
 
+            // 2. 若沒有卡片，判斷草稿
+            val draft = viewModel.getDraft(order)
+            if (draft != null) {
+                val splitModeStr = draft.pitchType?.substringAfter("|", "")
+                if (!splitModeStr.isNullOrEmpty()) return splitModeStr
+                val draftType = draft.scratchType
+                if (draftType != null && draftType > 0) return draftType.toString()
+            }
+
+            // 3. 最後才看下拉選單
             val selectedItem = binding.spinnerScratchesCount.selectedItem
             when (selectedItem) {
                 is ScratchTypeItem -> selectedItem.getScratchTypeString()
@@ -3373,15 +3386,9 @@ class SettingsFragment : Fragment() {
                             if (grandList.contains(number)) {
                                 grandList.remove(number)
                             } else {
-                                val selectedScratchTypeStr = getCurrentScratchType() ?: "20x4"
-                                val isSplitMode = selectedScratchTypeStr.contains("x")
-                                val subBoardCount = selectedScratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
-
-                                val limit = if (isSplitMode) 2 else (GRAND_LIMITS[subBoardCount] ?: 0)
-
-                                if (limit > 0 && grandList.size >= limit) {
-                                    val limitMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "${subBoardCount}刮的大獎數量限制為 ${limit} 個"
-                                    showToast(limitMsg)
+                                // 🌟 核心修復：這裡是子板專屬的建立邏輯，大獎上限絕對是 2 個
+                                if (grandList.size >= 2) {
+                                    showToast("分割版面的大獎數量限制為 2 個")
                                     return@setOnClickListener
                                 }
                                 grandList.add(number)
