@@ -38,6 +38,34 @@ class SettingsFragment : Fragment() {
     companion object {
         // 刮板切換閾值配置：當刮取進度超過此比例且特獎未出時，不允許切換
         private const val SCRATCH_SWITCH_THRESHOLD = 0.5  // 50%
+
+        // 🌟 分割版面專屬：跨畫面的草稿快取 (依據 order 儲存，確保切換 Fragment 不遺失)
+        val splitBoardSpecialPrizesCache = mutableMapOf<Int, MutableMap<String, String>>()
+        val splitBoardGrandPrizesCache = mutableMapOf<Int, MutableMap<String, String>>()
+        val splitBoardPitchTypesCache = mutableMapOf<Int, MutableMap<String, String>>()
+        val splitBoardClawsCountsCache = mutableMapOf<Int, MutableMap<String, String>>()
+        val splitBoardGiveawayCountsCache = mutableMapOf<Int, MutableMap<String, Int>>()
+        val splitBoardConfigurationsCache = mutableMapOf<Int, MutableMap<String, List<NumberConfiguration>>>()
+
+        // 🌟 清除特定板位的快取
+        fun clearSplitDraftCache(order: Int) {
+            splitBoardSpecialPrizesCache.remove(order)
+            splitBoardGrandPrizesCache.remove(order)
+            splitBoardPitchTypesCache.remove(order)
+            splitBoardClawsCountsCache.remove(order)
+            splitBoardGiveawayCountsCache.remove(order)
+            splitBoardConfigurationsCache.remove(order)
+        }
+
+        // 🌟 新增：一鍵清空所有快取 (用於登出與關閉APP時)
+        fun clearAllSplitDraftCaches() {
+            splitBoardSpecialPrizesCache.clear()
+            splitBoardGrandPrizesCache.clear()
+            splitBoardPitchTypesCache.clear()
+            splitBoardClawsCountsCache.clear()
+            splitBoardGiveawayCountsCache.clear()
+            splitBoardConfigurationsCache.clear()
+        }
     }
 
     // 大獎數量限制表
@@ -813,19 +841,16 @@ class SettingsFragment : Fragment() {
         if (draft != null && draft.scratchType != null) {
             showRightPanel()
 
-            // 🌟 解析隱藏在 pitchType 裡的真實玩法與分割版面字串
             val rawPitch = draft.pitchType ?: "scratch"
             val realPitchType = rawPitch.substringBefore("|")
             val splitModeStr = rawPitch.substringAfter("|", "")
 
-            // 決定顯示的版型字串：如果是分割版面就用藏著的字串，否則用原本的 Int
             val displayScratchTypeStr = if (splitModeStr.isNotEmpty()) {
                 splitModeStr
             } else {
                 draft.scratchType.toString()
             }
 
-            // 傳入字串給 spinner 選擇器與預覽畫面
             setScratchTypeSpinnerSelection(displayScratchTypeStr)
             displayScratchBoardPreview(displayScratchTypeStr, draft.numberConfigurations)
 
@@ -855,16 +880,15 @@ class SettingsFragment : Fragment() {
                 ?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
             currentPreviewFragment?.setGrandSelectedNumbers(gp)
 
-            // 🌟 核心修復點：在所有數值與 UI 都載入完畢後，最後一步強制執行隱藏過濾！
-            // 這樣能保證剛剛被 applyPitchTypeUi 顯示出來的元件，如果是分割母板，就會乖乖收起來
             val isSplitDraft = splitModeStr.isNotEmpty()
             applySplitModeVisibility(isSplitMode = isSplitDraft, isReadonly = false)
             setPrizeControlsEnabled(!isSplitDraft)
 
         } else {
-            // 完全沒草稿時，徹底隱藏參數區域
-            hideRightPanel()
+            // 🌟 核心防呆：如果這格沒有草稿（或因登出被清空），確保分割版面的快取也一併清空
+            clearSplitDraftCache(order)
 
+            hideRightPanel()
             showPreviewUnset()
             clearTextFieldsOnly()
             clearSpinnerSelection()
@@ -1130,6 +1154,7 @@ class SettingsFragment : Fragment() {
                 val updatedCard = viewModel.cards.value[order]
                 if (updatedCard != null) {
                     viewModel.clearDraft(order)
+                    clearSplitDraftCache(order) // 🌟 儲存成功，清除快取
                     showSetShelfState(updatedCard)
                 } else {
                     showUnsetShelfState()
@@ -1337,6 +1362,7 @@ class SettingsFragment : Fragment() {
     private fun handleDeleteClick() {
         val order = shelfManager.selectedShelfOrder
         viewModel.clearDraft(order)
+        clearSplitDraftCache(order) // 🌟 刪除時，同步清除快取
         actionHandler.handleDelete(order, viewModel.cards.value)
     }
 
@@ -1367,7 +1393,11 @@ class SettingsFragment : Fragment() {
             splitBoardPitchTypes.clear()
             splitBoardClawsCounts.clear()
             splitBoardGiveawayCounts.clear()
-            splitBoardConfigurations.clear() // 🌟 重新整理時一併清空
+            splitBoardConfigurations.clear()
+
+            // 🌟 同步清空快取，確保重新生成全新的亂數版面
+            val order = shelfManager.selectedShelfOrder
+            clearSplitDraftCache(order)
         }
 
         displayScratchBoardPreview(scratchTypeStr, null)
@@ -1691,11 +1721,11 @@ class SettingsFragment : Fragment() {
                 val boardsCount = scratchTypeStr.substringAfter("x").toIntOrNull() ?: 4
                 val boardNames = listOf("A", "B", "C", "D").take(boardsCount)
                 val splitNumbers = mutableMapOf<String, List<Int>>()
+                val order = shelfManager.selectedShelfOrder
 
-                // 🌟 情況 A：正在載入已儲存的分割版面 (點擊架位或儲存後重新整理)
+                // 🌟 情況 A：正在載入已儲存的分割版面
                 if (savedCard != null && savedCard.splitMode == scratchTypeStr) {
 
-                    // ⚡ 效能優化核心：判斷是否為同一張卡片且已建立過視圖
                     val isSameCardRendered = binding.scratchBoardArea.tag == savedCard.serialNumber
                     val hasViews = binding.scratchBoardArea.childCount > 0
 
@@ -1706,7 +1736,6 @@ class SettingsFragment : Fragment() {
                     splitBoardGiveawayCounts.clear()
                     splitBoardConfigurations.clear()
 
-                    // 安全提取 boards 屬性
                     val boardsMap = try {
                         savedCard.javaClass.getMethod("getBoards").invoke(savedCard) as? Map<*, *>
                     } catch (e: Exception) {
@@ -1719,8 +1748,6 @@ class SettingsFragment : Fragment() {
 
                     boardNames.forEach { boardName ->
                         val rawBoard = boardsMap?.get(boardName)
-
-                        // 準備預設值
                         var sp = ""
                         var gp = ""
                         var pt = "scratch"
@@ -1758,7 +1785,6 @@ class SettingsFragment : Fragment() {
                             }
                         }
 
-                        // 寫入暫存區
                         splitBoardSpecialPrizes[boardName] = sp
                         splitBoardGrandPrizes[boardName] = gp
                         splitBoardPitchTypes[boardName] = pt
@@ -1769,7 +1795,6 @@ class SettingsFragment : Fragment() {
                             splitBoardConfigurations[boardName] = configs
                             splitNumbers[boardName] = configs.map { it.number }
                         } else {
-                            // 萬一沒抓到配置，給予亂數並預設特獎，避免畫面空掉
                             val shuffled = (1..subBoardScratchCount).toList().shuffled()
                             splitNumbers[boardName] = shuffled
                             splitBoardConfigurations[boardName] = shuffled.mapIndexed { idx, num ->
@@ -1779,9 +1804,7 @@ class SettingsFragment : Fragment() {
                         }
                     }
 
-                    // ⚡ 效能優化核心：如果視圖已經建立，我們只需刷新資料綁定，不需重新建立 View！
                     if (isSameCardRendered && hasViews) {
-                        Log.d("SettingsFragment", "⚡ 優化觸發：免重建 View，直接更新子板 UI 狀態！")
                         boardNames.forEach { boardName ->
                             updateSubBoardCellsUI(boardName)
                             renderSubBoardHeaderUI(boardName)
@@ -1789,14 +1812,53 @@ class SettingsFragment : Fragment() {
                         return@safeExecute
                     }
 
-                    // 如果是新的卡片或初次載入，設定 tag 並執行完整重建
                     binding.scratchBoardArea.tag = savedCard.serialNumber
                     buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                     return@safeExecute
                 }
-                // 🌟 情況 B：全新生成 (選擇下拉選單)
+                // 🌟 情況 B：發現草稿暫存！(使用者從背包或商城切換回來)
+                else if (splitBoardConfigurationsCache.containsKey(order)) {
+                    val isSameDraftRendered = binding.scratchBoardArea.tag == "draft_$order"
+                    val hasViews = binding.scratchBoardArea.childCount > 0
+
+                    splitBoardSpecialPrizes.clear()
+                    splitBoardSpecialPrizes.putAll(splitBoardSpecialPrizesCache[order] ?: emptyMap())
+
+                    splitBoardGrandPrizes.clear()
+                    splitBoardGrandPrizes.putAll(splitBoardGrandPrizesCache[order] ?: emptyMap())
+
+                    splitBoardPitchTypes.clear()
+                    splitBoardPitchTypes.putAll(splitBoardPitchTypesCache[order] ?: emptyMap())
+
+                    splitBoardClawsCounts.clear()
+                    splitBoardClawsCounts.putAll(splitBoardClawsCountsCache[order] ?: emptyMap())
+
+                    splitBoardGiveawayCounts.clear()
+                    splitBoardGiveawayCounts.putAll(splitBoardGiveawayCountsCache[order] ?: emptyMap())
+
+                    splitBoardConfigurations.clear()
+                    splitBoardConfigurations.putAll(splitBoardConfigurationsCache[order] ?: emptyMap())
+
+                    boardNames.forEach { boardName ->
+                        splitNumbers[boardName] = splitBoardConfigurations[boardName]?.map { it.number } ?: emptyList()
+                    }
+
+                    // 效能優化：如果視圖已存在，只更新 UI 即可
+                    if (isSameDraftRendered && hasViews) {
+                        boardNames.forEach { boardName ->
+                            updateSubBoardCellsUI(boardName)
+                            renderSubBoardHeaderUI(boardName)
+                        }
+                        return@safeExecute
+                    }
+
+                    binding.scratchBoardArea.tag = "draft_$order"
+                    buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
+                    return@safeExecute
+                }
+                // 🌟 情況 C：全新生成 (選擇下拉選單)
                 else if (existingConfigs == null) {
-                    binding.scratchBoardArea.tag = null // 清除 tag
+                    binding.scratchBoardArea.tag = null
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
                     splitBoardPitchTypes.clear()
@@ -1821,9 +1883,9 @@ class SettingsFragment : Fragment() {
                     buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                     return@safeExecute
                 }
-                // 🌟 情況 C：防呆兜底
+                // 🌟 情況 D：防呆兜底
                 else {
-                    binding.scratchBoardArea.tag = null // 清除 tag
+                    binding.scratchBoardArea.tag = null
                     boardNames.forEach { boardName ->
                         splitNumbers[boardName] = (1..subBoardScratchCount).toList().shuffled()
                     }
@@ -1833,7 +1895,7 @@ class SettingsFragment : Fragment() {
             }
 
             // --- 單一版面原有邏輯 ---
-            binding.scratchBoardArea.tag = null // 單一版面不用 tag 記錄
+            binding.scratchBoardArea.tag = null
             val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
@@ -2958,6 +3020,16 @@ class SettingsFragment : Fragment() {
     }
 
     private fun saveDraftIfNeeded(order: Int) {
+        // 🌟 登出與關閉防呆：檢查使用者是否正在執行登出
+        // 當 MainActivity 點擊登出時，會將 currentUser 設為 null
+        val userKey = (activity as? com.champion.king.UserSessionProvider)?.getCurrentUserFirebaseKey()
+        if (userKey == null) {
+            // 偵測到無使用者狀態，絕對不允許再存入草稿，並強制清空所有快取！
+            viewModel.clearDraft(order)
+            clearAllSplitDraftCaches()
+            return
+        }
+
         val hasCard = viewModel.cards.value[order] != null
         if (hasCard) return
 
@@ -2966,17 +3038,25 @@ class SettingsFragment : Fragment() {
         val selectedItem = binding.spinnerScratchesCount.selectedItem as? ScratchTypeItem
         val scratchTypeStr = selectedItem?.getScratchTypeString()
 
-        // 🌟 核心防呆：如果目前是未設置(未選刮數)狀態，清空草稿並直接返回，避免產生異常的UI暫存
+        // 🌟 核心防呆：如果目前是未設置狀態，清空草稿並同步清除快取
         if (scratchTypeStr.isNullOrEmpty()) {
             viewModel.clearDraft(order)
+            clearSplitDraftCache(order)
             return
         }
 
         val isShopping = binding.radioPitchShopping.isChecked
         val basePitchType = if (isShopping) "shopping" else "scratch"
 
-        // 🌟 技巧：由於草稿的 scratchType 只能存 Int，我們將分割版面的字串(如20x4)偷偷藏進 pitchType 紀錄中
+        // 🌟 核心寫入：如果是分割版面，將子板的暫存寫入 Companion 快取中
         val storedPitchType = if (scratchTypeStr.contains("x")) {
+            splitBoardSpecialPrizesCache[order] = splitBoardSpecialPrizes.toMutableMap()
+            splitBoardGrandPrizesCache[order] = splitBoardGrandPrizes.toMutableMap()
+            splitBoardPitchTypesCache[order] = splitBoardPitchTypes.toMutableMap()
+            splitBoardClawsCountsCache[order] = splitBoardClawsCounts.toMutableMap()
+            splitBoardGiveawayCountsCache[order] = splitBoardGiveawayCounts.toMutableMap()
+            splitBoardConfigurationsCache[order] = splitBoardConfigurations.toMutableMap()
+
             "${basePitchType}|${scratchTypeStr}"
         } else {
             basePitchType
