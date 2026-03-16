@@ -632,9 +632,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             val giveaway = board.giveawayCount ?: 0
 
             if (pitchType == "shopping") {
-                tvPitchRule.text = "消費${claws}送${giveaway}"
+                tvPitchRule.text = "消費${claws}元 贈送${giveaway}刮"
             } else {
-                tvPitchRule.text = "夾${claws}送${giveaway}"
+                tvPitchRule.text = "夾出${claws}樣 贈送${giveaway}刮"
             }
 
             // 🌟 點擊夾送規則連點 7 下「重新鎖定螢幕」

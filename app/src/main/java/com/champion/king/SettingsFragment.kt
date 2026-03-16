@@ -3781,7 +3781,7 @@ class SettingsFragment : Fragment() {
             val giveaway = splitBoardGiveawayCounts[boardName] ?: 1
 
             if (pitchType == "shopping") {
-                tvRule.text = "消費${claws}刮${giveaway}"
+                tvRule.text = "消費${claws}元刮${giveaway}"
             } else {
                 tvRule.text = "夾${claws}刮${giveaway}"
             }
