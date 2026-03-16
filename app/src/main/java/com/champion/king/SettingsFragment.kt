@@ -3129,6 +3129,14 @@ class SettingsFragment : Fragment() {
             tag = "sub_board_$boardName"
             isClickable = true
             setOnClickListener {
+                // 🌟 新增防呆：如果是使用中的板位，直接阻擋進入聚焦模式
+                val order = shelfManager.selectedShelfOrder
+                val card = viewModel.cards.value[order]
+                if (card != null && card.inUsed) {
+                    showToast("此為使用中板位，無法進行子板編輯")
+                    return@setOnClickListener
+                }
+
                 if (currentFocusedSubBoardId == boardName) {
                     // 點擊正在聚焦的自己：無反應，不再跳出聚焦模式
                     return@setOnClickListener
@@ -3347,6 +3355,14 @@ class SettingsFragment : Fragment() {
 
                 isClickable = true
                 setOnClickListener {
+                    // 🌟 新增防呆：連點擊格子也要阻擋，避免被當成切換子板的觸發點
+                    val order = shelfManager.selectedShelfOrder
+                    val card = viewModel.cards.value[order]
+                    if (card != null && card.inUsed) {
+                        showToast("此為使用中板位，無法進行子板編輯")
+                        return@setOnClickListener
+                    }
+
                     if (currentFocusedSubBoardId != boardName) {
                         if (isPickingSpecialPrize || isPickingGrandPrize) {
                             showToast("請先取消選取模式，再切換子板")
