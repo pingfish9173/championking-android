@@ -1688,11 +1688,17 @@ class SettingsFragment : Fragment() {
 
             if (scratchTypeStr.contains("x")) {
                 val subBoardScratchCount = scratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
-                val boardNames = listOf("A", "B", "C", "D")
+                val boardsCount = scratchTypeStr.substringAfter("x").toIntOrNull() ?: 4
+                val boardNames = listOf("A", "B", "C", "D").take(boardsCount)
                 val splitNumbers = mutableMapOf<String, List<Int>>()
 
                 // 🌟 情況 A：正在載入已儲存的分割版面 (點擊架位或儲存後重新整理)
                 if (savedCard != null && savedCard.splitMode == scratchTypeStr) {
+
+                    // ⚡ 效能優化核心：判斷是否為同一張卡片且已建立過視圖
+                    val isSameCardRendered = binding.scratchBoardArea.tag == savedCard.serialNumber
+                    val hasViews = binding.scratchBoardArea.childCount > 0
+
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
                     splitBoardPitchTypes.clear()
@@ -1722,7 +1728,6 @@ class SettingsFragment : Fragment() {
                         var gc = 1
                         var configs: List<NumberConfiguration>? = null
 
-                        // 🌟 核心修復：完美支援您自訂的 Board 類別，並保留 Map 作為防呆退路
                         if (rawBoard is com.champion.king.model.Board) {
                             sp = rawBoard.specialPrize ?: ""
                             gp = rawBoard.grandPrize ?: ""
@@ -1753,7 +1758,7 @@ class SettingsFragment : Fragment() {
                             }
                         }
 
-                        // 寫入暫存區！這樣標題列 UI 才抓得到資料來顯示「特獎、大獎、夾X刮X」
+                        // 寫入暫存區
                         splitBoardSpecialPrizes[boardName] = sp
                         splitBoardGrandPrizes[boardName] = gp
                         splitBoardPitchTypes[boardName] = pt
@@ -1773,9 +1778,25 @@ class SettingsFragment : Fragment() {
                             if (sp.isEmpty()) splitBoardSpecialPrizes[boardName] = shuffled.random().toString()
                         }
                     }
+
+                    // ⚡ 效能優化核心：如果視圖已經建立，我們只需刷新資料綁定，不需重新建立 View！
+                    if (isSameCardRendered && hasViews) {
+                        Log.d("SettingsFragment", "⚡ 優化觸發：免重建 View，直接更新子板 UI 狀態！")
+                        boardNames.forEach { boardName ->
+                            updateSubBoardCellsUI(boardName)
+                            renderSubBoardHeaderUI(boardName)
+                        }
+                        return@safeExecute
+                    }
+
+                    // 如果是新的卡片或初次載入，設定 tag 並執行完整重建
+                    binding.scratchBoardArea.tag = savedCard.serialNumber
+                    buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
+                    return@safeExecute
                 }
                 // 🌟 情況 B：全新生成 (選擇下拉選單)
                 else if (existingConfigs == null) {
+                    binding.scratchBoardArea.tag = null // 清除 tag
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
                     splitBoardPitchTypes.clear()
@@ -1797,20 +1818,22 @@ class SettingsFragment : Fragment() {
                             NumberConfiguration(id = index + 1, number = num, scratched = false)
                         }
                     }
+                    buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
+                    return@safeExecute
                 }
                 // 🌟 情況 C：防呆兜底
                 else {
+                    binding.scratchBoardArea.tag = null // 清除 tag
                     boardNames.forEach { boardName ->
                         splitNumbers[boardName] = (1..subBoardScratchCount).toList().shuffled()
                     }
+                    buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
+                    return@safeExecute
                 }
-
-                // 呼叫繪製 UI，這時它會去讀取我們剛剛塞進暫存區的特獎與規則
-                buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
-                return@safeExecute
             }
 
             // --- 單一版面原有邏輯 ---
+            binding.scratchBoardArea.tag = null // 單一版面不用 tag 記錄
             val scratchesTypeString = "${scratchTypeStr}刮 (${getScratchDimensions(scratchTypeStr)})"
 
             currentPreviewFragment = if (existingConfigs != null) {
