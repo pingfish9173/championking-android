@@ -571,17 +571,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                     setStroke(2, gold)
                 }
             }
-
-            // ==========================================
-            // TODO: 準備正式上架前，請務必刪除以下這段測試用捷徑！
-            // ==========================================
-            tvSpecialPrize.setOnClickListener {
-                Log.d(TAG, "🥷 觸發測試捷徑：點擊特獎圈圈，一鍵進入設置頁面！")
-                // 呼叫 MainActivity 剛寫好的捷徑函式
-                (activity as? MainActivity)?.devBypassToSettings()
-            }
-            // ==========================================
-
         }
 
         // 3. 設定大獎 (綠底白字)
