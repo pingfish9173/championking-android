@@ -29,10 +29,13 @@ class ScratchCardSplitPlayerFragment : Fragment() {
     // 記錄目前的母卡
     private var currentMasterCard: ScratchCard? = null
 
-    // ====== 紀錄格子視圖與動畫狀態 (使用 "BoardID_CellID" 作為 Key，例如 "A_1") ======
+    // ====== 紀錄格子視圖與動畫狀態 ======
     private val cellViews = mutableMapOf<String, View>()
     private val scratchingCells = mutableSetOf<String>()
     private var isScratchDialogShowing: Boolean = false  // 防止多指同時開啟多個刮卡視窗
+
+    // 🌟 解決多指點擊 BUG：新增是否正在處理網路請求的狀態
+    private var isProcessingClick: Boolean = false
 
     // 🌟 新增：儲存漩渦View和動畫 (使用 String 型別的 cellKey，例如 "A_1")
     private val swirlViews = mutableMapOf<String, View>()
@@ -306,10 +309,10 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             updateBoardCellDisplay(cellView, cellKey, config?.scratched == true, config?.number, board)
 
             frameLayout.setOnClickListener {
-                // 🛑 防呆 1：如果已經有刮卡視窗在顯示中，直接忽略
-                if (isScratchDialogShowing) return@setOnClickListener
+                // 🛑 防呆 1：如果已經有刮卡視窗在顯示中，或【正在處理其他格子的點擊】，直接忽略
+                if (isScratchDialogShowing || isProcessingClick) return@setOnClickListener
 
-                // 🛑 防呆 2：【核心修改】確保同一時間只有「一個格子」能處於處理/漩渦狀態！
+                // 🛑 防呆 2：確保同一時間只有「一個格子」能處於處理/漩渦狀態！
                 if (scratchingCells.isNotEmpty()) {
                     Log.d(TAG, "已經有格子正在處理中，防呆攔截多指連點！")
                     return@setOnClickListener
@@ -334,7 +337,10 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 if (number != null) {
                     val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return@setOnClickListener
 
-                    // 💡 體驗升級：一按下去立刻加入 scratchingCells，不僅完成防呆鎖定，也馬上秀出黃色漩渦！
+                    // 🌟 鎖定全域點擊，擋下微秒級的並行點擊
+                    isProcessingClick = true
+
+                    // 💡 體驗升級：一按下去立刻加入 scratchingCells，馬上秀出黃色漩渦！
                     scratchingCells.add(cellKey)
                     updateBoardCellDisplay(cellView, cellKey, false, number, board)
 
@@ -347,6 +353,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                         if (!isAcknowledged) {
                             isTimedOut = true
                             frameLayout.isEnabled = true
+                            isProcessingClick = false // 🌟 解鎖全域點擊
 
                             // ❌ 逾時沒回應：移除漩渦，恢復黑底
                             scratchingCells.remove(cellKey)
@@ -365,8 +372,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
                             if (isTimedOut) return@addOnCompleteListener
                             frameLayout.isEnabled = true
+                            isProcessingClick = false // 🌟 收到回應，解鎖全域點擊
 
                             if (task.isSuccessful) {
+                                // 🌟 終極防呆：再次確認這瞬間是否已經有視窗正在顯示
+                                if (isScratchDialogShowing) return@addOnCompleteListener
+
                                 // 🌟 敲門成功！正式呼叫刮卡小視窗
                                 isScratchDialogShowing = true
 

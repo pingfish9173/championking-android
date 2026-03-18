@@ -43,6 +43,9 @@ class ScratchCardPlayerFragment : Fragment() {
     // ✅ 新增：是否已有刮卡小視窗正在顯示（避免多指同時開多個）
     private var isScratchDialogShowing: Boolean = false
 
+    // 🌟 解決多指點擊 BUG：新增是否正在處理網路請求的狀態
+    private var isProcessingClick: Boolean = false
+
     // 新增：儲存漩渦View和動畫
     private val swirlViews = mutableMapOf<Int, SwirlView>()
     private val cellAnimators = mutableMapOf<Int, List<ObjectAnimator>>()
@@ -457,9 +460,9 @@ class ScratchCardPlayerFragment : Fragment() {
         // 設定點擊事件
         cellView.setOnClickListener {
 
-            // ✅ 若已有刮卡視窗在顯示中，直接忽略這次點擊
-            if (isScratchDialogShowing) {
-                Log.d(TAG, "已有刮卡視窗顯示中，忽略格子 $cellNumber 的點擊")
+            // ✅ 若已有刮卡視窗在顯示中，或【正在處理其他格子的點擊】，直接忽略這次點擊
+            if (isScratchDialogShowing || isProcessingClick) {
+                Log.d(TAG, "已有刮卡視窗顯示中或正在處理點擊，忽略格子 $cellNumber 的點擊")
                 return@setOnClickListener
             }
 
@@ -499,6 +502,9 @@ class ScratchCardPlayerFragment : Fragment() {
                     return@setOnClickListener
                 }
 
+                // 🌟 鎖定全域點擊，避免玩家在等待回應的 1.5 秒內狂點或多指點擊其他格子
+                isProcessingClick = true
+
                 // 🛑 終極防線：主動敲門測試 (Active Pre-flight Check)
                 // 目的：破解假 Wi-Fi / TCP Half-Open 幽靈空窗期
                 val pingRef = database.child("users").child(userKey).child("ping")
@@ -513,6 +519,7 @@ class ScratchCardPlayerFragment : Fragment() {
                     if (!isAcknowledged) {
                         isTimedOut = true
                         cellView.isEnabled = true // 解鎖
+                        isProcessingClick = false // 🌟 解鎖全域點擊
                         Log.w(TAG, "【敲門測試】1.5秒內未收到伺服器回應，判定為假性連線(空窗期)")
                         activity?.let { ToastManager.show(it, "網路不穩定，無法開啟刮卡，請稍後再試") }
                     }
@@ -530,8 +537,12 @@ class ScratchCardPlayerFragment : Fragment() {
                     if (isTimedOut) return@addOnCompleteListener
 
                     cellView.isEnabled = true // 解鎖
+                    isProcessingClick = false // 🌟 收到伺服器回應，解鎖全域點擊
 
                     if (task.isSuccessful) {
+                        // 🌟 終極防呆：再次確認這瞬間是否已經有視窗正在顯示
+                        if (isScratchDialogShowing) return@addOnCompleteListener
+
                         Log.d(TAG, "【敲門測試】伺服器秒回！確認為真實網路，開啟刮卡視窗")
 
                         // ✅ 通過所有測試，真正開啟小視窗
