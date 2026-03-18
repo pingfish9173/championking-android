@@ -162,16 +162,16 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         val container = binding.shopItemsContainer
         container.removeAllViews()
 
-        // 🌟 1. 利用節點名稱 (nodeKey) 是否包含 "x" 或 "X" 來過濾商品
+        // 利用節點名稱 (nodeKey) 是否包含 "x" 或 "X" 來過濾商品
         val singleBoardItems = shopItems.filter { !it.first.contains("x", ignoreCase = true) }
         val splitBoardItems = shopItems.filter { it.first.contains("x", ignoreCase = true) }
 
-        // 🌟 2. 顯示單一版面區塊
+        // 顯示單一版面區塊
         if (singleBoardItems.isNotEmpty()) {
             addCategoryToContainer(container, "單一版面：", singleBoardItems)
         }
 
-        // 🌟 3. 如果有分割版面的商品，接著顯示分割版面區塊
+        // 如果有分割版面的商品，接著顯示分割版面區塊
         if (splitBoardItems.isNotEmpty()) {
             addCategoryToContainer(container, "分割版面：", splitBoardItems)
         }
@@ -187,14 +187,14 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     ) {
         val titleTextView = TextView(requireContext()).apply {
             text = title
-            textSize = 18f // 🌟 稍微把標題字體縮小一點點
+            textSize = 18f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                // 🌟 把上下留白從 16.toPx() 縮小成 8.toPx()，節省垂直空間
+                // 設定標題上下的留白
                 setMargins(0, 8.toPx(), 0, 8.toPx())
             }
         }
@@ -207,16 +207,14 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         val emptySlots = if (totalItems % itemsPerRow != 0) itemsPerRow - (totalItems % itemsPerRow) else 0
 
         (0 until totalItems + emptySlots).forEachIndexed { index, _ ->
+            // 每 5 個商品建立一個新的水平 LinearLayout (Row)
             if (index % itemsPerRow == 0) {
                 rowLayout = LinearLayout(requireContext()).apply {
                     orientation = LinearLayout.HORIZONTAL
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        // 🌟 取消原本的 Row MarginBottom，因為 shop_item_template 已經有 8dp margin 了，避免間距過大
-                        setMargins(0, 0, 0, 0)
-                    }
+                    ) // 外層 Row 不設定 Margin，交給裡面的商品卡片去互相推開
                 }
                 container.addView(rowLayout)
             }
@@ -226,9 +224,15 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
                 val itemLayout = LayoutInflater.from(requireContext())
                     .inflate(R.layout.shop_item_template, rowLayout, false)
 
+                // 🌟 關鍵修改：在這裡透過程式碼強制設定卡片的 Margin
                 itemLayout.layoutParams = LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-                )
+                ).apply {
+                    // 設定 8dp 的外距 (左右相鄰的卡片會被推開 16dp 的空隙)
+                    // 如果覺得不夠開，可以把 8 改成 10 或 12
+                    val margin = 8.toPx()
+                    setMargins(margin, margin, margin, margin)
+                }
 
                 val productNameTextView: TextView = itemLayout.findViewById(R.id.product_name_textview)
                 val priceTextView: TextView = itemLayout.findViewById(R.id.price_textview)
@@ -274,8 +278,14 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
                 rowLayout?.addView(itemLayout)
             } else {
+                // 🌟 關鍵修改：用來排版佔位的透明空 View，也要設定一模一樣的 Margin，否則排版會歪掉
                 rowLayout?.addView(View(requireContext()).apply {
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    layoutParams = LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                    ).apply {
+                        val margin = 8.toPx()
+                        setMargins(margin, margin, margin, margin)
+                    }
                 })
             }
         }
