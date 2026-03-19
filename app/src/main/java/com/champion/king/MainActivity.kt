@@ -481,9 +481,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         // ✅ 關鍵：根據拿到的資料，動態進入單版面或分割版面
         render(targetMode)
-
-        // 可選：自動還原專用提示
-        ToastManager.show(this, "已自動進入玩家模式")
     }
 
     override fun onResume() {
@@ -546,7 +543,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 }
                 // 切玩家頁面即載入顯示頁
                 loadFragment(ScratchCardPlayerFragment(), containerIdFor(Mode.PLAYER))
-                ToastManager.show(this, "已切換至玩家頁面")
                 Log.d(TAG, "已切換至玩家頁面。")
                 lockAppToScreen()
             }
@@ -1980,7 +1976,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                     database.child("users").child(userFirebaseKey).child("scratchCards")
                         .updateChildren(updates)
                         .addOnSuccessListener {
-                            ToastManager.show(this@MainActivity, "已切換至版位 $nextOrder")
                             Log.d(TAG, "成功切換至下一版：版位 $nextOrder (序號: $nextSerialNumber)")
 
                             // 更新完資料庫後，呼叫分流檢查站，搭配過場動畫滑順切換！
@@ -2567,7 +2562,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             if (activityManager.lockTaskModeState == android.app.ActivityManager.LOCK_TASK_MODE_NONE) {
                 startLockTask()
-                ToastManager.show(this,"已啟用鎖定模式，無法跳出遊戲")
             }
         }
     }
