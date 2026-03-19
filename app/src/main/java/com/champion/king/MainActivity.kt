@@ -2375,14 +2375,37 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
         lastInteractionTime = System.currentTimeMillis()
         resetIdleTimer()
+        markSessionSeen() // ✅ 使用者有操作就刷新 lastSeenAt
 
-        // 🌟 新增：如果分割版面的抽屜選單是開著的，玩家只要有碰到螢幕任何地方，就重新倒數 1 分鐘
-        if (isMenuOpen) {
+        // 🌟 新增：攔截分割版面抽屜選單開啟時的外部點擊
+        if (isMenuOpen && ev != null && ev.action == android.view.MotionEvent.ACTION_DOWN) {
+            // 取得「選單內容」與「開關按鈕」目前的螢幕絕對座標範圍
+            val menuRect = android.graphics.Rect()
+            menuContentLayout?.getGlobalVisibleRect(menuRect)
+
+            val buttonRect = android.graphics.Rect()
+            menuToggleButton?.getGlobalVisibleRect(buttonRect)
+
+            val touchX = ev.rawX.toInt()
+            val touchY = ev.rawY.toInt()
+
+            // 判斷點擊的位置是否「不在選單內部」且「不在開關按鈕上」
+            val isTouchOutside = (menuRect.width() > 0 && !menuRect.contains(touchX, touchY)) &&
+                    (buttonRect.width() > 0 && !buttonRect.contains(touchX, touchY))
+
+            if (isTouchOutside) {
+                Log.d(TAG, "點擊選單外部，自動收合選單並攔截底層點擊事件")
+                closeSplitMenu()
+                splitMenuIdleHandler.removeCallbacks(splitMenuIdleRunnable) // 收合後清除計時器
+                return true // 🛑 核心修改：回傳 true 攔截這個 ACTION_DOWN 事件，不往下傳遞給刮板！
+            } else {
+                // 點擊在選單內部，重置抽屜閒置計時器
+                resetSplitMenuIdleTimer()
+            }
+        } else if (isMenuOpen) {
+            // 滑動等其他手勢，只要選單開著就重置閒置計時器
             resetSplitMenuIdleTimer()
         }
-
-        // ✅ 使用者有操作就刷新 lastSeenAt → 持續玩3天也不會被登出
-        markSessionSeen()
 
         return super.dispatchTouchEvent(ev)
     }
