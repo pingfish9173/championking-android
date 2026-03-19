@@ -556,7 +556,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 // 載入未來的 Fragment 邏輯
                 loadFragment(ScratchCardSplitPlayerFragment(), containerIdFor(Mode.PLAYER_SPLIT))
 
-                ToastManager.show(this, "已切換至分割玩家頁面")
                 Log.d(TAG, "已切換至分割玩家頁面。")
                 lockAppToScreen()
             }
