@@ -119,17 +119,17 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     }
 
     /**
-     * ✅ 實作商城優化 (修正版 3.0)：完全透明背景的極簡浮動 QRCode
+     * ✅ 實作商城優化 (修正版 4.0)：聚焦模式全螢幕暗化背景
      *
      * 需求：
-     * 1. 移除全部半透明灰色背景（包含系統預設的 Dim 效果），解決右邊切線不乾淨的問題。
-     * 2. 保留卡片圓角與陰影，讓 QRCode 直接漂浮在商城原本的畫面上。
-     * 3. 點擊卡片以外任意位置關閉。
+     * 1. 背景呈現整個暗掉的狀態（類似聚焦模式）。
+     * 2. 解決右邊切線不乾淨的問題：透過全螢幕透明主題與沉浸式 UI 標籤，強制 Dialog 覆蓋邊緣。
+     * 3. 點擊卡片以外任意位置關閉彈窗。
      */
     private fun showLargeQrCodeDialog() {
-        // 使用程式碼動態建立佈局，方便單一 FUNCTION 複製貼上，不需新增 XML 檔案
         val context = requireContext()
-        val dialog = Dialog(context)
+        // 🌟 關鍵修正 1：使用全螢幕透明主題，確保 Dialog 視窗本身佔滿整個物理螢幕
+        val dialog = Dialog(context, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
 
         // Helper Function: DP 轉 PX
@@ -138,19 +138,20 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
             return (dp * density).toInt()
         }
 
-        // 1️⃣ 根佈局 (Full Screen root, 🌟 修正：改成完全透明，移除原本的灰色)
+        // 1️⃣ 根佈局 (手動控制暗化背景)
         val rootLayout = FrameLayout(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            setBackgroundColor(Color.TRANSPARENT)
+            // 🌟 關鍵修正 2：手動設定半透明黑色背景 (約 65% 黑)，模擬聚焦模式
+            setBackgroundColor(Color.parseColor("#A6000000"))
         }
 
         // 2️⃣ 內容容器 (極簡白色圓角卡片，浮動置中)
         val contentCard = FrameLayout(context).apply {
             val params = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, // 寬度隨圖片縮放
+                FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = android.view.Gravity.CENTER
@@ -192,22 +193,27 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
 
         // 4️⃣ 設置 Dialog 視窗參數
         dialog.window?.let { window ->
-            // 視窗設為滿版
             window.setLayout(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT
             )
-            // 將 Dialog 視窗背景設為透明
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
-            // 🌟 🌟 關鍵修正：清除系統預設的背景變暗效果 (Dim behind)，確保完全透明，不會再出現右邊突兀的切線！
+            // 拔除系統預設的變暗效果，統一由我們的 rootLayout 背景色來控管
             window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-
-            // 設置滑入滑出的過場動畫
             window.setWindowAnimations(android.R.style.Animation_Dialog)
+
+            // 🌟 關鍵修正 3：開啟沉浸式模式，將導覽列與狀態列隱藏，徹底消滅邊緣切線問題
+            window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    )
         }
 
-        // 5️⃣ 設置點擊邏輯：點擊卡片以外任意位置（完全透明區域）關閉彈窗
+        // 5️⃣ 設置點擊邏輯：點擊卡片以外任意位置（即半透明暗色區域）關閉彈窗
         rootLayout.setOnClickListener {
             dialog.dismiss()
         }
