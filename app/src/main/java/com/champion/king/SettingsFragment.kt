@@ -71,16 +71,16 @@ class SettingsFragment : Fragment() {
     // 大獎數量限制表
     private val GRAND_LIMITS = mapOf(
         10 to 3,
-        20 to 5,
-        25 to 6,
-        30 to 6,
-        40 to 8,
-        50 to 8,
-        60 to 10,
-        80 to 10,
-        100 to 10,
-        120 to 12,
-        160 to 12,
+        20 to 15,
+        25 to 15,
+        30 to 15,
+        40 to 15,
+        50 to 15,
+        60 to 15,
+        80 to 15,
+        100 to 15,
+        120 to 15,
+        160 to 15,
         200 to 15,
         240 to 15
     )
@@ -1255,11 +1255,11 @@ class SettingsFragment : Fragment() {
         val selectedScratchTypeStr = getCurrentScratchType() ?: ""
         val isSplitMode = selectedScratchTypeStr.contains("x")
 
-        // 🌟 防呆：儲存時再次驗證大獎上限（分割=2，單一=既有限制）
-        val limit = if (isSplitMode) 2 else (GRAND_LIMITS[data.scratchType] ?: 0)
+        // 🌟 更新防呆：確保未定義的單一版型預設上限為 15
+        val limit = if (isSplitMode) 2 else (GRAND_LIMITS[data.scratchType] ?: 15)
 
         val gpList = data.grandPrize?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
-        if (limit > 0 && gpList.size > limit) {
+        if (gpList.size > limit) {
             val limitMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "${data.scratchType}刮的大獎數量限制為 ${limit} 個"
             showToast(limitMsg)
             return
@@ -2415,8 +2415,12 @@ class SettingsFragment : Fragment() {
 
                 val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
 
-                if (isSplitMode && sortedList.size > 2) {
-                    showToast("分割版面的大獎數量限制為 2 個")
+                // 🌟 新增防呆：加入單一版面大獎數量上限檢查 (10刮為3，其餘為15)
+                val limit = if (isSplitMode) 2 else (GRAND_LIMITS[displayScratchType] ?: 15)
+
+                if (sortedList.size > limit) {
+                    val limitMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "${displayScratchType}刮的大獎數量限制為 ${limit} 個"
+                    showToast(limitMsg)
                     return@showGrandPrizeKeyboard
                 }
 

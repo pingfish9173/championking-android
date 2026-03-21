@@ -66,7 +66,6 @@ class ScratchBoardPreviewFragment : Fragment() {
 
     private var scratchesType: String? = null
     private lateinit var grid: GridLayout
-    private var hintView: TextView? = null
 
     /** 目前使用中的配置（可能來自 arguments、savedInstanceState 或新隨機生成） */
     private var generatedNumberConfigurations: ArrayList<NumberConfiguration>? = null
@@ -136,7 +135,6 @@ class ScratchBoardPreviewFragment : Fragment() {
     ): View {
         val root = inflater.inflate(R.layout.fragment_scratch_board_preview, container, false)
         grid = root.findViewById(R.id.scratch_board_grid_layout)
-        hintView = root.findViewById(R.id.single_pick_hint)
         return root
     }
 
@@ -515,7 +513,6 @@ class ScratchBoardPreviewFragment : Fragment() {
         if (singlePickEnabled == enabled) return
         singlePickEnabled = enabled
         if (enabled) multiPickEnabled = false
-        updateHintBarText()
         applyModesAndMarkers()
     }
 
@@ -524,7 +521,6 @@ class ScratchBoardPreviewFragment : Fragment() {
         if (multiPickEnabled == enabled) return
         multiPickEnabled = enabled
         if (enabled) singlePickEnabled = false
-        updateHintBarText()
         applyModesAndMarkers()
     }
 
@@ -544,10 +540,8 @@ class ScratchBoardPreviewFragment : Fragment() {
         applyModesAndMarkers()
     }
 
-    fun getGrandSelectedNumbers(): List<Int> = grandSelectedNumbers.toList()
     fun getGeneratedNumberConfigurations(): List<NumberConfiguration>? =
         generatedNumberConfigurations
-    fun getScratchesType(): String? = scratchesType
 
     fun scratchNumbers(numbers: Collection<Int>) {
         if (numbers.isEmpty()) return
@@ -575,37 +569,6 @@ class ScratchBoardPreviewFragment : Fragment() {
             updateXmlCells()
         } else {
             updateGridCells()
-        }
-    }
-
-    // 🌟 修改點 7：對應新的字串擷取
-    private fun updateHintBarText() {
-        when {
-            readonlyMode -> {
-                hintView?.visibility = View.VISIBLE
-                hintView?.text = "此刮板為使用中狀態，不可修改特獎／大獎設定"
-            }
-
-            singlePickEnabled -> {
-                hintView?.visibility = View.VISIBLE
-                hintView?.text = "請點選一個數字作為「特獎」"
-            }
-
-            multiPickEnabled -> {
-                val countStr = extractScratchTypeStr(scratchesType ?: "")
-                val limit = getGrandLimitByScratchType()
-                val text = if (limit > 0) {
-                    "請點選一個或多個數字作為「大獎」（再點可取消）\n${countStr}刮的大獎數量限制為 ${limit} 個"
-                } else {
-                    "請點選一個或多個數字作為「大獎」（再點可取消）"
-                }
-                hintView?.visibility = View.VISIBLE
-                hintView?.text = text
-            }
-
-            else -> {
-                hintView?.visibility = View.GONE
-            }
         }
     }
 
@@ -843,13 +806,7 @@ class ScratchBoardPreviewFragment : Fragment() {
         val scratchCount = typeStr.toIntOrNull() ?: return 0
         return when (scratchCount) {
             10 -> 3
-            20 -> 5
-            25, 30 -> 6
-            40, 50 -> 8
-            60, 80, 100 -> 10
-            120, 160 -> 12
-            200, 240 -> 15
-            else -> 0
+            else -> 15
         }
     }
 }
