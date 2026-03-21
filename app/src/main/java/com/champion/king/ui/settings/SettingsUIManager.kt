@@ -221,15 +221,16 @@ class SettingsUIManager(
         showPrizeKeyboard(
             title = "輸入消費金額（元）",
             currentValue = currentValue,
-            hint = "請輸入整數元（0以上）",
+            hint = "請輸入整數元（0~99999）",
             allowComma = false,
+            maxRealtimeValue = 99999, // 🌟 新增：設定即時輸入上限為 99999
             validator = { input ->
                 val t = input.trim()
                 val v = if (t.isEmpty()) 0 else t.toIntOrNull()
                 if (v == null || v < 0) {
                     ValidationResult(false, "請輸入 0 或正整數")
                 } else {
-                    ValidationResult(true, "")
+                    ValidationResult(true, "") // 🌟 儲存時不檢查上限，一律放行
                 }
             },
             onConfirm = { raw ->
@@ -246,6 +247,7 @@ class SettingsUIManager(
         currentValue: String?,
         hint: String,
         allowComma: Boolean,
+        maxRealtimeValue: Int? = null, // 🌟 新增：即時上限參數，預設為 null 避免影響大獎/特獎
         validator: (String) -> ValidationResult,
         onConfirm: (String) -> Unit
     ) {
@@ -272,44 +274,37 @@ class SettingsUIManager(
         // 設置當前值
         dialogEditText.setText(currentValue ?: "")
 
-        // ⭐ 修正點：在這裡設定游標到最後
-        // 使用 length 確保游標停在文字最後方
+        // 確保游標停在文字最後方
         dialogEditText.post {
             val textLength = dialogEditText.text?.length ?: 0
             dialogEditText.setSelection(textLength)
         }
 
-        // ⭐ 修改點 1：除了 showSoftInputOnFocus，強制指定 InputType 為 NULL
         dialogEditText.showSoftInputOnFocus = false
-        dialogEditText.isCursorVisible = true       // ⭐ 強制游標顯示
-        dialogEditText.requestFocus()               // 確保取得焦點
+        dialogEditText.isCursorVisible = true
+        dialogEditText.requestFocus()
         dialogEditText.inputType = android.text.InputType.TYPE_CLASS_TEXT
 
-        // ⭐ 上方提示文字
+        // 上方提示文字
         val topHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_top_hint)
         topHintText.text = hint
 
-        // ✅ 有逗點鍵 -> 才顯示提示（例如大獎可用逗點分隔）
-        // ⭐ 下方提示文字
+        // 下方提示文字
         var bottomHintText = dialogView.findViewById<TextView>(com.champion.king.R.id.dialog_number_bottom_hint)
         bottomHintText.visibility = if (allowComma) View.VISIBLE else View.GONE
 
-        // ✅ 交換：逗點鍵的位置改成「清除」；清除鍵的位置改成「逗點」
+        // 交換：逗點鍵的位置改成「清除」；清除鍵的位置改成「逗點」
         btnComma.text = "清除"
         btnClear.text = ","
-
-        // 逗點是否允許：不允許時就把「清除原位置(現在是逗點鍵)」隱藏，避免怪空格出現在逗點鍵位置
         btnClear.visibility = if (allowComma) View.VISIBLE else View.GONE
 
         val dialog = AlertDialog.Builder(context)
             .setTitle(title)
             .setView(dialogView)
-            .setPositiveButton("確定", null) // 先設 null，onShow 再綁 click（才能控制不關閉）
+            .setPositiveButton("確定", null)
             .setNegativeButton("取消", null)
             .create()
 
-        // ⭐ 修改點 2：在 Dialog 顯示前，設定 Window 屬性強制隱藏鍵盤
-        // 這行是解決特定平板會跳出鍵盤的關鍵
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
 
         dialog.setOnShowListener {
@@ -328,7 +323,6 @@ class SettingsUIManager(
                 }
             }
 
-            // ⭐ 修改點 3 (雙保險)：視窗顯示時清除焦點再重新聚焦，防止系統輸入法搶入
             dialogEditText.clearFocus()
             dialogEditText.requestFocus()
         }
@@ -337,7 +331,6 @@ class SettingsUIManager(
             ToastManager.clearHostWindow()
         }
 
-        // --- 下面「數字按鈕插入」的邏輯：保留你原本那套（不要動） ---
         val numberClickListener = View.OnClickListener { view ->
             val button = view as Button
             val number = button.text.toString()
@@ -346,6 +339,25 @@ class SettingsUIManager(
 
             var start = dialogEditText.selectionStart
             var end = dialogEditText.selectionEnd
+
+            // 🌟 預先計算如果允許輸入，字串會變成什麼樣子
+            val currentText = editable.toString()
+            val newText = if (start != -1 && end != -1 && start != end) {
+                currentText.replaceRange(minOf(start, end), maxOf(start, end), number)
+            } else if (start != -1) {
+                currentText.substring(0, start) + number + currentText.substring(start)
+            } else {
+                currentText + number
+            }
+
+            // 🌟 即時檢查是否超過上限 (防呆：若輸入太長轉 Int 失敗也會直接擋下)
+            if (maxRealtimeValue != null && !newText.contains(",")) {
+                val newVal = newText.toIntOrNull()
+                if ((newVal != null && newVal > maxRealtimeValue) || (newVal == null && newText.isNotEmpty())) {
+                    showToast("消費上限為${maxRealtimeValue}元")
+                    return@OnClickListener // 阻擋輸入，不會往下執行 append/insert
+                }
+            }
 
             if (start == -1 || end == -1) {
                 editable.append(number)
@@ -367,7 +379,6 @@ class SettingsUIManager(
             it.setOnClickListener(numberClickListener)
         }
 
-        // ✅ 清除按鈕（放到逗點鍵的位置）
         btnComma.setOnClickListener {
             dialogEditText.setText("")
             dialogEditText.setSelection(0)
@@ -388,23 +399,19 @@ class SettingsUIManager(
             }
         }
 
-        // 逗點按鈕（在 UI 上顯示為 ","，但在程式碼中 ID 是 btnClear）
         btnClear.setOnClickListener {
             if (!allowComma) return@setOnClickListener
 
             val editable = dialogEditText.text ?: return@setOnClickListener
 
-            // 1. 取得當前游標位置，並確保 start 不會大於 end
             val start = dialogEditText.selectionStart.coerceAtLeast(0)
             val end = dialogEditText.selectionEnd.coerceAtLeast(0)
             val minPos = minOf(start, end)
             val maxPos = maxOf(start, end)
 
-            // 2. 執行插入 "," (使用 replace 可以在有選取文字時直接覆蓋)
             val insertStr = ","
             editable.replace(minPos, maxPos, insertStr)
 
-            // 3. 安全地移動游標：算出新位置，但絕不超過文字總長度 (防止閃退的關鍵)
             val newCursorPos = minPos + insertStr.length
             val safePos = newCursorPos.coerceAtMost(editable.length)
 

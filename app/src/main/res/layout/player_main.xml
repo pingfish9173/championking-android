@@ -58,7 +58,7 @@
                 android:gravity="center"
                 android:text=""
                 android:textColor="#00008B"
-                android:textSize="34sp" />
+                android:textSize="30sp" />
         </FrameLayout>
 
         <!-- 特獎和大獎資訊區塊 -->
