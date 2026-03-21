@@ -3204,7 +3204,9 @@ class SettingsFragment : Fragment() {
             weightSum = 2f
         }
 
-        val defaultNumbers = (1..20).toList()
+        // 🌟 動態判斷當前子板的刮數 (20, 25 或 30)，讓迴圈正確對應
+        val defaultCount = boardNumbers.values.firstOrNull()?.size ?: 20
+        val defaultNumbers = (1..defaultCount).toList()
 
         row1.addView(createSingleBoardPreview(context, "A", boardNumbers["A"] ?: defaultNumbers))
         row1.addView(createSingleBoardPreview(context, "B", boardNumbers["B"] ?: defaultNumbers))
@@ -3405,6 +3407,29 @@ class SettingsFragment : Fragment() {
 
         renderSubBoardHeaderUI(boardName)
 
+        // 🌟 核心修改：動態計算行列與大小
+        val cellCount = numbers.size
+        val targetRowCount = when (cellCount) {
+            25 -> 5
+            30 -> 5
+            else -> 4
+        }
+        val targetColCount = when (cellCount) {
+            25 -> 5
+            30 -> 6
+            else -> 5
+        }
+        val targetCircleSizeDp = when (cellCount) {
+            25 -> 30  // 稍微縮小避免破版
+            30 -> 26
+            else -> 36
+        }
+        val targetTextSize = when (cellCount) {
+            25 -> 12f
+            30 -> 11f
+            else -> 14f
+        }
+
         val gridContainer = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -3415,8 +3440,8 @@ class SettingsFragment : Fragment() {
 
         val gridLayout = GridLayout(context).apply {
             tag = "grid_$boardName"
-            rowCount = 4
-            columnCount = 5
+            rowCount = targetRowCount
+            columnCount = targetColCount
             alignmentMode = GridLayout.ALIGN_BOUNDS
             useDefaultMargins = false
             layoutParams = FrameLayout.LayoutParams(
@@ -3429,7 +3454,7 @@ class SettingsFragment : Fragment() {
         }
 
         val cellMargin = (1 * density).toInt()
-        val circleSize = (36 * density).toInt()
+        val circleSize = (targetCircleSizeDp * density).toInt()
 
         // 🌟 準備好邊框顏色和獎項數字，供下方格子判斷使用
         val specialPrize = splitBoardSpecialPrizes[boardName]
@@ -3448,7 +3473,6 @@ class SettingsFragment : Fragment() {
 
         val configs = splitBoardConfigurations[boardName]
 
-        val cellCount = numbers.size
         for (i in 0 until cellCount) {
             val cellFrame = FrameLayout(context).apply {
                 setBackgroundColor(Color.WHITE)
@@ -3531,7 +3555,7 @@ class SettingsFragment : Fragment() {
                 val number = numbers.getOrNull(i) ?: 0
                 text = number.toString()
 
-                textSize = 14f
+                textSize = targetTextSize
                 setTypeface(null, Typeface.BOLD)
                 gravity = Gravity.CENTER
 
@@ -3550,7 +3574,7 @@ class SettingsFragment : Fragment() {
 
                     background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
                         if (this is android.graphics.drawable.GradientDrawable) {
-                            setColor(Color.WHITE)
+                            setColor(Color.WHITE) // 白底
                             setStroke(3, borderColor) // 稍微加粗邊框讓狀態更明顯
                         }
                     }
