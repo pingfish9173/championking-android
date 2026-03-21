@@ -2028,18 +2028,29 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             .alpha(1f)
             .setDuration(250)
             .withEndAction {
-                // 2. 畫面全黑後，執行實際的切換邏輯 (此時背後的 Fragment 怎麼亂閃玩家都看不到)
+                // 2. 畫面全黑後，執行實際的切換邏輯
                 action.invoke()
 
-                // 3. 延遲 1 秒等待 Firebase 抓本地快取與 Fragment 渲染，然後淡出黑畫面
+                // 3. 延遲 1 秒後開始淡出黑畫面
                 Handler(Looper.getMainLooper()).postDelayed({
+
+                    // 獨立定義移除 View 的動作
+                    val removeRunnable = Runnable {
+                        if (transitionView.parent != null) {
+                            decorView.removeView(transitionView)
+                        }
+                    }
+
                     transitionView.animate()
                         .alpha(0f)
                         .setDuration(350)
-                        .withEndAction {
-                            decorView.removeView(transitionView)
-                        }
+                        .withEndAction(removeRunnable)
                         .start()
+
+                    // 🛑 核心防呆：不管動畫有沒有被 Android 系統強制中斷，
+                    // 給它多 50 毫秒的緩衝，時間到強制移除 View！
+                    Handler(Looper.getMainLooper()).postDelayed(removeRunnable, 400)
+
                 }, 1000)
             }
             .start()
