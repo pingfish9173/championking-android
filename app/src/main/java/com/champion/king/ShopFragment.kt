@@ -1,15 +1,23 @@
 package com.champion.king
 
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -57,6 +65,12 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // 🌟 當使用者點擊右上角 QRCode 區域時 (id: shop_activity_zone)
+        binding.shopActivityZone.setOnClickListener {
+            // 呼叫上方實作的彈窗函式
+            showLargeQrCodeDialog()
+        }
+
         shopItemsHandle = repo.observeShopItems(
             onItems = { items ->
                 if (!isAdded || this@ShopFragment.view == null) return@observeShopItems
@@ -102,6 +116,104 @@ class ShopFragment : BaseBindingFragment<FragmentShopBinding>() {
         }
 
         binding.clearCartButton.setThrottledClick { clearCart() }
+    }
+
+    /**
+     * ✅ 實作商城優化 (修正版 3.0)：完全透明背景的極簡浮動 QRCode
+     *
+     * 需求：
+     * 1. 移除全部半透明灰色背景（包含系統預設的 Dim 效果），解決右邊切線不乾淨的問題。
+     * 2. 保留卡片圓角與陰影，讓 QRCode 直接漂浮在商城原本的畫面上。
+     * 3. 點擊卡片以外任意位置關閉。
+     */
+    private fun showLargeQrCodeDialog() {
+        // 使用程式碼動態建立佈局，方便單一 FUNCTION 複製貼上，不需新增 XML 檔案
+        val context = requireContext()
+        val dialog = Dialog(context)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+        // Helper Function: DP 轉 PX
+        fun dpToPx(dp: Int): Int {
+            val density = context.resources.displayMetrics.density
+            return (dp * density).toInt()
+        }
+
+        // 1️⃣ 根佈局 (Full Screen root, 🌟 修正：改成完全透明，移除原本的灰色)
+        val rootLayout = FrameLayout(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+
+        // 2️⃣ 內容容器 (極簡白色圓角卡片，浮動置中)
+        val contentCard = FrameLayout(context).apply {
+            val params = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, // 寬度隨圖片縮放
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = android.view.Gravity.CENTER
+            }
+            layoutParams = params
+
+            // 內部間距設為相同，讓 QRCode 置中且精緻
+            val p = dpToPx(32)
+            setPadding(p, p, p, p)
+
+            elevation = dpToPx(12).toFloat() // 保持陰影深度，加強浮動立體感
+
+            // 保持卡片圓角 (16dp)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                setColor(Color.WHITE)
+                setCornerRadius(dpToPx(16).toFloat())
+            }
+
+            // 防止點擊卡片內部時穿透到根佈局導致彈窗關閉
+            isClickable = true
+            isFocusable = true
+        }
+        rootLayout.addView(contentCard)
+
+        // 3️⃣ QRCode 圖片 (直接置中於卡片中)
+        val imageView = ImageView(context).apply {
+            val size = dpToPx(260)
+            layoutParams = FrameLayout.LayoutParams(size, size).apply {
+                gravity = android.view.Gravity.CENTER
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            // 使用原本 fragment_shop.xml 中定義的 Demo 圖片
+            setImageResource(R.drawable.line_qr)
+        }
+        contentCard.addView(imageView)
+
+        dialog.setContentView(rootLayout)
+
+        // 4️⃣ 設置 Dialog 視窗參數
+        dialog.window?.let { window ->
+            // 視窗設為滿版
+            window.setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT
+            )
+            // 將 Dialog 視窗背景設為透明
+            window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+            // 🌟 🌟 關鍵修正：清除系統預設的背景變暗效果 (Dim behind)，確保完全透明，不會再出現右邊突兀的切線！
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+
+            // 設置滑入滑出的過場動畫
+            window.setWindowAnimations(android.R.style.Animation_Dialog)
+        }
+
+        // 5️⃣ 設置點擊邏輯：點擊卡片以外任意位置（完全透明區域）關閉彈窗
+        rootLayout.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // 顯示 Dialog
+        dialog.show()
     }
 
     private fun setupLineTextWithUnderline() {
