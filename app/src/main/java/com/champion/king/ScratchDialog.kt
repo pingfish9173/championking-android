@@ -85,6 +85,13 @@ class ScratchDialog(
         handleInactivityTimeout()
     }
 
+    // 👇 1. 新增這個 Function：提供給外部判斷是否允許「瞬間強制切斷」
+    fun canBeInstantlyDismissed(): Boolean {
+        // 只有當「允許外部點擊」且「已經在收尾播放音效」時，才允許無縫接軌
+        return canCancelByTouchingOutside && isPlayingSound
+    }
+
+    // 👇 2. 替換整段 onCreate：加入事件穿透 FLAG
     override fun onCreate(savedInstanceState: Bundle?) {
         (context as? MainActivity)?.enableImmersiveMode()
         super.onCreate(savedInstanceState)
@@ -96,100 +103,74 @@ class ScratchDialog(
         quickScratchButton = findViewById(R.id.quick_scratch_button)
 
         scratchView.setup(number, isSpecialPrize, isGrandPrize)
-        // 🛑 注入第 2 道鎖的邏輯：提供 ScratchView 檢查連線狀態
         scratchView.setCanScratchCheck {
             val mainActivity = getMainActivity()
             if (mainActivity == null) return@setCanScratchCheck false
-
-            // 1. Android 系統層級檢查 (阻擋假 Wi-Fi)
             if (!isNetworkAvailable(mainActivity)) {
                 ToastManager.show(mainActivity, "偵測到網路異常，禁止刮卡")
                 return@setCanScratchCheck false
             }
-
-            // 2. Firebase 被動狀態檢查
             if (!mainActivity.isFirebaseConnected) {
                 ToastManager.show(mainActivity, "連線中斷！請確認網路狀態")
                 return@setCanScratchCheck false
             }
-
             true
         }
 
-        // ✅ Dialog 一出現就開始倒數（60秒無動作就自動處理）
         resetInactivityTimer()
 
-        // 監聽刮卡開始事件 - 防弊機制關鍵
         scratchView.setOnScratchStartListener {
-            // 一旦開始刮卡，就不能通過點擊外部關閉
             canCancelByTouchingOutside = false
             setCanceledOnTouchOutside(false)
-
-            // 立即觸發防弊機制：標記 hasTriggeredScratchStart
             if (!hasTriggeredScratchStart) {
                 hasTriggeredScratchStart = true
                 onScratchStart.invoke()
             }
-
-            // ✅ 有刮動，重置倒數
             resetInactivityTimer()
         }
 
-        // 初始狀態允許點擊外部關閉
         setCanceledOnTouchOutside(true)
 
         quickScratchButton.setOnClickListener {
-            // 🛑 第 3 道鎖：點擊一鍵刮開時，瞬間檢查連線
             val mainActivity = getMainActivity()
             if (mainActivity == null || !isNetworkAvailable(mainActivity) || !mainActivity.isFirebaseConnected) {
                 mainActivity?.let { ToastManager.show(it, "連線中斷！無法執行一鍵刮開") }
                 return@setOnClickListener
             }
-            val isConnected = mainActivity?.isFirebaseConnected ?: false
 
-            if (!isConnected) {
-                if (mainActivity != null) {
-                    ToastManager.show(mainActivity, "連線中斷！無法執行一鍵刮開")
-                }
-                return@setOnClickListener // 擋下操作
-            }
-
-            // ✅ 點按也算互動
             resetInactivityTimer()
-
-            // 標記為已點擊一鍵刮開
             hasClickedQuickScratch = true
-
-            // 點擊一鍵刮開後，立即禁止點擊外部關閉
             canCancelByTouchingOutside = false
             setCanceledOnTouchOutside(false)
 
-            // 立即觸發防弊機制：標記 hasTriggeredScratchStart
             if (!hasTriggeredScratchStart) {
                 hasTriggeredScratchStart = true
                 onScratchStart.invoke()
             }
 
-            // 先清除塗層
             scratchView.revealCompletely()
 
-            // 檢查是否已經在播放音效
             if (!isPlayingSound) {
                 isPlayingSound = true
-
-                // ✅ 已經進入完成收尾（播放音效），停止 Timeout 避免干擾
                 stopInactivityTimer()
 
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
-
-                // 🌟 【優化核心】：不再等待音效播完，瞬間呼叫 onScratchComplete 讓背景去寫資料庫
                 onScratchComplete()
 
-                // 只有 dialog.dismiss 需要等音效播完才執行
+                // 🌟 【極速 UX 優化】：一般獎項允許事件穿透！
+                if (!isSpecialPrize && !isGrandPrize) {
+                    canCancelByTouchingOutside = true
+                    setCanceledOnTouchOutside(true)
+
+                    // 讓玩家的點擊可以「穿透」這個 Dialog，直接點到後面的下一個格子
+                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
+                }
+
                 scratchView.postDelayed({
-                    dismiss()
+                    if (isShowing) dismiss()
                 }, delayTime)
             }
         }
@@ -200,23 +181,42 @@ class ScratchDialog(
 
             if (!isPlayingSound) {
                 isPlayingSound = true
-
-                // ✅ 已經進入完成收尾（播放音效），停止 Timeout 避免干擾
                 stopInactivityTimer()
 
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
-
-                // 🌟 【優化核心】：瞬間呼叫 onScratchComplete 讓背景去寫資料庫
                 onScratchComplete()
 
-                // 只有 dialog.dismiss 需要等音效播完才執行
+                // 🌟 【極速 UX 優化】：一般獎項允許事件穿透！
+                if (!isSpecialPrize && !isGrandPrize) {
+                    canCancelByTouchingOutside = true
+                    setCanceledOnTouchOutside(true)
+
+                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
+                }
+
                 scratchView.postDelayed({
-                    dismiss()
+                    if (isShowing) dismiss()
                 }, delayTime)
             }
         }
+    }
+
+    // 👇 3. 替換整段 onTouchEvent：配合穿透事件，讓點擊外部時也能自我關閉
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // 處理穿透點擊事件 (ACTION_OUTSIDE)
+        if (event.action == MotionEvent.ACTION_OUTSIDE) {
+            if (canCancelByTouchingOutside) {
+                dismiss()
+            }
+            return true
+        }
+        if (!canCancelByTouchingOutside && event.action == MotionEvent.ACTION_DOWN) {
+            return true
+        }
+        return super.onTouchEvent(event)
     }
 
     /**
@@ -234,9 +234,14 @@ class ScratchDialog(
                     showBackConfirmationDialog()
                 } else if (isPlayingSound) {
                     // 情況2：正在播放音效（已經刮完或點了一鍵刮開）
-                    // 此時不允許返回，需要等音效播完
-                    android.util.Log.d("ScratchDialog", "【返回鍵】音效播放中，不允許返回")
-                    // 不處理，保持對話框開啟
+                    // 🌟 【UX 急性子優化】：音效播放中，若是一般數字允許返回鍵提早關閉！
+                    if (!isSpecialPrize && !isGrandPrize) {
+                        android.util.Log.d("ScratchDialog", "【返回鍵】一般數字播放音效中，允許玩家提早返回")
+                        dismiss() // 呼叫 dismiss 會自動釋放 MediaPlayer 並停止音效
+                    } else {
+                        android.util.Log.d("ScratchDialog", "【返回鍵】大獎或特獎音效播放中，強制聽完不可返回")
+                        // 不處理，保持對話框開啟
+                    }
                 } else {
                     // 情況3：還沒開始刮卡，正常關閉
                     android.util.Log.d("ScratchDialog", "【返回鍵】玩家未開始刮卡，正常關閉")
@@ -396,13 +401,6 @@ class ScratchDialog(
             @Suppress("DEPRECATION")
             return networkInfo != null && networkInfo.isConnected
         }
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!canCancelByTouchingOutside && event.action == MotionEvent.ACTION_DOWN) {
-            return true
-        }
-        return super.onTouchEvent(event)
     }
 
     override fun onStart() {

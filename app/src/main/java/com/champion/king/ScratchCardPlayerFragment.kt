@@ -65,6 +65,11 @@ class ScratchCardPlayerFragment : Fragment() {
     private val networkHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var networkLoopStarted = false
 
+    // ✅ 新增：記錄目前的 Dialog 實體，用來做無縫接軌判斷
+    private var currentScratchDialog: ScratchDialog? = null
+    // ✅ 新增：本地樂觀更新防呆鎖，避免網路慢時玩家狂點同一個格子
+    private val optimisticallyScratchedCells = mutableSetOf<Int>()
+
     companion object {
         private const val TAG = "ScratchCardPlayerFragment"
     }
@@ -119,6 +124,214 @@ class ScratchCardPlayerFragment : Fragment() {
 
         // ✅ 載入刮刮卡（有網路會正常顯示格子；沒網路會顯示提示文字）
         loadUserScratchCards()
+    }
+
+    // 👇 1. 替換 setupCell：加入強制中斷舊視窗的邏輯
+    private fun setupCell(cellView: View, cellNumber: Int, serialNumber: String, card: ScratchCard) {
+        val numberConfig = card.numberConfigurations?.find { it.id == cellNumber }
+        val isScratched = numberConfig?.scratched == true
+        val number = numberConfig?.number
+
+        updateCellDisplay(cellView, cellNumber, isScratched, number)
+
+        cellView.setOnClickListener {
+            // 🛑 本地樂觀更新防呆：避免網路慢時，玩家重複點擊已經刮開(但DB還沒回傳)的格子
+            if (optimisticallyScratchedCells.contains(cellNumber)) {
+                return@setOnClickListener
+            }
+
+            // ✅ 核心優化：若已有刮卡視窗在顯示中
+            if (isScratchDialogShowing) {
+                // 檢查舊視窗是否允許被瞬間中斷 (一般數字且已刮完)
+                if (currentScratchDialog?.canBeInstantlyDismissed() == true) {
+                    Log.d(TAG, "偵測到玩家快速點擊下一個刮格，強制關閉舊視窗並放行新點擊！")
+                    currentScratchDialog?.dismiss()
+                    currentScratchDialog = null
+                    isScratchDialogShowing = false // 強制解除鎖定
+                } else {
+                    return@setOnClickListener
+                }
+            }
+
+            if (isProcessingClick) return@setOnClickListener
+
+            val refreshedConfig = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }
+            val isAlreadyScratched = refreshedConfig?.scratched == true
+
+            if (isAlreadyScratched) return@setOnClickListener
+
+            if (!isNetworkAvailable()) {
+                activity?.let { ToastManager.show(it, "偵測到網路異常，請檢查連線") }
+                return@setOnClickListener
+            }
+
+            val isReallyConnected = (activity as? MainActivity)?.isFirebaseConnected ?: false
+            if (!isReallyConnected) {
+                activity?.let { ToastManager.show(it, "資料庫連線中斷，請確認網路狀態後再試") }
+                return@setOnClickListener
+            }
+
+            if (refreshedConfig?.scratched != true && number != null) {
+                val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return@setOnClickListener
+
+                isProcessingClick = true
+                val pingRef = database.child("users").child(userKey).child("ping")
+
+                cellView.isEnabled = false
+                var isAcknowledged = false
+                var isTimedOut = false
+
+                val timeoutHandler = Handler(Looper.getMainLooper())
+                val timeoutRunnable = Runnable {
+                    if (!isAcknowledged) {
+                        isTimedOut = true
+                        cellView.isEnabled = true
+                        isProcessingClick = false
+                        activity?.let { ToastManager.show(it, "網路不穩定，無法開啟刮卡，請稍後再試") }
+                    }
+                }
+
+                timeoutHandler.postDelayed(timeoutRunnable, 1500)
+
+                pingRef.setValue(ServerValue.TIMESTAMP).addOnCompleteListener { task ->
+                    isAcknowledged = true
+                    timeoutHandler.removeCallbacks(timeoutRunnable)
+
+                    if (isTimedOut) return@addOnCompleteListener
+
+                    cellView.isEnabled = true
+                    isProcessingClick = false
+
+                    if (task.isSuccessful) {
+                        if (isScratchDialogShowing) return@addOnCompleteListener
+
+                        isScratchDialogShowing = true
+                        scratchingCells.add(cellNumber)
+                        updateCellDisplay(cellView, cellNumber, false, number)
+
+                        val isSecondToLast = isSecondToLastScratch()
+                        val hasUnscatchedPrizes = hasUnscatchedPrizes()
+
+                        (activity as? MainActivity)?.enableImmersiveMode()
+
+                        val dialog = ScratchDialog(
+                            requireContext(),
+                            number,
+                            isSpecialPrize(number),
+                            isGrandPrize(number),
+                            isSecondToLast,
+                            hasUnscatchedPrizes,
+                            onScratchStart = { writeTempScratch(serialNumber, cellNumber) },
+                            onScratchComplete = { scratchCell(serialNumber, cellNumber, cellView) },
+                            onTimeoutForceReveal = { scratchCell(serialNumber, cellNumber, cellView) }
+                        )
+
+                        // 🌟 記錄目前正在顯示的視窗實體
+                        currentScratchDialog = dialog
+
+                        dialog.setOnDismissListener {
+                            isScratchDialogShowing = false
+                            // 視窗關閉時清除實體紀錄
+                            if (currentScratchDialog == dialog) {
+                                currentScratchDialog = null
+                            }
+
+                            val hasStartedScratching = dialog.hasStartedScratching()
+                            if (!hasStartedScratching) {
+                                scratchingCells.remove(cellNumber)
+                                updateCellDisplay(cellView, cellNumber, false, number)
+                            }
+                            (activity as? MainActivity)?.enableImmersiveMode()
+                        }
+                        dialog.show()
+                    } else {
+                        activity?.let { ToastManager.show(it, "網路異常，請重試") }
+                    }
+                }
+            }
+        }
+    }
+
+    // 👇 2. 替換 scratchCell：加入防呆鎖註記
+    private fun scratchCell(serialNumber: String, cellNumber: Int, cellView: View) {
+        val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        // 🌟 樂觀更新與防呆
+        optimisticallyScratchedCells.add(cellNumber)
+        val number = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }?.number
+        scratchingCells.remove(cellNumber)
+        updateCellDisplay(cellView, cellNumber, true, number)
+
+        database.child("users")
+            .child(currentUserFirebaseKey)
+            .child("scratchCards")
+            .child(serialNumber)
+            .child("numberConfigurations")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for ((index, child) in snapshot.children.withIndex()) {
+                        val id = child.child("id").getValue(Int::class.java)
+                        if (id == cellNumber) {
+                            val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
+                            if (alreadyScratched) return
+
+                            val cellRef = database.child("users")
+                                .child(currentUserFirebaseKey)
+                                .child("scratchCards")
+                                .child(serialNumber)
+                                .child("numberConfigurations")
+                                .child(index.toString())
+
+                            val updates = mapOf<String, Any>(
+                                "scratched" to true,
+                                "scratchedAt" to ServerValue.TIMESTAMP
+                            )
+
+                            cellRef.updateChildren(updates)
+                                .addOnSuccessListener {
+                                    updateRemainingScratchesDisplay()
+                                    val sp = requireContext().getSharedPreferences("LocalPendingScratches_$currentUserFirebaseKey", Context.MODE_PRIVATE)
+                                    val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                                    pendingSet.remove("$serialNumber:$cellNumber")
+                                    sp.edit().putStringSet("pending_scratches", pendingSet).apply()
+                                }
+                                .addOnFailureListener {
+                                    optimisticallyScratchedCells.remove(cellNumber) // 失敗則解除鎖定
+                                    scratchingCells.remove(cellNumber)
+                                    updateCellDisplay(cellView, cellNumber, false, null)
+                                }
+                            break
+                        }
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    optimisticallyScratchedCells.remove(cellNumber)
+                    scratchingCells.remove(cellNumber)
+                    cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }
+                }
+            })
+    }
+
+    // 👇 3. 替換 displayNoScratchCardMessage：重置版面時清空防呆鎖
+    private fun displayNoScratchCardMessage(message: String) {
+        if (!canSafelyUpdateUi()) return
+
+        scratchCardContainer.removeAllViews()
+        noScratchCardText.text = message
+        noScratchCardText.visibility = View.VISIBLE
+        cellViews.clear()
+        currentScratchCard = null
+        scratchingCells.clear()
+        optimisticallyScratchedCells.clear() // 🌟 清空防呆鎖
+
+        remainingScratchTextView?.apply {
+            text = ""
+            visibility = View.GONE
+        }
+
+        cellAnimators.keys.toList().forEach { cellNumber ->
+            stopCellAnimation(cellNumber)
+        }
     }
 
     override fun onDetach() {
@@ -450,160 +663,6 @@ class ScratchCardPlayerFragment : Fragment() {
         return Triple(totalCells, scratchedCount, remainingCount)
     }
 
-    private fun setupCell(cellView: View, cellNumber: Int, serialNumber: String, card: ScratchCard) {
-        val numberConfig = card.numberConfigurations?.find { it.id == cellNumber }
-        val isScratched = numberConfig?.scratched == true
-        val number = numberConfig?.number
-
-        updateCellDisplay(cellView, cellNumber, isScratched, number)
-
-        // 設定點擊事件
-        cellView.setOnClickListener {
-
-            // ✅ 若已有刮卡視窗在顯示中，或【正在處理其他格子的點擊】，直接忽略這次點擊
-            if (isScratchDialogShowing || isProcessingClick) {
-                Log.d(TAG, "已有刮卡視窗顯示中或正在處理點擊，忽略格子 $cellNumber 的點擊")
-                return@setOnClickListener
-            }
-
-            // ✅ 每次點擊都重新檢查最新狀態，避免使用舊的 numberConfig
-            val refreshedConfig = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }
-            val isAlreadyScratched = refreshedConfig?.scratched == true
-
-            // ✅ 若已刮開，完全忽略點擊
-            if (isAlreadyScratched) {
-                Log.d(TAG, "⚠️ 格子 $cellNumber 已刮開，忽略點擊。")
-                return@setOnClickListener
-            }
-
-            // 🛑 第 1 道鎖：檢查 Android 系統是否驗證過有真實外網
-            if (!isNetworkAvailable()) {
-                Log.w(TAG, "【網路檢查】無真實網際網路存取，拒絕開啟刮卡視窗")
-                activity?.let { ToastManager.show(it, "偵測到網路異常，請檢查是否連上有效的 Wi-Fi 或行動網路") }
-                return@setOnClickListener
-            }
-
-            // 🛑 第 2 道鎖：檢查 Firebase 真實連線狀態
-            val isReallyConnected = (activity as? MainActivity)?.isFirebaseConnected ?: false
-            if (!isReallyConnected) {
-                Log.w(TAG, "【連線檢查】未連接至資料庫，拒絕開啟刮卡視窗")
-                activity?.let { ToastManager.show(it, "資料庫連線中斷，請確認網路狀態後再試") }
-                return@setOnClickListener
-            }
-
-            Log.d(TAG, "【連線檢查】資料庫連線正常，準備進行主動敲門測試")
-
-            // ✅ 只允許「未刮開」且 number 有效的格子進行互動
-            if (refreshedConfig?.scratched != true && number != null) {
-
-                val userKey = userSessionProvider?.getCurrentUserFirebaseKey()
-                if (userKey.isNullOrEmpty()) {
-                    activity?.let { ToastManager.show(it, "發生錯誤：找不到使用者資訊") }
-                    return@setOnClickListener
-                }
-
-                // 🌟 鎖定全域點擊，避免玩家在等待回應的 1.5 秒內狂點或多指點擊其他格子
-                isProcessingClick = true
-
-                // 🛑 終極防線：主動敲門測試 (Active Pre-flight Check)
-                // 目的：破解假 Wi-Fi / TCP Half-Open 幽靈空窗期
-                val pingRef = database.child("users").child(userKey).child("ping")
-
-                // 暫時鎖住格子，避免玩家這 1.5 秒內狂點
-                cellView.isEnabled = false
-                var isAcknowledged = false
-                var isTimedOut = false
-
-                val timeoutHandler = Handler(Looper.getMainLooper())
-                val timeoutRunnable = Runnable {
-                    if (!isAcknowledged) {
-                        isTimedOut = true
-                        cellView.isEnabled = true // 解鎖
-                        isProcessingClick = false // 🌟 解鎖全域點擊
-                        Log.w(TAG, "【敲門測試】1.5秒內未收到伺服器回應，判定為假性連線(空窗期)")
-                        activity?.let { ToastManager.show(it, "網路不穩定，無法開啟刮卡，請稍後再試") }
-                    }
-                }
-
-                // 開始 1.5 秒倒數
-                timeoutHandler.postDelayed(timeoutRunnable, 1500)
-
-                // 送出極小封包 (時間戳記) 給伺服器，要求伺服器必須回應
-                pingRef.setValue(ServerValue.TIMESTAMP).addOnCompleteListener { task ->
-                    isAcknowledged = true
-                    timeoutHandler.removeCallbacks(timeoutRunnable)
-
-                    // 如果已經逾時（玩家已被提示不穩），就算後來網路恢復，也不要突然彈出視窗嚇人
-                    if (isTimedOut) return@addOnCompleteListener
-
-                    cellView.isEnabled = true // 解鎖
-                    isProcessingClick = false // 🌟 收到伺服器回應，解鎖全域點擊
-
-                    if (task.isSuccessful) {
-                        // 🌟 終極防呆：再次確認這瞬間是否已經有視窗正在顯示
-                        if (isScratchDialogShowing) return@addOnCompleteListener
-
-                        Log.d(TAG, "【敲門測試】伺服器秒回！確認為真實網路，開啟刮卡視窗")
-
-                        // ✅ 通過所有測試，真正開啟小視窗
-                        isScratchDialogShowing = true
-
-                        scratchingCells.add(cellNumber)
-                        updateCellDisplay(cellView, cellNumber, false, number)
-
-                        val isSecondToLast = isSecondToLastScratch()
-                        val hasUnscatchedPrizes = hasUnscatchedPrizes()
-                        val (totalCells, scratchedCount, remainingCount) = getScratchCardStats()
-                        Log.d(TAG, "點擊格子 $cellNumber: 總格數=$totalCells, 已刮=$scratchedCount, 剩餘=$remainingCount")
-                        Log.d(TAG, "是否倒數第二刮=$isSecondToLast, 剩餘是否有獎項=$hasUnscatchedPrizes")
-
-                        (activity as? MainActivity)?.enableImmersiveMode()
-
-                        // 顯示刮卡彈窗
-                        val dialog = ScratchDialog(
-                            requireContext(),
-                            number,
-                            isSpecialPrize(number),
-                            isGrandPrize(number),
-                            isSecondToLast,
-                            hasUnscatchedPrizes,
-                            onScratchStart = {
-                                Log.d(TAG, "【防弊機制觸發】格子 $cellNumber 開始刮卡")
-                                writeTempScratch(serialNumber, cellNumber)
-                            },
-                            onScratchComplete = {
-                                Log.d(TAG, "格子 $cellNumber 刮卡完成，標記 scratched = true")
-                                scratchCell(serialNumber, cellNumber, cellView)
-                            },
-                            onTimeoutForceReveal = {
-                                // ✅ 你要的：刮一點點沒刮乾淨跑掉 -> 60秒後強制視為刮開
-                                Log.d(TAG, "【無動作逾時】格子 $cellNumber 已開始刮但未完成，強制視為刮開")
-                                scratchCell(serialNumber, cellNumber, cellView)
-                            }
-                        )
-
-                        dialog.setOnDismissListener {
-                            // ✅ 小視窗關閉後解除鎖定，允許下一次點擊
-                            isScratchDialogShowing = false
-
-                            val hasStartedScratching = dialog.hasStartedScratching()
-                            if (!hasStartedScratching) {
-                                scratchingCells.remove(cellNumber)
-                                updateCellDisplay(cellView, cellNumber, false, number)
-                            }
-                            (activity as? MainActivity)?.enableImmersiveMode()
-                        }
-                        dialog.show()
-
-                    } else {
-                        Log.w(TAG, "【敲門測試】封包傳送失敗: ${task.exception?.message}")
-                        activity?.let { ToastManager.show(it, "網路異常，請重試") }
-                    }
-                }
-            }
-        }
-    }
-
     // ✅ 寫入 scratchCardsTemp 的防弊暫存紀錄
     private fun writeTempScratch(serialNumber: String, cellNumber: Int) {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
@@ -829,85 +888,6 @@ class ScratchCardPlayerFragment : Fragment() {
         }
     }
 
-    private fun scratchCell(serialNumber: String, cellNumber: Int, cellView: View) {
-        val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
-
-        // 🌟 【樂觀 UI 更新 Optimistic Update】：不等資料庫回傳，直接在畫面上翻開牌！
-        // 先從現有的暫存卡片中找出這個格子的號碼
-        val number = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }?.number
-        scratchingCells.remove(cellNumber) // 立刻移除正在刮的標記 (停止漩渦)
-        updateCellDisplay(cellView, cellNumber, true, number) // 強制畫面顯示為「已刮開」狀態
-
-        // 接著才在背景默默送出 Firebase 更新要求 (此時玩家已經看到結果，不會覺得卡頓)
-        database.child("users")
-            .child(currentUserFirebaseKey)
-            .child("scratchCards")
-            .child(serialNumber)
-            .child("numberConfigurations")
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    // 遍歷 numberConfigurations 找到對應 id 的項目
-                    for ((index, child) in snapshot.children.withIndex()) {
-                        val id = child.child("id").getValue(Int::class.java)
-                        if (id == cellNumber) {
-
-                            // ✅ 若已刮開就不重複寫入 scratchedAt（保留第一次刮開時間）
-                            val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
-                            if (alreadyScratched) {
-                                Log.d(TAG, "格子 $cellNumber 已是刮開狀態，略過寫入 scratchedAt")
-                                return
-                            }
-
-                            val cellRef = database.child("users")
-                                .child(currentUserFirebaseKey)
-                                .child("scratchCards")
-                                .child(serialNumber)
-                                .child("numberConfigurations")
-                                .child(index.toString())
-
-                            // ✅ 一次更新 scratched + scratchedAt
-                            val updates = mapOf<String, Any>(
-                                "scratched" to true,
-                                "scratchedAt" to ServerValue.TIMESTAMP
-                            )
-
-                            cellRef.updateChildren(updates)
-                                .addOnSuccessListener {
-                                    updateRemainingScratchesDisplay()
-                                    Log.d(TAG, "格子 $cellNumber 刮開成功（已寫入 scratchedAt）")
-
-                                    // 🌟 伺服器已確認收到，解除本地硬碟防弊鎖
-                                    val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: ""
-                                    val sp = requireContext().getSharedPreferences("LocalPendingScratches_$currentUserFirebaseKey", Context.MODE_PRIVATE)
-                                    val pendingSet = sp.getStringSet("pending_scratches", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-                                    pendingSet.remove("$serialNumber:$cellNumber")
-                                    sp.edit().putStringSet("pending_scratches", pendingSet).apply()
-                                    Log.d(TAG, "🔓 [本地硬碟防弊] 伺服器已接收，從本地備用紀錄移除格子 $cellNumber")
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e(TAG, "刮開格子 $cellNumber 失敗: ${e.message}", e)
-                                    activity?.let { ToastManager.show(it, "刮卡操作失敗") }
-                                    // ❌ 失敗時：倒退回未刮開狀態（防護機制）
-                                    scratchingCells.remove(cellNumber)
-                                    updateCellDisplay(cellView, cellNumber, false, null)
-                                }
-
-                            break
-                        }
-                    }
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e(TAG, "讀取格子配置失敗: ${error.message}", error.toException())
-                    activity?.let { ToastManager.show(it, "刮卡操作失敗") }
-                    // ❌ 失敗時：倒退回未刮開狀態（防護機制）
-                    scratchingCells.remove(cellNumber)
-                    cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }
-                }
-            })
-    }
-
     /**
      * 更新左側下方顯示的「剩餘刮數 / 總刮數（版型）」- 玩家頁面
      */
@@ -926,28 +906,6 @@ class ScratchCardPlayerFragment : Fragment() {
 
         view.text = "$remaining/$total"
         view.visibility = View.VISIBLE
-    }
-
-    private fun displayNoScratchCardMessage(message: String) {
-        if (!canSafelyUpdateUi()) return
-
-        scratchCardContainer.removeAllViews()
-        noScratchCardText.text = message
-        noScratchCardText.visibility = View.VISIBLE
-        cellViews.clear()
-        currentScratchCard = null
-        scratchingCells.clear()
-
-        // 額外：沒有刮卡時隱藏剩餘刮數顯示
-        remainingScratchTextView?.apply {
-            text = ""
-            visibility = View.GONE
-        }
-
-        // 清理所有動畫
-        cellAnimators.keys.toList().forEach { cellNumber ->
-            stopCellAnimation(cellNumber)
-        }
     }
 
     private fun isSpecialPrize(number: Int): Boolean {
