@@ -109,7 +109,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         loadSplitScratchCard()
     }
 
-    // 👇 1. 替換 setupBoard：加入強制中斷舊視窗的邏輯
     private fun setupBoard(containerView: View, serialNumber: String, board: com.champion.king.model.Board) {
         populateBoardHeader(containerView, board)
         val gridLayout = containerView.findViewById<android.view.ViewGroup>(R.id.gridLayout)
@@ -133,11 +132,12 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
             updateBoardCellDisplay(cellView, cellKey, config?.scratched == true, config?.number, board)
 
+            // 🌟 極致靈敏優化：將點擊綁定在涵蓋面積最大的 frameLayout 上，確保快速盲點也不會失效
             frameLayout.setOnClickListener {
                 // 🛑 本地樂觀更新防呆
                 if (optimisticallyScratchedCells.contains(cellKey)) return@setOnClickListener
 
-                // ✅ 核心優化：若已有刮卡視窗在顯示中
+                // ✅ 強制中斷舊視窗並放行新點擊
                 if (isScratchDialogShowing) {
                     if (currentScratchDialog?.canBeInstantlyDismissed() == true) {
                         currentScratchDialog?.dismiss()
@@ -357,7 +357,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
 
                 if (targetCard == null || targetCard.splitMode.isNullOrEmpty()) {
                     Log.w(TAG, "找不到使用中的分割版面母卡")
-                    // 🌟 呼叫完美防護 Function
                     displayNoCardMessage("目前沒有可用的分割版面刮刮卡")
                     return
                 }
@@ -366,7 +365,10 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                 noCardTextView.visibility = View.GONE
                 targetCard.serialNumber = targetSerial
 
-                val needRebuild = currentMasterCard?.serialNumber != targetSerial || mainContentContainer.childCount <= 1
+                // 🌟 核心破案修正：改用 cellViews 是否為空來判斷 UI 建立狀態
+                // 徹底解決舊版 childCount 判斷錯誤導致每次都 rebuild 造成 800ms 卡頓的問題！
+                val uiNotBuiltYet = cellViews.isEmpty()
+                val needRebuild = currentMasterCard?.serialNumber != targetSerial || uiNotBuiltYet
 
                 currentMasterCard = targetCard
 
@@ -380,9 +382,7 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                // 🌟 修正：如果 Fragment 已經被拔除 (例如正在登出)，直接終止，不要去更新 UI
                 if (!isAdded) return
-
                 Log.e(TAG, "載入失敗: ${error.message}")
                 if (!isNetworkAvailable()) {
                     displayNoCardMessage("目前未連線網路，請先連接 Wi-Fi / 行動網路後再使用。")
