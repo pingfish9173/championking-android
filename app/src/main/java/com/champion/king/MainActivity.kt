@@ -2313,6 +2313,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         isUpdateDialogShowing = true
         val dialog = builder.create()
+
+        // 👇 加入這一行，強制要求使用者只能透過按鈕操作，點擊外部區域將不會有任何反應
+        dialog.setCanceledOnTouchOutside(false)
+
         dialog.setOnDismissListener {
             isUpdateDialogShowing = false
         }
