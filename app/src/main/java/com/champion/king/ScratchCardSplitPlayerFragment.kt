@@ -757,11 +757,19 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         }
     }
 
-    // ✅ 正式刮開寫入 Firebase (增強 Log 版本)
+    // ✅ 正式刮開寫入 Firebase (增強 Log 版本 + 樂觀更新)
     private fun scratchCell(serialNumber: String, boardId: String, cellNumber: Int, cellKey: String, cellView: View) {
         val userKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
         Log.d(TAG, "準備寫入 Firebase -> user:$userKey, serial:$serialNumber, board:$boardId, cell:$cellNumber")
+
+        // 🌟 【樂觀 UI 更新 Optimistic Update】：不等資料庫回傳，直接在畫面上翻開牌！
+        val board = currentMasterCard?.boards?.get(boardId)
+        val number = board?.numberConfigurations?.find { it.id == cellNumber }?.number
+        if (board != null) {
+            scratchingCells.remove(cellKey) // 立刻移除正在刮的標記 (停止漩渦)
+            updateBoardCellDisplay(cellView, cellKey, true, number, board) // 強制畫面顯示為「已刮開」狀態
+        }
 
         // 🌟 路徑：users/uid/scratchCards/serial/boards/boardId/numberConfigurations
         val targetRef = database.child("users").child(userKey).child("scratchCards")
@@ -781,7 +789,6 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                         found = true
                         val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
                         if (alreadyScratched) {
-                            scratchingCells.remove(cellKey)
                             Log.d(TAG, "⚠️ 格子 $cellKey 已經是刮開狀態，略過重複寫入")
                             return
                         }
@@ -803,8 +810,8 @@ class ScratchCardSplitPlayerFragment : Fragment() {
                             }
                             .addOnFailureListener { e ->
                                 Log.e(TAG, "❌ 寫入 Firebase 失敗: ${e.message}")
+                                // ❌ 失敗時：倒退回未刮開狀態（防護機制）
                                 scratchingCells.remove(cellKey)
-                                val board = currentMasterCard?.boards?.get(boardId)
                                 if (board != null) updateBoardCellDisplay(cellView, cellKey, false, null, board)
                             }
                         break
@@ -817,7 +824,9 @@ class ScratchCardSplitPlayerFragment : Fragment() {
             }
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "❌ 讀取資料庫失敗: ${error.message}")
+                // ❌ 失敗時：倒退回未刮開狀態（防護機制）
                 scratchingCells.remove(cellKey)
+                if (board != null) updateBoardCellDisplay(cellView, cellKey, false, null, board)
             }
         })
     }

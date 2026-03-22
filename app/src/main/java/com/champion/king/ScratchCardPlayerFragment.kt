@@ -832,6 +832,13 @@ class ScratchCardPlayerFragment : Fragment() {
     private fun scratchCell(serialNumber: String, cellNumber: Int, cellView: View) {
         val currentUserFirebaseKey = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
+        // 🌟 【樂觀 UI 更新 Optimistic Update】：不等資料庫回傳，直接在畫面上翻開牌！
+        // 先從現有的暫存卡片中找出這個格子的號碼
+        val number = currentScratchCard?.numberConfigurations?.find { it.id == cellNumber }?.number
+        scratchingCells.remove(cellNumber) // 立刻移除正在刮的標記 (停止漩渦)
+        updateCellDisplay(cellView, cellNumber, true, number) // 強制畫面顯示為「已刮開」狀態
+
+        // 接著才在背景默默送出 Firebase 更新要求 (此時玩家已經看到結果，不會覺得卡頓)
         database.child("users")
             .child(currentUserFirebaseKey)
             .child("scratchCards")
@@ -848,7 +855,6 @@ class ScratchCardPlayerFragment : Fragment() {
                             // ✅ 若已刮開就不重複寫入 scratchedAt（保留第一次刮開時間）
                             val alreadyScratched = child.child("scratched").getValue(Boolean::class.java) ?: false
                             if (alreadyScratched) {
-                                scratchingCells.remove(cellNumber)
                                 Log.d(TAG, "格子 $cellNumber 已是刮開狀態，略過寫入 scratchedAt")
                                 return
                             }
@@ -882,7 +888,7 @@ class ScratchCardPlayerFragment : Fragment() {
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "刮開格子 $cellNumber 失敗: ${e.message}", e)
                                     activity?.let { ToastManager.show(it, "刮卡操作失敗") }
-                                    // 失敗時也要移除正在刮的標記
+                                    // ❌ 失敗時：倒退回未刮開狀態（防護機制）
                                     scratchingCells.remove(cellNumber)
                                     updateCellDisplay(cellView, cellNumber, false, null)
                                 }
@@ -895,7 +901,7 @@ class ScratchCardPlayerFragment : Fragment() {
                 override fun onCancelled(error: DatabaseError) {
                     Log.e(TAG, "讀取格子配置失敗: ${error.message}", error.toException())
                     activity?.let { ToastManager.show(it, "刮卡操作失敗") }
-                    // 失敗時也要移除正在刮的標記
+                    // ❌ 失敗時：倒退回未刮開狀態（防護機制）
                     scratchingCells.remove(cellNumber)
                     cellViews[cellNumber]?.let { updateCellDisplay(it, cellNumber, false, null) }
                 }

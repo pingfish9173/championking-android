@@ -183,8 +183,12 @@ class ScratchDialog(
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
+
+                // 🌟 【優化核心】：不再等待音效播完，瞬間呼叫 onScratchComplete 讓背景去寫資料庫
+                onScratchComplete()
+
+                // 只有 dialog.dismiss 需要等音效播完才執行
                 scratchView.postDelayed({
-                    onScratchComplete()
                     dismiss()
                 }, delayTime)
             }
@@ -203,8 +207,12 @@ class ScratchDialog(
                 val soundResId = getSoundResource()
                 val delayTime = getSoundDuration(soundResId)
                 playSound(soundResId)
+
+                // 🌟 【優化核心】：瞬間呼叫 onScratchComplete 讓背景去寫資料庫
+                onScratchComplete()
+
+                // 只有 dialog.dismiss 需要等音效播完才執行
                 scratchView.postDelayed({
-                    onScratchComplete()
                     dismiss()
                 }, delayTime)
             }
