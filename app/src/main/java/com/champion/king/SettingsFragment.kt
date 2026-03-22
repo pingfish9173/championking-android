@@ -1681,18 +1681,32 @@ class SettingsFragment : Fragment() {
         scratchTypeLabel?.visibility = View.VISIBLE
     }
 
-    // 🌟 修改點 13：傳入字串
     private fun updatePreviewForScratchType(scratchTypeStr: String) {
-        val selectedCard = viewModel.cards.value[shelfManager.selectedShelfOrder]
+        val order = shelfManager.selectedShelfOrder
+        val selectedCard = viewModel.cards.value[order]
 
         if (selectedCard != null) return
 
-        Log.d("SettingsFragment", "未設置板位：立即更新預覽為 ${scratchTypeStr}刮")
+        // 🌟 核心修正：檢查是否為切換不同的版型，若是則必須先清除舊快取，避免分割版面殘留舊資料
+        val draft = viewModel.getDraft(order)
+        val draftTypeStr = if (draft?.pitchType?.contains("|") == true) {
+            draft.pitchType.substringAfter("|", "")
+        } else {
+            draft?.scratchType?.toString() ?: ""
+        }
+
+        if (draftTypeStr.isNotEmpty() && draftTypeStr != scratchTypeStr) {
+            android.util.Log.d("SettingsFragment", "偵測到版型變更 ($draftTypeStr -> $scratchTypeStr)，清除舊草稿與快取")
+            viewModel.clearDraft(order)
+            clearSplitDraftCache(order)
+        }
+
+        android.util.Log.d("SettingsFragment", "未設置板位：立即更新預覽為 ${scratchTypeStr}刮")
 
         displayScratchBoardPreview(scratchTypeStr, null)
         setPrizeControlsEnabled(true)
 
-        saveDraftIfNeeded(shelfManager.selectedShelfOrder)
+        saveDraftIfNeeded(order)
     }
 
     private fun updateParametersTitle(order: Int?) {
@@ -1719,9 +1733,17 @@ class SettingsFragment : Fragment() {
             if (scratchTypeStr.contains("x")) {
                 val subBoardScratchCount = scratchTypeStr.substringBefore("x").toIntOrNull() ?: 20
                 val boardsCount = scratchTypeStr.substringAfter("x").toIntOrNull() ?: 4
-                val boardNames = listOf("A", "B", "C", "D").take(boardsCount)
+
+                // 🌟 順手修復：如果未來有 x6 的版面，這裡必須要有 E 跟 F 才能正常 render
+                val boardNames = listOf("A", "B", "C", "D", "E", "F").take(boardsCount)
                 val splitNumbers = mutableMapOf<String, List<Int>>()
                 val order = shelfManager.selectedShelfOrder
+
+                // 🌟 核心防呆：檢查快取的版型是否與即將切換的版型完全吻合（子板數與每板刮數）
+                val cachedBoards = splitBoardConfigurationsCache[order]
+                val isCacheValid = cachedBoards != null &&
+                        cachedBoards.size == boardsCount &&
+                        cachedBoards.values.firstOrNull()?.size == subBoardScratchCount
 
                 // 🌟 情況 A：正在載入已儲存的分割版面
                 if (savedCard != null && savedCard.splitMode == scratchTypeStr) {
@@ -1816,8 +1838,8 @@ class SettingsFragment : Fragment() {
                     buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                     return@safeExecute
                 }
-                // 🌟 情況 B：發現草稿暫存！(使用者從背包或商城切換回來)
-                else if (splitBoardConfigurationsCache.containsKey(order)) {
+                // 🌟 情況 B：發現草稿暫存！(使用者從背包或商城切換回來，且快取版型吻合)
+                else if (splitBoardConfigurationsCache.containsKey(order) && isCacheValid) {
                     val isSameDraftRendered = binding.scratchBoardArea.tag == "draft_$order"
                     val hasViews = binding.scratchBoardArea.childCount > 0
 
@@ -1856,8 +1878,8 @@ class SettingsFragment : Fragment() {
                     buildAllSplitPreviews(binding.scratchBoardArea, splitNumbers)
                     return@safeExecute
                 }
-                // 🌟 情況 C：全新生成 (選擇下拉選單)
-                else if (existingConfigs == null) {
+                // 🌟 情況 C：全新生成 (選擇下拉選單，或快取不符)
+                else if (existingConfigs == null || !isCacheValid) {
                     binding.scratchBoardArea.tag = null
                     splitBoardSpecialPrizes.clear()
                     splitBoardGrandPrizes.clear()
