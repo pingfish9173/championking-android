@@ -209,6 +209,8 @@ class SettingsFragment : Fragment() {
     }
     // 🌟 新增：分割版面專屬的格子數字配置暫存區
     private val splitBoardConfigurations = mutableMapOf<String, List<NumberConfiguration>>()
+    // 👇 新增這行：專門用來鎖定網路檢查，避免跟儲存鎖打架
+    private var isPingingNetwork = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -285,6 +287,42 @@ class SettingsFragment : Fragment() {
         // 如果都是未設置，選擇預設版位
         Log.d("SettingsFragment", "所有版位都未設置，選擇預設版位：${ScratchCardConstants.DEFAULT_SHELF_ORDER}")
         return ScratchCardConstants.DEFAULT_SHELF_ORDER
+    }
+
+    // 🌟 核心工具方法：主動發送真實的 HTTP 請求，徹底戳破假連線
+    private fun executeWithRealConnectionCheck(action: () -> Unit) {
+        // 防連點：如果正在檢查網路或正在儲存中，直接阻擋
+        if (isPingingNetwork || isSavingInProgress) return
+        isPingingNetwork = true
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            // 切換到 IO 執行緒，發送一個極輕量的 HTTP GET 請求
+            val isReallyConnected = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    // 使用 Google 專門用來測試是否「真正連上外網」的 204 端點
+                    val url = java.net.URL("https://clients3.google.com/generate_204")
+                    val connection = url.openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 2000 // 2秒超時，數據機斷線2秒內直接報錯
+                    connection.readTimeout = 2000
+                    connection.requestMethod = "GET"
+                    connection.connect()
+
+                    // 如果真正連上外網，會收到 204 No Content
+                    connection.responseCode == 204
+                } catch (e: Exception) {
+                    false // 發生 Timeout 或無網路時，直接判定為斷線
+                }
+            }
+
+            isPingingNetwork = false // 檢查完畢，立刻釋放檢查鎖
+
+            if (!isReallyConnected) {
+                showToast("無法連線至資料庫，請檢查連線後再試")
+            } else {
+                // 確定網路真的暢通，放行執行原本的儲存/自動刮開等動作
+                action()
+            }
+        }
     }
 
     // ===========================================
@@ -974,6 +1012,12 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleSaveClick() {
+        executeWithRealConnectionCheck {
+            performSave()
+        }
+    }
+
+    private fun performSave() {
         // 分流點：如果目前在「子板聚焦模式」
         if (currentFocusedSubBoardId != null) {
             val boardName = currentFocusedSubBoardId!!
@@ -1349,21 +1393,27 @@ class SettingsFragment : Fragment() {
     }
 
     private fun handleToggleInUseClick() {
-        actionHandler.handleToggleInUse(shelfManager.selectedShelfOrder, viewModel.cards.value)
+        executeWithRealConnectionCheck {
+            actionHandler.handleToggleInUse(shelfManager.selectedShelfOrder, viewModel.cards.value)
+        }
     }
 
     private fun handleReturnClick() {
-        if (currentBillingMode == "RENTAL") {
-            return
+        executeWithRealConnectionCheck {
+            if (currentBillingMode == "RENTAL") {
+                return@executeWithRealConnectionCheck
+            }
+            actionHandler.handleReturn(shelfManager.selectedShelfOrder, viewModel.cards.value)
         }
-        actionHandler.handleReturn(shelfManager.selectedShelfOrder, viewModel.cards.value)
     }
 
     private fun handleDeleteClick() {
-        val order = shelfManager.selectedShelfOrder
-        viewModel.clearDraft(order)
-        clearSplitDraftCache(order) // 🌟 刪除時，同步清除快取
-        actionHandler.handleDelete(order, viewModel.cards.value)
+        executeWithRealConnectionCheck {
+            val order = shelfManager.selectedShelfOrder
+            viewModel.clearDraft(order)
+            clearSplitDraftCache(order) // 🌟 刪除時，同步清除快取
+            actionHandler.handleDelete(order, viewModel.cards.value)
+        }
     }
 
     private fun handleRefreshScratchClick() {
@@ -2473,6 +2523,12 @@ class SettingsFragment : Fragment() {
     // ===========================================
 
     private fun handleAutoScratchClick() {
+        executeWithRealConnectionCheck {
+            performAutoScratchAction()
+        }
+    }
+
+    private fun performAutoScratchAction() {
         val order = shelfManager.selectedShelfOrder
         val selectedCard = viewModel.cards.value[order]
         if (selectedCard == null) {
