@@ -792,6 +792,13 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         fragmentContainerPlayer = findViewById(R.id.main_content_container_player)
         watermarkOverlayContainerPlayer = findViewById(R.id.watermark_overlay_container_player)
 
+        if (BuildConfig.DEBUG) {
+            specialPrizeTextViewPlayer?.setOnClickListener {
+                Log.d(TAG, "🥷 觸發測試捷徑：點擊單一版面特獎圈圈，一鍵進入設置頁面！")
+                devBypassToSettings()
+            }
+        }
+
         val giveawayContainer = findViewById<View>(R.id.giveaway_count_container_player)
         giveawayContainer.setOnClickListener {
             val currentTime = System.currentTimeMillis()
@@ -2686,6 +2693,15 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
         private fun resetTimer() {
             startTimer()
+        }
+    }
+
+    fun devBypassToSettings() {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "🥷 開發者捷徑：直接切換到台主設置頁面")
+            unlockAppFromScreen() // 1. 解除玩家頁面的螢幕鎖定
+            render(Mode.MASTER)   // 2. 切換為台主版面
+            loadFragment(SettingsFragment(), containerIdFor(Mode.MASTER)) // 3. 直接載入設置頁面
         }
     }
 
