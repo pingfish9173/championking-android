@@ -766,14 +766,24 @@ class ScratchCardSplitPlayerFragment : Fragment() {
         else grandPrizeStr.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(number)
     }
 
+    // 👇 1. 替換這個函式：加入扣除本地樂觀更新的判斷
     private fun isSecondToLastScratch(board: com.champion.king.model.Board): Boolean {
-        val remaining = board.numberConfigurations?.count { it.scratched == false } ?: 0
+        val remaining = board.numberConfigurations?.count { config ->
+            val cellKey = "${board.id}_${config.id}"
+            // 🌟 核心修正：計算剩餘刮數時，必須扣除「本地端已標記刮開、但 Firebase 還沒同步回傳」的格子
+            config.scratched == false && !optimisticallyScratchedCells.contains(cellKey)
+        } ?: 0
         return remaining == 2
     }
 
+    // 👇 2. 替換這個函式：加入扣除本地樂觀更新的判斷
     private fun hasUnscatchedPrizes(board: com.champion.king.model.Board): Boolean {
         val unscratchedNumbers = board.numberConfigurations
-            ?.filter { it.scratched == false }
+            ?.filter { config ->
+                val cellKey = "${board.id}_${config.id}"
+                // 🌟 核心修正：檢查未開出的大獎時，也必須扣除「本地端已經先刮開」的格子
+                config.scratched == false && !optimisticallyScratchedCells.contains(cellKey)
+            }
             ?.mapNotNull { it.number } ?: emptyList()
         return unscratchedNumbers.any { isSpecialPrize(it, board) || isGrandPrize(it, board) }
     }
