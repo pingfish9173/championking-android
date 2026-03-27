@@ -1955,6 +1955,10 @@ class SettingsFragment : Fragment() {
             }
 
             binding.scratchBoardArea.removeAllViews()
+
+            // 🌟 核心修正：切換到未設置狀態時，必須清空 tag，避免分割版面切換回來時發生快取誤判！
+            binding.scratchBoardArea.tag = null
+
             val tv = TextView(requireContext()).apply {
                 text = "未設置"
                 textSize = 20f
