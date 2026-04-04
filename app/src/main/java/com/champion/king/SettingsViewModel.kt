@@ -140,7 +140,7 @@ class SettingsViewModel(
         }
     }
 
-    // 🌟 核心防護：將 ScratchCard 轉換為只有「已刮開」資料的安全公開結構，並加入帳號名稱
+    // 🌟 核心防護：將 ScratchCard 轉換為只有「已刮開」資料的安全公開結構，並加入帳號名稱與詳細歷程
     private fun generatePublicScratchBoardData(card: ScratchCard, accountName: String): Map<String, Any> {
         val publicData = mutableMapOf<String, Any>()
 
@@ -200,23 +200,37 @@ class SettingsViewModel(
                         } catch (e: Exception) {}
                     }
 
-                    val publicConfigs = mutableMapOf<String, Int>()
+                    // 🌟 核心升級：將 value 變成詳細的 Map 結構
+                    val publicConfigs = mutableMapOf<String, Any>()
                     configsList?.forEach { item ->
                         var id = 0
                         var number = 0
                         var scratched = false
+                        var scratchedAt = 0L
+
                         if (item is Map<*, *>) {
                             id = (item["id"] as? Number)?.toInt() ?: 0
                             number = (item["number"] as? Number)?.toInt() ?: 0
                             scratched = item["scratched"] as? Boolean ?: false
+                            scratchedAt = (item["scratchedAt"] as? Number)?.toLong() ?: 0L
                         } else if (item is NumberConfiguration) {
                             id = item.id
                             number = item.number
                             scratched = item.scratched
+                            // 🛡️ 防呆機制：使用反射讀取 scratchedAt，避免如果您的 Data Class 忘記加這個欄位導致編譯失敗
+                            scratchedAt = try {
+                                item.javaClass.getMethod("getScratchedAt").invoke(item) as? Long ?: 0L
+                            } catch (e: Exception) { 0L }
                         }
 
+                        // 只記錄被刮開的，並且用「陣列位置 (id - 1)」當作節點名稱
                         if (scratched && id > 0) {
-                            publicConfigs[id.toString()] = number
+                            val indexKey = (id - 1).toString()
+                            publicConfigs[indexKey] = mapOf(
+                                "id" to id,
+                                "number" to number,
+                                "scratchedAt" to scratchedAt
+                            )
                         }
                     }
 
@@ -243,10 +257,20 @@ class SettingsViewModel(
             publicData["clawsCount"] = card.clawsCount ?: 1
             publicData["giveawayCount"] = card.giveawayCount ?: 1
 
-            val publicConfigs = mutableMapOf<String, Int>()
+            // 🌟 核心升級：將 value 變成詳細的 Map 結構
+            val publicConfigs = mutableMapOf<String, Any>()
             card.numberConfigurations?.forEach { config ->
                 if (config.scratched) {
-                    publicConfigs[config.id.toString()] = config.number
+                    val indexKey = (config.id - 1).toString()
+                    val scratchedAtTime = try {
+                        config.javaClass.getMethod("getScratchedAt").invoke(config) as? Long ?: 0L
+                    } catch (e: Exception) { 0L }
+
+                    publicConfigs[indexKey] = mapOf(
+                        "id" to config.id,
+                        "number" to config.number,
+                        "scratchedAt" to scratchedAtTime
+                    )
                 }
             }
             publicData["numberConfigurations"] = publicConfigs
