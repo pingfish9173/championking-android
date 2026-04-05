@@ -2789,8 +2789,11 @@ class SettingsFragment : Fragment() {
         }
 
         val scratchedNumbers = mutableSetOf<Int>()
+        val currentTime = System.currentTimeMillis()
+
         eligibleIdx.forEach { idx ->
             configs[idx].scratched = true
+            configs[idx].scratchedAt = currentTime
             scratchedNumbers.add(configs[idx].number)
         }
 
