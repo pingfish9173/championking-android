@@ -12,6 +12,7 @@ data class ScratchCard(
     var clawsCount: Int? = null, // 新增：夾出數量
     var giveawayCount: Int? = null, // 新增：贈送刮數
     var pitchType: String = "scratch", // 新增：規則類型（scratch=夾出贈送, shopping=消費贈送）
+    var isAnswerShowed: Boolean = false,
 
     // ====== 👇 以下為新增的分割版面專用欄位 ======
     // 分割模式標記 (例如 "20x4", "30x6")。若為 null 則代表是舊版單一版面

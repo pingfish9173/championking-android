@@ -43,7 +43,8 @@ class SettingsViewModel(
         val claws: Int?,
         val giveaway: Int?,
         val numberConfigurations: List<NumberConfiguration>?,
-        val pitchType: String = "scratch"
+        val pitchType: String = "scratch",
+        val isAnswerShowed: Boolean = false
     )
 
     companion object DraftStore {
@@ -345,7 +346,8 @@ class SettingsViewModel(
         numberConfigurations: List<NumberConfiguration>,
         existingSerial: String?,
         keepInUsed: Boolean,
-        pitchType: String = "scratch"
+        pitchType: String = "scratch",
+        isAnswerShowed: Boolean = false
     ) {
         viewModelScope.launch {
             try {

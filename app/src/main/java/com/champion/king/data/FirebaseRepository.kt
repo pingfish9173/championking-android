@@ -17,6 +17,7 @@ import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import android.util.Log
+import kotlin.Boolean
 
 class FirebaseRepository(private val rootRef: DatabaseReference) {
 
@@ -71,7 +72,8 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
         pitchType: String = "scratch",
 
         existingSerial: String? = null,
-        keepInUsed: Boolean = false
+        keepInUsed: Boolean = false,
+        isAnswerShowed: Boolean = false
     ) {
         val serial = existingSerial ?: UUID.randomUUID().toString()
         val data = ScratchCard(
@@ -84,7 +86,8 @@ class FirebaseRepository(private val rootRef: DatabaseReference) {
             inUsed = keepInUsed,
             pitchType = pitchType,          // ✅ 存進 Firebase
             clawsCount = clawsCount,
-            giveawayCount = giveawayCount
+            giveawayCount = giveawayCount,
+            isAnswerShowed = isAnswerShowed
         )
         scratchCardRef(userKey, serial).setValue(data).await()
     }

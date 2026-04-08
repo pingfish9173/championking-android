@@ -89,6 +89,8 @@ class ScratchBoardPreviewFragment : Fragment() {
     private val cellViews = mutableMapOf<Int, View>()
     private val textViews = mutableMapOf<Int, TextView>()
 
+    private var isAnswerShowed: Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -348,11 +350,11 @@ class ScratchBoardPreviewFragment : Fragment() {
         }
     }
 
-    // 顯示更新方法 - 設置介面專用（支援XML中的TextView）
     private fun updateCellDisplay(cellView: View, textView: TextView?, isScratched: Boolean, number: Int?) {
         if (number != null) {
-            val isSpecial = isSpecialPrize(number)
-            val isGrand = isGrandPrize(number)
+            val showNumber = isScratched || isAnswerShowed
+            val isSpecial = isSpecialPrize(number) && showNumber
+            val isGrand = isGrandPrize(number) && showNumber
 
             val backgroundColor = if (isScratched) {
                 ContextCompat.getColor(cellView.context, R.color.scratch_card_white)
@@ -360,6 +362,7 @@ class ScratchBoardPreviewFragment : Fragment() {
                 ContextCompat.getColor(cellView.context, R.color.scratch_card_dark_gray)
             }
 
+            // ✅ 如果沒有 showNumber，就強制降級為灰色框，取消金框與綠框
             val strokeColor = when {
                 isSpecial -> ContextCompat.getColor(cellView.context, R.color.scratch_card_gold)
                 isGrand -> ContextCompat.getColor(cellView.context, R.color.scratch_card_green)
@@ -374,13 +377,15 @@ class ScratchBoardPreviewFragment : Fragment() {
             }
             cellView.background = background
 
+            // ✅ 沒有刮開且在屏蔽模式下，讓字體顏色變成透明，製造黑色蓋板效果
             val textColor = if (isScratched) {
                 ContextCompat.getColor(cellView.context, R.color.black)
-            } else {
+            } else if (isAnswerShowed) {
                 ContextCompat.getColor(cellView.context, R.color.scratch_card_light_gray)
+            } else {
+                android.graphics.Color.TRANSPARENT
             }
 
-            // 優先使用 XML 中已有的 TextView
             if (textView != null) {
                 textView.text = number.toString()
                 textView.setTextColor(textColor)
@@ -524,7 +529,6 @@ class ScratchBoardPreviewFragment : Fragment() {
         applyModesAndMarkers()
     }
 
-
     fun setSelectedNumber(number: Int?) {
         if (readonlyMode) return // 唯讀模式不允許變更
         lastPickedNumber = number?.takeIf { it > 0 }
@@ -602,14 +606,15 @@ class ScratchBoardPreviewFragment : Fragment() {
         grid.children.forEach { view ->
             val tv = view as TextView
             val n = (tv.tag as? Int) ?: tv.text.toString().toIntOrNull()
+
             val scratched = n?.let { cfgByNumber[it]?.scratched } == true
-            val isSpecial = n != null && n == lastPickedNumber
-            val isGrand = n != null && grandSelectedNumbers.contains(n)
+            val showNumber = scratched || isAnswerShowed
+            val isSpecial = n != null && n == lastPickedNumber && showNumber
+            val isGrand = n != null && grandSelectedNumbers.contains(n) && showNumber
 
             tv.setOnClickListener(null)
 
             if (readonlyMode) {
-                // 唯讀模式：不可點擊，顯示當前狀態
                 tv.isClickable = false
                 tv.isFocusable = false
                 tv.background = when {
@@ -675,6 +680,9 @@ class ScratchBoardPreviewFragment : Fragment() {
                     }
                 }
             }
+
+            // ✅ 根據狀態決定要不要給字體塗上透明漆 (隱藏數字)
+            tv.setTextColor(if (scratched || isAnswerShowed) 0xFF000000.toInt() else android.graphics.Color.TRANSPARENT)
         }
     }
 
@@ -807,6 +815,13 @@ class ScratchBoardPreviewFragment : Fragment() {
         return when (scratchCount) {
             10 -> 3
             else -> 15
+        }
+    }
+
+    fun setAnswerShowed(show: Boolean) {
+        if (isAnswerShowed != show) {
+            isAnswerShowed = show
+            applyModesAndMarkers()
         }
     }
 }

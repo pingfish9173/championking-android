@@ -212,6 +212,8 @@ class SettingsFragment : Fragment() {
     // 👇 新增這行：專門用來鎖定網路檢查，避免跟儲存鎖打架
     private var isPingingNetwork = false
 
+    private var currentIsAnswerShowed: Boolean = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -454,6 +456,28 @@ class SettingsFragment : Fragment() {
         binding.editTextGrandPrize.setOnClickListener {
             handleGrandPrizeKeyboardClick()
         }
+
+        binding.buttonToggleAnswerVisibility.setOnClickListener {
+            currentIsAnswerShowed = !currentIsAnswerShowed
+            updateEyeIcon()
+
+            // 通知單一版面預覽更新
+            currentPreviewFragment?.setAnswerShowed(currentIsAnswerShowed)
+
+            // 通知分割版面預覽更新
+            listOf("A", "B", "C", "D", "E", "F").forEach { boardName ->
+                if (splitBoardConfigurations.containsKey(boardName)) {
+                    updateSubBoardCellsUI(boardName)
+                }
+            }
+            // 即時存入草稿
+            saveDraftIfNeeded(shelfManager.selectedShelfOrder)
+        }
+    }
+
+    private fun updateEyeIcon() {
+        val iconRes = if (currentIsAnswerShowed) R.drawable.ic_visibility else R.drawable.ic_visibility_off
+        binding.buttonToggleAnswerVisibility.setImageResource(iconRes)
     }
 
     private fun setupSpinnerListeners() {
@@ -869,6 +893,8 @@ class SettingsFragment : Fragment() {
     private fun showUnsetShelfState() {
         val order = shelfManager.selectedShelfOrder
         val draft = viewModel.getDraft(order)
+        currentIsAnswerShowed = draft?.isAnswerShowed ?: false
+        updateEyeIcon()
         updateParametersTitle(order)
 
         isShowingUnsetState = true
@@ -962,6 +988,8 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showSetShelfState(selectedCard: ScratchCard) {
+        currentIsAnswerShowed = selectedCard.isAnswerShowed
+        updateEyeIcon()
         showRightPanel()
         isShowingUnsetState = false
         restorePreviewContainer()
@@ -1187,6 +1215,7 @@ class SettingsFragment : Fragment() {
             "order" to order,
             "scratchesType" to totalScratches, // 例如 20x4 會存 80
             "splitMode" to splitModeStr,
+            "isAnswerShowed" to currentIsAnswerShowed,
             "inUsed" to (existingCard?.inUsed ?: false),
             "boards" to boardsData
         )
@@ -1279,6 +1308,7 @@ class SettingsFragment : Fragment() {
             claws = clawsValue,
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
             numberConfigurations = currentPreviewFragment?.getGeneratedNumberConfigurations(),
+            isAnswerShowed = currentIsAnswerShowed,
             currentCards = viewModel.cards.value
         )
     }
@@ -1292,6 +1322,7 @@ class SettingsFragment : Fragment() {
         val claws: Int?,
         val giveaway: Int?,
         val numberConfigurations: List<NumberConfiguration>?,
+        val isAnswerShowed: Boolean, // ✅
         val currentCards: Map<Int, ScratchCard>
     )
 
@@ -1388,7 +1419,8 @@ class SettingsFragment : Fragment() {
             numberConfigurations = data.numberConfigurations!!,
             existingSerial = existingCard?.serialNumber,
             keepInUsed = existingCard?.inUsed ?: false,
-            pitchType = data.pitchType
+            pitchType = data.pitchType,
+            isAnswerShowed = data.isAnswerShowed
         )
     }
 
@@ -1984,6 +2016,7 @@ class SettingsFragment : Fragment() {
 
             currentPreviewFragment?.setSinglePickEnabled(isPickingSpecialPrize)
             currentPreviewFragment?.setMultiPickEnabled(isPickingGrandPrize)
+            currentPreviewFragment?.setAnswerShowed(currentIsAnswerShowed) // ✅ 強制同步顯示狀態
 
             childFragmentManager.executePendingTransactions()
 
@@ -2809,7 +2842,8 @@ class SettingsFragment : Fragment() {
             numberConfigurations = configs,
             existingSerial = card.serialNumber,
             keepInUsed = card.inUsed,
-            pitchType = card.pitchType // 🌟 核心修復點：把原本的玩法規則原封不動傳回去，防止被預設值覆蓋！
+            pitchType = card.pitchType,
+            isAnswerShowed = card.isAnswerShowed
         )
 
         val updatedCard = card.copy(numberConfigurations = configs)
@@ -3165,7 +3199,8 @@ class SettingsFragment : Fragment() {
             claws = clawsValue,
             giveaway = binding.spinnerGiveawayCount.selectedItem?.toString()?.toIntOrNull(),
             numberConfigurations = configs,
-            pitchType = storedPitchType
+            pitchType = storedPitchType,
+            isAnswerShowed = currentIsAnswerShowed
         )
 
         viewModel.saveDraft(order, draft)
@@ -4022,84 +4057,72 @@ class SettingsFragment : Fragment() {
 
     private fun updateSubBoardCellsUI(boardName: String) {
         val root = binding.scratchBoardArea
-        // 透過 Tag 找到該子板專屬的 GridLayout
         val gridLayout = root.findViewWithTag<GridLayout>("grid_$boardName") ?: return
         val context = gridLayout.context
 
-        // 取得目前最新的獎項設定
         val specialStr = splitBoardSpecialPrizes[boardName] ?: ""
         val grandStr = splitBoardGrandPrizes[boardName] ?: ""
-
         val specialList = specialStr.split(",").mapNotNull { it.trim().toIntOrNull() }
         val grandList = grandStr.split(",").mapNotNull { it.trim().toIntOrNull() }
 
-        // 🌟 取得該子板目前的格子配置 (包含是否已被刮開的狀態)
         val configs = splitBoardConfigurations[boardName]
-
         val colorGold = ContextCompat.getColor(context, R.color.scratch_card_gold)
         val colorGreen = ContextCompat.getColor(context, R.color.scratch_card_green)
-        val colorGrey = Color.GRAY
+        val colorGrey = android.graphics.Color.GRAY
         val darkGray = ContextCompat.getColor(context, R.color.scratch_card_dark_gray)
 
-        // 遍歷所有 20 個格子，比對數字並重新上色
         for (i in 0 until gridLayout.childCount) {
             val cellFrame = gridLayout.getChildAt(i) as? FrameLayout ?: continue
             val circleView = cellFrame.getChildAt(0) as? TextView ?: continue
 
             val numberStr = circleView.text.toString()
             val number = numberStr.toIntOrNull() ?: continue
-
-            // 🌟 判斷該格子是否已被刮開
             val isScratched = configs?.getOrNull(i)?.scratched ?: configs?.find { it.number == number }?.scratched ?: false
 
             if (isScratched) {
-                // =====================================
-                // 🌟 已刮開的格子視覺 (白底黑字)
-                // =====================================
-                circleView.setTextColor(Color.BLACK) // 黑字
-
+                circleView.setTextColor(android.graphics.Color.BLACK)
                 val borderColor = when {
-                    specialList.contains(number) -> colorGold    // 特獎用黃框
-                    grandList.contains(number) -> colorGreen // 大獎用綠框
-                    else -> colorGrey // 一般數字用灰框
+                    specialList.contains(number) -> colorGold
+                    grandList.contains(number) -> colorGreen
+                    else -> colorGrey
                 }
-
                 circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
                     if (this is android.graphics.drawable.GradientDrawable) {
-                        setColor(Color.WHITE) // 白底
+                        setColor(android.graphics.Color.WHITE)
                         setStroke(3, borderColor)
                     }
                 }
             } else {
-                // =====================================
-                // ⬛ 未刮開的格子視覺 (黑底/灰底 + 灰字/白字)
-                // =====================================
-                when {
-                    specialList.contains(number) -> {
-                        // 🌟 特獎：白色粗體字 + 深灰底 + 金色加粗外框
-                        circleView.setTextColor(Color.WHITE)
-                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                            if (this is android.graphics.drawable.GradientDrawable) {
-                                setColor(darkGray)
-                                setStroke(4, colorGold)
+                // ✅ 如果未刮開，根據睜眼/閉眼決定是否顯示
+                if (currentIsAnswerShowed) {
+                    when {
+                        specialList.contains(number) -> {
+                            circleView.setTextColor(android.graphics.Color.WHITE)
+                            circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                                if (this is android.graphics.drawable.GradientDrawable) {
+                                    setColor(darkGray)
+                                    setStroke(4, colorGold)
+                                }
                             }
                         }
-                    }
-                    grandList.contains(number) -> {
-                        // 🌟 大獎：白色粗體字 + 深灰底 + 綠色加粗外框
-                        circleView.setTextColor(Color.WHITE)
-                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
-                            if (this is android.graphics.drawable.GradientDrawable) {
-                                setColor(darkGray)
-                                setStroke(4, colorGreen)
+                        grandList.contains(number) -> {
+                            circleView.setTextColor(android.graphics.Color.WHITE)
+                            circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_normal_background)?.mutate()?.apply {
+                                if (this is android.graphics.drawable.GradientDrawable) {
+                                    setColor(darkGray)
+                                    setStroke(4, colorGreen)
+                                }
                             }
                         }
+                        else -> {
+                            circleView.setTextColor(android.graphics.Color.GRAY)
+                            circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
+                        }
                     }
-                    else -> {
-                        // ⬛ 沒中獎：恢復原始的黑底灰字與細灰框
-                        circleView.setTextColor(Color.GRAY)
-                        circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
-                    }
+                } else {
+                    // ✅ 閉眼屏蔽狀態：透明字體與黑色純蓋板，不漏光任何特獎/大獎
+                    circleView.setTextColor(android.graphics.Color.TRANSPARENT)
+                    circleView.background = ContextCompat.getDrawable(context, R.drawable.circle_cell_background_black)
                 }
             }
         }
