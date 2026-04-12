@@ -70,7 +70,7 @@ class SettingsFragment : Fragment() {
 
     // 大獎數量限制表
     private val GRAND_LIMITS = mapOf(
-        10 to 3,
+        10 to 9,
         20 to 15,
         25 to 15,
         30 to 15,
@@ -2524,7 +2524,6 @@ class SettingsFragment : Fragment() {
 
                 val sortedList = cleanedList.mapNotNull { it.toIntOrNull() }.sorted()
 
-                // 🌟 新增防呆：加入單一版面大獎數量上限檢查 (10刮為3，其餘為15)
                 val limit = if (isSplitMode) 2 else (GRAND_LIMITS[displayScratchType] ?: 15)
 
                 if (sortedList.size > limit) {

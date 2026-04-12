@@ -813,7 +813,7 @@ class ScratchBoardPreviewFragment : Fragment() {
 
         val scratchCount = typeStr.toIntOrNull() ?: return 0
         return when (scratchCount) {
-            10 -> 3
+            10 -> 9
             else -> 15
         }
     }

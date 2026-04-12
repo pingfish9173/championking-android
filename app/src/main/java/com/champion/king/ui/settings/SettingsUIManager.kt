@@ -31,7 +31,7 @@ class SettingsUIManager(
 
     // ✅ 新增：大獎數量限制表
     private val GRAND_LIMITS = mapOf(
-        10 to 3,
+        10 to 9,
         20 to 5,
         25 to 6,
         30 to 6,
@@ -190,8 +190,8 @@ class SettingsUIManager(
         isSplitMode: Boolean = false, // 🌟 新增：接收是否為分割版面
         onConfirm: (String) -> Unit
     ) {
-        // 🌟 更新防呆：確保未定義的單一版型預設上限為 15，10刮為3
-        val grandLimit = if (isSplitMode) 2 else (if (currentScratchType == 10) 3 else 15)
+        // 🌟 更新防呆：確保未定義的單一版型預設上限為 15，10刮為9
+        val grandLimit = if (isSplitMode) 2 else (if (currentScratchType == 10) 9 else 15)
 
         // 🌟 修改：根據模式顯示不同的提示文字
         val hintText = if (isSplitMode) {
@@ -471,8 +471,8 @@ class SettingsUIManager(
 
         // 6️⃣ ⭐ 大獎數量限制（依刮數）
         if (!isSpecialPrize) {
-            // 🌟 更新防呆：確保未定義的單一版型預設上限為 15，10刮為3
-            val grandLimit = if (isSplitMode) 2 else (if (maxNumber == 10) 3 else 15)
+            // 🌟 更新防呆：確保未定義的單一版型預設上限為 15，10刮為9
+            val grandLimit = if (isSplitMode) 2 else (if (maxNumber == 10) 9 else 15)
             if (numbers.size > grandLimit) {
                 val errorMsg = if (isSplitMode) "分割版面的大獎數量限制為 2 個" else "超過大獎最大數量（最多 $grandLimit 個）"
                 return ValidationResult(false, errorMsg)
