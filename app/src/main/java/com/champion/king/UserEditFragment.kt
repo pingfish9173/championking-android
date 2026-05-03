@@ -163,9 +163,12 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 // 設定點擊事件
                 binding.checkboxAdEnabled.setOnClickListener {
                     if (binding.checkboxAdEnabled.isChecked) {
-                        showAdSettingsDialog(idleAdMinutes, unlockAdPassword)
+                        // 💡 關鍵修改：只要是重新打勾，一律強制傳入預設值 (15分鐘, 無密碼)
+                        // 不要傳入剛剛 snapshot 抓到的舊變數，確保畫面乾淨
+                        showAdSettingsDialog(15, null)
                     } else {
-                        updateAdSettingsToFirebase(false, idleAdMinutes, unlockAdPassword)
+                        // 💡 取消勾選時，傳入 false 停用廣告，後面參數隨便傳(因為 Firebase 會直接寫 null 刪除)
+                        updateAdSettingsToFirebase(false, 15, null)
                     }
                 }
 
@@ -214,13 +217,15 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_ad_settings, null)
 
         val editMinutes = dialogView.findViewById<EditText>(R.id.edit_idle_minutes)
+        // 💡 關鍵魔術：把密碼的「圓點/星號」遮蔽效果強制關閉！
+        editMinutes.transformationMethod = null
         val radioGroup = dialogView.findViewById<RadioGroup>(R.id.radio_group_password)
-        val radioNoPassword = dialogView.findViewById<RadioButton>(R.id.radio_no_password)
         val radioUsePassword = dialogView.findViewById<RadioButton>(R.id.radio_use_password)
         val editPassword = dialogView.findViewById<EditText>(R.id.edit_ad_password)
 
         // 載入預設值
         editMinutes.setText(currentMinutes.toString())
+        editMinutes.setSelection(editMinutes.text.length)
         if (!currentPassword.isNullOrEmpty()) {
             radioUsePassword.isChecked = true
             editPassword.isEnabled = true
@@ -251,14 +256,23 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         dialog.setOnShowListener {
             val button = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
             button.setOnClickListener {
-                val minutesStr = editMinutes.text.toString()
-                val minutes = minutesStr.toIntOrNull() ?: 15
+                // 💡 1. 取得字串並去除前後空白
+                val minutesStr = editMinutes.text.toString().trim()
 
-                if (minutes <= 0) {
-                    editMinutes.error = "請輸入有效的時間"
+                // 💡 2. 檢查是否留空
+                if (minutesStr.isEmpty()) {
+                    editMinutes.error = "時間不能留空"
                     return@setOnClickListener
                 }
 
+                // 💡 3. 轉為數字並檢查範圍 (1 ~ 99999)
+                val minutes = minutesStr.toIntOrNull()
+                if (minutes == null || minutes < 1 || minutes > 99999) {
+                    editMinutes.error = "請輸入 1 到 99999 的數字"
+                    return@setOnClickListener
+                }
+
+                // --- 下面保留你原本的密碼驗證邏輯 ---
                 var finalPassword: String? = null
                 if (radioUsePassword.isChecked) {
                     val pwd = editPassword.text.toString()
@@ -281,26 +295,45 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
     private fun updateAdSettingsToFirebase(enabled: Boolean, minutes: Int, password: String?) {
         val uid = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
 
-        val updates = mapOf(
-            "isAdEnabled" to enabled,
-            "idleAdMinutes" to minutes,
-            "unlockAdPassword" to password
-        )
+        // 💡 根據 enabled 狀態動態建立要更新的 Map
+        val updates = mutableMapOf<String, Any?>()
+        updates["isAdEnabled"] = enabled
+
+        if (enabled) {
+            // 啟用時：正常寫入分鐘數與密碼
+            updates["idleAdMinutes"] = minutes
+            updates["unlockAdPassword"] = password
+        } else {
+            // 停用時：將這兩個欄位設為 null，Firebase 就會自動將它們刪除
+            updates["idleAdMinutes"] = null
+            updates["unlockAdPassword"] = null
+        }
 
         FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
             .child("users").child(uid)
             .updateChildren(updates)
             .addOnSuccessListener {
                 updateAdInfoUI(enabled, minutes, password)
-                if (enabled) showToast("廣告設定已儲存")
 
-                // 💡 關鍵修正：同步更新 MainActivity 的 currentUser 物件
+                if (enabled) {
+                    showToast("廣告設定已儲存")
+                } else {
+                    showToast("廣告已停用")
+                }
+
+                // 同步更新 MainActivity 的 currentUser 物件
                 val mainActivity = activity as? MainActivity
                 mainActivity?.let { activity ->
-                    val user = activity.getCurrentUser() // 假設你有這個方法
+                    val user = activity.getCurrentUser()
                     user?.isAdEnabled = enabled
-                    user?.idleAdMinutes = minutes
-                    user?.unlockAdPassword = password
+                    if (enabled) {
+                        user?.idleAdMinutes = minutes
+                        user?.unlockAdPassword = password
+                    } else {
+                        // 停用時，一併清空記憶體中的暫存資料，避免重置計時器時出錯
+                        user?.idleAdMinutes = 15 // 給回預設值
+                        user?.unlockAdPassword = null
+                    }
                     activity.resetIdleTimer() // 強制重置計時器，讓新設定立刻生效
                 }
             }
@@ -314,7 +347,11 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
         if (enabled) {
             binding.textAdSettingsInfo.visibility = View.VISIBLE
             val pwdDisplay = if (password.isNullOrEmpty()) "不使用密碼" else password
+            // 修改了這裡的字串格式
             binding.textAdSettingsInfo.text = "閒置 ${minutes} 分鐘啟用廣告\n解除廣告密碼：$pwdDisplay"
+
+            // 可以選擇在這裡設定字體大小，或是直接在 xml 裡面設定
+            binding.textAdSettingsInfo.textSize = 12f
         } else {
             binding.textAdSettingsInfo.visibility = View.GONE
         }

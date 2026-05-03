@@ -2513,24 +2513,46 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             gravity = Gravity.CENTER
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("解除廣告")
             .setView(input)
             .setCancelable(false) // 防止點旁邊關閉，強迫一定要輸入對
-            .setPositiveButton("確定") { dialog, _ ->
+            .setPositiveButton("確定", null) // 💡 關鍵 1：傳入 null，告訴系統「不要自動幫我關閉視窗」
+            .setNegativeButton("取消") { d, _ ->
+                d.dismiss()
+            }
+            .create()
+
+        // 💡 加入你在其他地方寫好的防呆小幫手，避免對話框開著放太久
+        val timeoutHelper = DialogTimeoutHelper(dialog, input)
+
+        dialog.setOnShowListener {
+            ToastManager.setHostWindow(dialog.window)
+            timeoutHelper.startTimer() // 啟動倒數
+
+            // 💡 關鍵 2：視窗顯示後，我們才自己去接管「確定」按鈕的點擊事件
+            val button = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            button.setOnClickListener {
                 if (input.text.toString() == correctPassword) {
+                    // 密碼正確：關閉海報、關閉視窗
                     closeAdPoster(posterContainer)
                     dialog.dismiss()
                 } else {
-                    ToastManager.show(this, "密碼錯誤，無法解除廣告！")
-                    // 錯誤不關閉視窗的處理：在後面重新顯示或直接 Toast 讓它關掉重按即可
+                    // 💡 密碼錯誤：不呼叫 dismiss()！直接在輸入框顯示紅色錯誤提示，並清空輸入內容
+                    input.error = "密碼錯誤"
+                    input.setText("")
                 }
             }
-            .setNegativeButton("取消") { dialog, _ ->
-                dialog.dismiss()
-            }
-            .show()
+        }
+
+        dialog.setOnDismissListener {
+            ToastManager.clearHostWindow()
+            timeoutHelper.stopTimer() // 關閉倒數
+        }
+
+        dialog.show()
     }
+
     private fun startFloatingTapHint(container: FrameLayout) {
 
         // 建議將尺寸加大，以容納 56f 的字體和爆炸圖。

@@ -23,7 +23,9 @@
             android:id="@+id/edit_idle_minutes"
             android:layout_width="60dp"
             android:layout_height="wrap_content"
-            android:inputType="number"
+            android:inputType="numberPassword"
+            android:digits="0123456789"
+            android:maxLength="5"
             android:gravity="center"
             android:text="15" />
 
