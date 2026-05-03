@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="閒置 "
+            android:textColor="#333333"
+            android:textSize="16sp" />
+
+        <EditText
+            android:id="@+id/edit_idle_minutes"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:gravity="center"
+            android:text="15" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" 分鐘啟用廣告"
+            android:textColor="#333333"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="解除廣告密碼："
+        android:textColor="#333333"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 確保兩個 RadioButton 都是 RadioGroup 的直接子節點 -->
+    <RadioGroup
+        android:id="@+id/radio_group_password"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/radio_no_password"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="不使用密碼"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radio_use_password"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="使用密碼" />
+
+    </RadioGroup>
+
+    <!-- 把 EditText 獨立拉出來，並設定一點縮排讓它看起來隸屬於「使用密碼」 -->
+    <EditText
+        android:id="@+id/edit_ad_password"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="4dp"
+        android:hint="4~20碼純數字"
+        android:inputType="numberPassword"
+        android:enabled="false"
+        android:maxLength="20" />
+</LinearLayout>

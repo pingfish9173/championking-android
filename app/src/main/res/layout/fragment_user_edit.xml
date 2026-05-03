@@ -250,6 +250,27 @@
                         android:backgroundTint="#FF9800"
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="8dp" />
+
+                    <!-- 💡 新增：廣告啟用 CheckBox 與資訊顯示區塊 -->
+                    <CheckBox
+                        android:id="@+id/checkbox_ad_enabled"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="廣告啟用"
+                        android:textSize="14sp"
+                        android:textColor="#333333"
+                        android:layout_marginTop="16dp" />
+
+                    <TextView
+                        android:id="@+id/text_ad_settings_info"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="14sp"
+                        android:textColor="#2196F3"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginTop="4dp"
+                        android:visibility="gone"
+                        android:lineSpacingExtra="4dp" />
                 </LinearLayout>
 
             </LinearLayout>

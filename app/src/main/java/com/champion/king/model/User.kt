@@ -41,7 +41,10 @@ data class User(
     var passwordHash: String? = null,
     var devicePasswords: String? = null,
     var deviceBindingStatus: String? = null,  // "BOUND" 或 "UNBOUND"
-    var boundDeviceInfo: BoundDeviceInfo? = null  // 綁定的裝置資訊
+    var boundDeviceInfo: BoundDeviceInfo? = null,  // 綁定的裝置資訊
+    var isAdEnabled: Boolean = false,
+    var idleAdMinutes: Int = 15,
+    var unlockAdPassword: String? = null
 )
 
 // 🔹 新增：綁定裝置資訊

@@ -2426,20 +2426,28 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
         return super.dispatchTouchEvent(ev)
     }
 
-    private fun resetIdleTimer() {
+    fun resetIdleTimer() {
         idleHandler.removeCallbacks(idleRunnable)
-        // 只有在廣告開關開啟時，才啟動計時器
-        if (isAdEnabled) {
-            idleHandler.postDelayed(idleRunnable, idleTimeoutMillis)
+        // 💡 讀取 currentUser 的動態設定
+        val adEnabled = currentUser?.isAdEnabled ?: false
+        if (adEnabled) {
+            val minutes = currentUser?.idleAdMinutes ?: 15
+            // 💡 確保時間單位轉換正確（這裡設定為分鐘 * 60秒 * 1000毫秒）
+            val dynamicTimeoutMillis = minutes * 60 * 1000L
+            idleHandler.postDelayed(idleRunnable, dynamicTimeoutMillis)
+            Log.d(TAG, "廣告計時器已重置，將在 $minutes 分鐘後觸發")
+        } else {
+            Log.d(TAG, "廣告功能未啟用，計時器不啟動")
         }
     }
 
     private fun showAdPoster() {
-        if (!isAdEnabled) return // 💡 如果開關關閉，直接跳出不執行
+        val adEnabled = currentUser?.isAdEnabled ?: false
+        if (!adEnabled) return
+
         runOnUiThread {
             val decorView = window.decorView as FrameLayout
 
-            // 🔹 建立最外層容器（保持滿版、可放置海報與文字）
             val posterContainer = FrameLayout(this).apply {
                 alpha = 0f
                 layoutParams = FrameLayout.LayoutParams(
@@ -2449,7 +2457,6 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
                 setBackgroundColor(android.graphics.Color.BLACK)
             }
 
-            // 🔹 建立海報 (全螢幕延展，避免裁切)
             val posterImage = ImageView(this).apply {
                 setImageResource(R.drawable.splash_poster)
                 scaleType = ImageView.ScaleType.FIT_XY
@@ -2461,33 +2468,69 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
 
             posterContainer.addView(posterImage)
 
-            // 🔹 點擊海報時，淡出並移除
+            // 💡 點擊海報時的密碼解鎖判斷
             posterContainer.setOnClickListener {
-                posterContainer.animate()
-                    .alpha(0f)
-                    .setDuration(400)
-                    .withEndAction {
-                        decorView.removeView(posterContainer)
-                        resetIdleTimer()
-                    }
-                    .start()
+                val savedPassword = currentUser?.unlockAdPassword
+
+                if (!savedPassword.isNullOrEmpty()) {
+                    // 有設定密碼：跳出要求輸入密碼小視窗
+                    showUnlockAdPasswordDialog(posterContainer, savedPassword)
+                } else {
+                    // 沒設定密碼：直接關閉海報
+                    closeAdPoster(posterContainer)
+                }
             }
 
-            // 🔹 放進畫面
             decorView.addView(posterContainer)
 
-            // 🔹 整體淡入
             posterContainer.animate()
                 .alpha(1f)
                 .setDuration(400)
                 .withEndAction {
-                    // ⭐ 這裡會呼叫你的 startFloatingTapHint
                     startFloatingTapHint(posterContainer)
                 }
                 .start()
         }
     }
 
+    // 關閉海報共用函式
+    private fun closeAdPoster(posterContainer: View) {
+        posterContainer.animate()
+            .alpha(0f)
+            .setDuration(400)
+            .withEndAction {
+                (window.decorView as FrameLayout).removeView(posterContainer)
+                resetIdleTimer() // 恢復計時
+            }
+            .start()
+    }
+
+    // 顯示解鎖密碼對話框
+    private fun showUnlockAdPasswordDialog(posterContainer: View, correctPassword: String) {
+        val input = EditText(this).apply {
+            hint = "請輸入解除廣告密碼"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            gravity = Gravity.CENTER
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("解除廣告")
+            .setView(input)
+            .setCancelable(false) // 防止點旁邊關閉，強迫一定要輸入對
+            .setPositiveButton("確定") { dialog, _ ->
+                if (input.text.toString() == correctPassword) {
+                    closeAdPoster(posterContainer)
+                    dialog.dismiss()
+                } else {
+                    ToastManager.show(this, "密碼錯誤，無法解除廣告！")
+                    // 錯誤不關閉視窗的處理：在後面重新顯示或直接 Toast 讓它關掉重按即可
+                }
+            }
+            .setNegativeButton("取消") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
     private fun startFloatingTapHint(container: FrameLayout) {
 
         // 建議將尺寸加大，以容納 56f 的字體和爆炸圖。
@@ -2703,6 +2746,10 @@ class MainActivity : AppCompatActivity(), OnAuthFlowListener, UserSessionProvide
             render(Mode.MASTER)   // 2. 切換為台主版面
             loadFragment(SettingsFragment(), containerIdFor(Mode.MASTER)) // 3. 直接載入設置頁面
         }
+    }
+
+    fun getCurrentUser(): User? {
+        return currentUser
     }
 
     companion object {

@@ -8,6 +8,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import androidx.core.widget.doOnTextChanged
 import com.champion.king.core.config.AppConfig
 import com.champion.king.core.ui.BaseBindingFragment
@@ -149,6 +151,24 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 val rentalStartAt = snap.child("rentalStartAt").getValue(Long::class.java)
                 val rentalDays = snap.child("rentalDays").getValue(Int::class.java) ?: 0
 
+                val isAdEnabled = snap.child("isAdEnabled").getValue(Boolean::class.java) ?: false
+                val idleAdMinutes = snap.child("idleAdMinutes").getValue(Int::class.java) ?: 15
+                val unlockAdPassword = snap.child("unlockAdPassword").getValue(String::class.java)
+
+                // 💡 更新廣告 UI
+                binding.checkboxAdEnabled.setOnCheckedChangeListener(null) // 避免觸發 listener
+                binding.checkboxAdEnabled.isChecked = isAdEnabled
+                updateAdInfoUI(isAdEnabled, idleAdMinutes, unlockAdPassword)
+
+                // 設定點擊事件
+                binding.checkboxAdEnabled.setOnClickListener {
+                    if (binding.checkboxAdEnabled.isChecked) {
+                        showAdSettingsDialog(idleAdMinutes, unlockAdPassword)
+                    } else {
+                        updateAdSettingsToFirebase(false, idleAdMinutes, unlockAdPassword)
+                    }
+                }
+
                 originalAddress = "$city $district".trim()
                 originalAuthCode = snap.child("devicePasswords").getValue(String::class.java) ?: "無"
 
@@ -188,6 +208,116 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
 
                 showToast(AppConfig.Msg.LOAD_FAIL_PREFIX + e.message)
             }
+    }
+
+    private fun showAdSettingsDialog(currentMinutes: Int, currentPassword: String?) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_ad_settings, null)
+
+        val editMinutes = dialogView.findViewById<EditText>(R.id.edit_idle_minutes)
+        val radioGroup = dialogView.findViewById<RadioGroup>(R.id.radio_group_password)
+        val radioNoPassword = dialogView.findViewById<RadioButton>(R.id.radio_no_password)
+        val radioUsePassword = dialogView.findViewById<RadioButton>(R.id.radio_use_password)
+        val editPassword = dialogView.findViewById<EditText>(R.id.edit_ad_password)
+
+        // 載入預設值
+        editMinutes.setText(currentMinutes.toString())
+        if (!currentPassword.isNullOrEmpty()) {
+            radioUsePassword.isChecked = true
+            editPassword.isEnabled = true
+            editPassword.setText(currentPassword)
+        }
+
+        // 監聽 RadioButton 切換來開啟/關閉密碼輸入框
+        radioGroup.setOnCheckedChangeListener { _, checkedId ->
+            editPassword.isEnabled = (checkedId == R.id.radio_use_password)
+            if (checkedId == R.id.radio_no_password) {
+                editPassword.text.clear()
+                editPassword.error = null
+            }
+        }
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("廣告設定")
+            .setView(dialogView)
+            .setCancelable(false)
+            .setPositiveButton("儲存", null) // 稍後覆寫以防止驗證失敗時自動關閉
+            .setNegativeButton("取消") { d, _ ->
+                // 取消的話，把 CheckBox 退回原本狀態
+                binding.checkboxAdEnabled.isChecked = false
+                d.dismiss()
+            }
+            .create()
+
+        dialog.setOnShowListener {
+            val button = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+            button.setOnClickListener {
+                val minutesStr = editMinutes.text.toString()
+                val minutes = minutesStr.toIntOrNull() ?: 15
+
+                if (minutes <= 0) {
+                    editMinutes.error = "請輸入有效的時間"
+                    return@setOnClickListener
+                }
+
+                var finalPassword: String? = null
+                if (radioUsePassword.isChecked) {
+                    val pwd = editPassword.text.toString()
+                    // 驗證：只能是數字，且長度 4~20
+                    if (pwd.length !in 4..20 || !pwd.all { it.isDigit() }) {
+                        editPassword.error = "密碼必須為4~20碼純數字"
+                        return@setOnClickListener
+                    }
+                    finalPassword = pwd
+                }
+
+                // 驗證通過，寫入資料庫
+                updateAdSettingsToFirebase(true, minutes, finalPassword)
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun updateAdSettingsToFirebase(enabled: Boolean, minutes: Int, password: String?) {
+        val uid = userSessionProvider?.getCurrentUserFirebaseKey() ?: return
+
+        val updates = mapOf(
+            "isAdEnabled" to enabled,
+            "idleAdMinutes" to minutes,
+            "unlockAdPassword" to password
+        )
+
+        FirebaseDatabase.getInstance(AppConfig.DB_URL).reference
+            .child("users").child(uid)
+            .updateChildren(updates)
+            .addOnSuccessListener {
+                updateAdInfoUI(enabled, minutes, password)
+                if (enabled) showToast("廣告設定已儲存")
+
+                // 💡 關鍵修正：同步更新 MainActivity 的 currentUser 物件
+                val mainActivity = activity as? MainActivity
+                mainActivity?.let { activity ->
+                    val user = activity.getCurrentUser() // 假設你有這個方法
+                    user?.isAdEnabled = enabled
+                    user?.idleAdMinutes = minutes
+                    user?.unlockAdPassword = password
+                    activity.resetIdleTimer() // 強制重置計時器，讓新設定立刻生效
+                }
+            }
+            .addOnFailureListener { e ->
+                showToast("廣告設定更新失敗：${e.message}")
+                binding.checkboxAdEnabled.isChecked = !enabled // 失敗時退回狀態
+            }
+    }
+
+    private fun updateAdInfoUI(enabled: Boolean, minutes: Int, password: String?) {
+        if (enabled) {
+            binding.textAdSettingsInfo.visibility = View.VISIBLE
+            val pwdDisplay = if (password.isNullOrEmpty()) "不使用密碼" else password
+            binding.textAdSettingsInfo.text = "閒置 ${minutes} 分鐘啟用廣告\n解除廣告密碼：$pwdDisplay"
+        } else {
+            binding.textAdSettingsInfo.visibility = View.GONE
+        }
     }
 
     private fun showRentalInfoDialog(rentalStartAt: Long?, rentalDays: Int) {
