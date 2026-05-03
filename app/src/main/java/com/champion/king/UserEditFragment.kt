@@ -252,8 +252,13 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             }
             .create()
 
-        // 💡 加上這行魔法：強制隱藏對話框開啟時自動彈出的軟體鍵盤
-        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        // 💡 替換成這段：利用「or (位元聯集)」將兩個屬性結合起來
+        // 1. SOFT_INPUT_STATE_ALWAYS_HIDDEN：開啟時不要自動彈出鍵盤
+        // 2. SOFT_INPUT_ADJUST_PAN：鍵盤彈出時，將整個視窗往上推，避免擋住輸入框
+        dialog.window?.setSoftInputMode(
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+        )
 
         dialog.setOnShowListener {
             val button = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
