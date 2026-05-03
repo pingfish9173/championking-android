@@ -155,19 +155,18 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                 val idleAdMinutes = snap.child("idleAdMinutes").getValue(Int::class.java) ?: 15
                 val unlockAdPassword = snap.child("unlockAdPassword").getValue(String::class.java)
 
-                // 💡 更新廣告 UI
-                binding.checkboxAdEnabled.setOnCheckedChangeListener(null) // 避免觸發 listener
-                binding.checkboxAdEnabled.isChecked = isAdEnabled
+                // 💡 更新廣告 UI (改用 switchAdEnabled)
+                binding.switchAdEnabled.setOnCheckedChangeListener(null) // 避免觸發 listener
+                binding.switchAdEnabled.isChecked = isAdEnabled
                 updateAdInfoUI(isAdEnabled, idleAdMinutes, unlockAdPassword)
 
-                // 設定點擊事件
-                binding.checkboxAdEnabled.setOnClickListener {
-                    if (binding.checkboxAdEnabled.isChecked) {
-                        // 💡 關鍵修改：只要是重新打勾，一律強制傳入預設值 (15分鐘, 無密碼)
-                        // 不要傳入剛剛 snapshot 抓到的舊變數，確保畫面乾淨
+                // 設定點擊事件 (改用 switchAdEnabled)
+                binding.switchAdEnabled.setOnClickListener {
+                    if (binding.switchAdEnabled.isChecked) {
+                        // 打開開關時，強制傳入預設值 (15分鐘, 無密碼)
                         showAdSettingsDialog(15, null)
                     } else {
-                        // 💡 取消勾選時，傳入 false 停用廣告，後面參數隨便傳(因為 Firebase 會直接寫 null 刪除)
+                        // 關閉開關時，停用廣告
                         updateAdSettingsToFirebase(false, 15, null)
                     }
                 }
@@ -248,10 +247,13 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             .setPositiveButton("儲存", null) // 稍後覆寫以防止驗證失敗時自動關閉
             .setNegativeButton("取消") { d, _ ->
                 // 取消的話，把 CheckBox 退回原本狀態
-                binding.checkboxAdEnabled.isChecked = false
+                binding.switchAdEnabled.isChecked = false
                 d.dismiss()
             }
             .create()
+
+        // 💡 加上這行魔法：強制隱藏對話框開啟時自動彈出的軟體鍵盤
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
 
         dialog.setOnShowListener {
             val button = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
@@ -265,10 +267,12 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
                     return@setOnClickListener
                 }
 
-                // 💡 3. 轉為數字並檢查範圍 (1 ~ 99999)
+                // 💡 3. 轉為數字並檢查範圍 (3 ~ 99999)
                 val minutes = minutesStr.toIntOrNull()
-                if (minutes == null || minutes < 1 || minutes > 99999) {
-                    editMinutes.error = "請輸入 1 到 99999 的數字"
+                // 💡 將原本的 minutes < 1 改成 minutes < 3
+                if (minutes == null || minutes < 3 || minutes > 99999) {
+                    // 💡 同時把錯誤提示的文字更新
+                    editMinutes.error = "請輸入 3 到 99999 的數字"
                     return@setOnClickListener
                 }
 
@@ -339,7 +343,7 @@ class UserEditFragment : BaseBindingFragment<FragmentUserEditBinding>() {
             }
             .addOnFailureListener { e ->
                 showToast("廣告設定更新失敗：${e.message}")
-                binding.checkboxAdEnabled.isChecked = !enabled // 失敗時退回狀態
+                binding.switchAdEnabled.isChecked = !enabled // 失敗時退回狀態
             }
     }
 

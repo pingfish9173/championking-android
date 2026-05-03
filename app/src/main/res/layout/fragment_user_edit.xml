@@ -131,9 +131,8 @@
 
                         <TextView
                             android:id="@+id/text_address"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:textColor="#111111"
                             android:textSize="16sp" />
 
@@ -166,9 +165,8 @@
 
                         <TextView
                             android:id="@+id/text_authorization_code"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:textColor="#111111"
                             android:textSize="16sp" />
 
@@ -251,15 +249,30 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="8dp" />
 
-                    <!-- 💡 新增：廣告啟用 CheckBox 與資訊顯示區塊 -->
-                    <CheckBox
-                        android:id="@+id/checkbox_ad_enabled"
+                    <!-- 💡 用一個水平的 LinearLayout 把開關跟文字包裝起來 -->
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="廣告啟用"
-                        android:textSize="14sp"
-                        android:textColor="#333333"
-                        android:layout_marginTop="8dp" />
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="8dp">
+
+                        <!-- 💡 拔掉 text 和 rtl 屬性，讓它變成一個純開關 -->
+                        <androidx.appcompat.widget.SwitchCompat
+                            android:id="@+id/switch_ad_enabled"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+
+                        <!-- 💡 在開關的右邊放一個 TextView 來顯示文字 -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="廣告屏蔽"
+                            android:textSize="14sp"
+                            android:textColor="#333333"
+                            android:layout_marginStart="8dp" />
+
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/text_ad_settings_info"
